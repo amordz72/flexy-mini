@@ -1,0 +1,27 @@
+{
+  "name": "flexy-mini",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@refinedev/core": "^5.0.0",
+    "@refinedev/react-router": "^2.0.0",
+    "@refinedev/supabase": "^6.0.0",
+    "@supabase/supabase-js": "^2.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router": "^7.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.4.0",
+    "typescript": "^5.8.0",
+    "vite": "^6.0.0"
+  }
+}
