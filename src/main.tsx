@@ -346,6 +346,32 @@ function ConnectionDiagnostics() {
     </Space>
   </Card>;
 }
+function TableCustomerLogin(){
+  const [identifier,setIdentifier]=useState("");
+  const [password,setPassword]=useState("");
+  const [token,setToken]=useState(()=>window.sessionStorage.getItem("flexy_mini_customer_token")||"");
+  const [account,setAccount]=useState<{username:string;phone?:string;party_id:number}|null>(null);
+  const [error,setError]=useState("");
+  const [busy,setBusy]=useState(false);
+  const call=async(body:Record<string,unknown>)=>{
+    const response=await fetch(url+"/functions/v1/flexy-mini-customers",{method:"POST",headers:{"Content-Type":"application/json",apikey:key},body:JSON.stringify(body)});
+    return {ok:response.ok,data:await response.json()};
+  };
+  useEffect(()=>{if(!token)return;let active=true;void call({action:"me",token}).then(r=>{if(!active)return;if(r.ok)setAccount(r.data);else {window.sessionStorage.removeItem("flexy_mini_customer_token");setToken("");}}).catch(()=>{if(active)setError("تعذر التحقق من الجلسة");});return()=>{active=false};},[token]);
+  const login=async()=>{setBusy(true);setError("");try{const r=await call({action:"login",identifier,password});if(!r.ok){setError("بيانات الدخول غير صحيحة");return;}window.sessionStorage.setItem("flexy_mini_customer_token",r.data.token);setToken(r.data.token);setPassword("");}catch{setError("تعذر الاتصال بالخادم");}finally{setBusy(false);}};
+  const logout=async()=>{try{await call({action:"logout",token});}catch{}window.sessionStorage.removeItem("flexy_mini_customer_token");setToken("");setAccount(null);};
+  return <ConfigProvider direction="rtl"><div style={{maxWidth:460,margin:"60px auto",padding:16}}>
+    <Card title="Flexy Mini — دخول الزبون">
+      {account?<Space direction="vertical" style={{width:"100%"}}><Alert type="success" message={"مرحبًا "+account.username}/><Text>الهاتف: <span dir="ltr">{account.phone}</span></Text><Alert type="warning" message="عمليات الشحن والدين غير مفعلة لهذا الحساب حاليًا"/><Button onClick={()=>void logout()}>تسجيل الخروج</Button></Space>:<Space direction="vertical" style={{width:"100%"}}>
+        <Input value={identifier} onChange={e=>setIdentifier(e.target.value)} placeholder="اسم المستخدم أو رقم الهاتف" dir="ltr"/>
+        <Input.Password value={password} onChange={e=>setPassword(e.target.value)} placeholder="كلمة المرور"/>
+        {error&&<Alert type="error" message={error}/>}
+        <Button type="primary" block loading={busy} onClick={()=>void login()}>دخول</Button>
+      </Space>}
+      <a href="#/login">دخول الإدارة</a>
+    </Card>
+  </div></ConfigProvider>;
+}
 function CustomerDashboard() {
   const { mutate: logout } = useLogout();
   const [status, setStatus] = useState<Record<string, unknown> | null>(null);
@@ -416,7 +442,7 @@ function Dashboard() {
             {mobile && <Button onClick={() => setDrawer(true)} aria-label="فتح القائمة">☰</Button>}
             <Text strong>Flexy Mini</Text>
           </Space>
-          <Space><Tag color={client ? "green" : "blue"}>v0.9.0 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
+          <Space><Tag color={client ? "green" : "blue"}>v0.9.1 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
         </Header>
         <Content className="app-content">
           {page !== "home" && <div className="page-heading"><Title level={mobile ? 3 : 2}>{names[page]}</Title></div>}
@@ -455,6 +481,7 @@ createRoot(document.getElementById("root")!).render(
         liveProvider={client ? liveProvider(client) : undefined}
         resources={[]} options={{ syncWithLocation: true, warnWhenUnsavedChanges: true }}>
         <Routes>
+          <Route path="/customer-login" element={<TableCustomerLogin />} />
           <Route path="/login" element={client ? <LoginPage /> : <Alert type="error" showIcon message="التطبيق غير مهيأ للاتصال. لا يمكن الدخول قبل إعداد Supabase." />} />
           <Route path="/" element={client ? <Authenticated key="protected" fallback={<LoginPage />}><HomeByRole /></Authenticated> : <Alert type="error" showIcon message="الاتصال غير مهيأ. تم تعطيل وضع المعاينة المفتوح." />} />
         </Routes>
