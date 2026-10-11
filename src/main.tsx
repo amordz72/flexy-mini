@@ -33,7 +33,8 @@ const authProvider: AuthProvider | undefined = client ? {
     if (error) return { success: false, error: { name: "LoginError", message: "تعذر تسجيل الدخول" } };
     if (!(await isShopAdmin())) {
       const { data: status, error: statusError } = await client.rpc("flexy_mini_credit_status");
-      if (statusError || !status) {
+      const account = Array.isArray(status) ? status[0] : status;
+      if (statusError || !account || typeof account !== "object" || Array.isArray(account)) {
         await client.auth.signOut();
         return { success: false, error: { name: "AccessDenied", message: "لا يوجد حساب عميل مربوط ومصرّح له بالدخول" } };
       }
@@ -49,7 +50,8 @@ const authProvider: AuthProvider | undefined = client ? {
     if (error || !data.session) return { authenticated: false, redirectTo: "/login" };
     if (await isShopAdmin()) return { authenticated: true };
     const status = await client.rpc("flexy_mini_credit_status");
-    return !status.error && !!status.data ? { authenticated: true } : { authenticated: false, redirectTo: "/login" };
+    const account = Array.isArray(status.data) ? status.data[0] : status.data;
+    return !status.error && !!account && typeof account === "object" && !Array.isArray(account) ? { authenticated: true } : { authenticated: false, redirectTo: "/login" };
   },
   onError: async () => ({ error: undefined }),
   getIdentity: async () => {
