@@ -23,6 +23,11 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      - name: Redirect legacy deep links on GitHub Pages
+        run: |
+          cat > dist/404.html <<'EOF'
+          <!doctype html><html lang="ar"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Flexy Mini</title><script>location.replace('/flexy-mini/#/login');</script></head><body><a href="/flexy-mini/#/login">فتح صفحة الدخول</a></body></html>
+          EOF
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
