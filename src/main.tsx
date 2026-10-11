@@ -218,10 +218,14 @@ function CardsCatalog() {
 }
 function MasterCustomerLookup() {
   const [query,setQuery]=useState("");
-  const [matches,setMatches]=useState<Array<{id:number;display_name:string;primary_phone?:string|null}>>([]);
+  const [matches,setMatches]=useState<Array<{id:number;display_name:string;primary_phone?:string|null;mytool_username?:string|null}>>([]);
   const [selected,setSelected]=useState<number|null>(null);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
+  const [creating,setCreating]=useState(false);
+  const [name,setName]=useState("");
+  const [phone,setPhone]=useState("");
+  const [username,setUsername]=useState("");
   useEffect(()=>{
     if(!client || query.trim().length<2){setMatches([]);return;}
     let active=true;
@@ -230,22 +234,40 @@ function MasterCustomerLookup() {
       const result=await client!.rpc("admin_customer_master_search",{p_query:query.trim(),p_limit:10});
       if(!active)return;
       setBusy(false);
-      if(result.error){setError("البحث غير متاح بهذه الصلاحيات");setMatches([]);}
+      if(result.error){setError("تعذر البحث في الماستر بهذه الصلاحيات");setMatches([]);}
       else {setError("");setMatches(Array.isArray(result.data)?result.data:[]);}
     },350);
     return ()=>{active=false;window.clearTimeout(timer);};
   },[query]);
-  return <Card title="الزبائن — البحث في الماستر">
-    <Input value={query} onChange={e=>{setQuery(e.target.value);setSelected(null);}} placeholder="اسم الزبون أو الهاتف أو حساب المنصة" allowClear/>
-    {error&&<Alert style={{marginTop:12}} type="warning" message={error}/>}
-    <Table size="small" style={{marginTop:12}} rowKey="id" loading={busy} dataSource={matches} pagination={false} columns={[
-      {title:"الاسم",dataIndex:"display_name"},
-      {title:"الهاتف",dataIndex:"primary_phone"},
-      {title:"",render:(_:unknown,r:{id:number})=><Button type={selected===r.id?"primary":"default"} onClick={()=>setSelected(r.id)}>اختيار</Button>}
-    ]}/>
-    <Space style={{marginTop:12}}><Button onClick={()=>setSelected(null)}>بدون ماستر</Button><Text>{selected?"تم اختيار الماستر رقم "+selected:"بدون ربط"}</Text></Space>
-    <Alert style={{marginTop:12}} type="info" message="المرحلة الحالية: البحث والاختيار فقط. إنشاء اسم المستخدم وكلمة المرور يحتاج خدمة تحقق آمنة على الخادم، ولم يُفعّل بعد."/>
-  </Card>;
+  return <Space direction="vertical" size="middle" style={{width:"100%"}}>
+    <Card title="زبائن Flexy Mini" extra={<Button type="primary" onClick={()=>setCreating(v=>!v)}>{creating?"إغلاق":"زبون جديد +"}</Button>}>
+      <Alert type="info" showIcon message="الجدول يعرض حسابات Flexy Mini عند تفعيل خدمة الحسابات. لا نعرض كل الماستر كأنهم زبائن مسجلون."/>
+      <Table size="small" style={{marginTop:12}} dataSource={[]} columns={[
+        {title:"الزبون",dataIndex:"name"},
+        {title:"اسم المستخدم",dataIndex:"username"},
+        {title:"الماستر",dataIndex:"master"},
+        {title:"الحالة",dataIndex:"status"}
+      ]} locale={{emptyText:"لا توجد حسابات Flexy Mini مؤكدة بعد"}}/>
+    </Card>
+    {creating&&<Card title="زبون جديد — مطابقة الماستر">
+      <Alert type="warning" showIcon message="هذه استمارة تحضير فقط؛ الحفظ وتسجيل الدخول غير مفعّلين حتى تجهيز خدمة الحسابات الآمنة."/>
+      <Form layout="vertical" style={{marginTop:14}}>
+        <Form.Item label="اسم الزبون"><Input value={name} onChange={e=>{setName(e.target.value);setSelected(null);setQuery(e.target.value);}} placeholder="الاسم الكامل"/></Form.Item>
+        <Form.Item label="رقم الهاتف"><Input dir="ltr" value={phone} onChange={e=>{const v=e.target.value.replace(/[^0-9+]/g,"");setPhone(v);setSelected(null);if(v.replace(/\D/g,"").length>=5)setQuery(v);}} placeholder="0XXXXXXXXX"/></Form.Item>
+        <Form.Item label="اسم المستخدم"><Input dir="ltr" value={username} onChange={e=>setUsername(e.target.value)} placeholder="username"/></Form.Item>
+        <Form.Item label="بحث إضافي في الماستر"><Input value={query} onChange={e=>{setQuery(e.target.value);setSelected(null);}} placeholder="اسم أو هاتف أو حساب منصة" allowClear/></Form.Item>
+      </Form>
+      {error&&<Alert type="warning" message={error}/>}
+      <Table size="small" rowKey="id" loading={busy} dataSource={matches} pagination={false} scroll={{x:450}} columns={[
+        {title:"الماستر",dataIndex:"display_name"},
+        {title:"الهاتف",dataIndex:"primary_phone",render:(v:string|null)=><span dir="ltr">{v||"—"}</span>},
+        {title:"اسم المستخدم",dataIndex:"mytool_username"},
+        {title:"الربط",render:(_:unknown,r:{id:number})=><Button type={selected===r.id?"primary":"default"} onClick={()=>setSelected(r.id)}>{selected===r.id?"تم الاختيار":"اختيار"}</Button>}
+      ]}/>
+      <Alert style={{marginTop:12}} type={selected?"success":"info"} message={selected?"تم اختيار ماستر موجود. سيُربط عند الحفظ بعد تجهيز الخدمة.":"إذا لم يوجد تطابق، يلزم إنشاء ماستر جديد عند الحفظ. لا يُسمح بحساب دون ماستر."}/>
+      <Button style={{marginTop:12}} type="primary" disabled>حفظ الزبون وإنشاء الحساب — قريبًا</Button>
+    </Card>}
+  </Space>;
 }
 function ConnectionDiagnostics() {
   const [status, setStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
@@ -360,7 +382,7 @@ function Dashboard() {
             {mobile && <Button onClick={() => setDrawer(true)} aria-label="فتح القائمة">☰</Button>}
             <Text strong>Flexy Mini</Text>
           </Space>
-          <Space><Tag color={client ? "green" : "blue"}>v0.8.3 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
+          <Space><Tag color={client ? "green" : "blue"}>v0.8.4 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
         </Header>
         <Content className="app-content">
           {page !== "home" && <div className="page-heading"><Title level={mobile ? 3 : 2}>{names[page]}</Title></div>}
