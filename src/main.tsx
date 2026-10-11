@@ -272,7 +272,7 @@ function MasterCustomerLookup() {
         {title:"الماستر",dataIndex:"display_name"},
         {title:"الهاتف",dataIndex:"primary_phone",render:(v:string|null)=><span dir="ltr">{v||"—"}</span>},
         {title:"اسم المستخدم",dataIndex:"mytool_username"},
-        {title:"الربط",render:(_:unknown,r:{id:number})=><Button type={selected===r.id?"primary":"default"} onClick={()=>assignMaster(r)}>{selected===r.id?"تم الاختيار":"اختيار"}</Button>}
+        {title:"الربط",render:(_:unknown,r:{id:number;display_name:string;primary_phone?:string|null;mytool_username?:string|null})=><Button type={selected===r.id?"primary":"default"} onClick={()=>assignMaster(r)}>{selected===r.id?"تم الاختيار":"اختيار"}</Button>}
       ]}/>
       {masterRecord&&<Space wrap style={{marginTop:12}}><Button onClick={()=>assignMaster(masterRecord,true)}>إسناد بيانات الماستر</Button><Text type="secondary">تعبئة الاسم والهاتف واسم المستخدم غير التقني من الماستر</Text></Space>}
       <Alert style={{marginTop:12}} type={selected?"success":"info"} message={selected?"تم اختيار ماستر موجود. سيُربط عند الحفظ بعد تجهيز الخدمة.":"إذا لم يوجد تطابق، يلزم إنشاء ماستر جديد عند الحفظ. لا يُسمح بحساب دون ماستر."}/>
