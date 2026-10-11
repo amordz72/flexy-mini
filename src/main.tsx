@@ -1,12 +1,13 @@
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Refine } from "@refinedev/core";
+import { Authenticated, Refine, useLogout } from "@refinedev/core";
+import type { AuthProvider } from "@refinedev/core";
+import { AuthPage } from "@refinedev/antd";
 import { BrowserRouter, Route, Routes } from "react-router";
 import routerProvider from "@refinedev/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { dataProvider, liveProvider } from "@refinedev/supabase";
-import { AuthGate } from "./AuthGate";
-import type { Session } from "@supabase/supabase-js";
+
 import { ConfigProvider, Layout, Menu, Typography, Card, Row, Col, Table, Tag, Button, Space, Alert, Grid, Drawer, Empty, Descriptions } from "antd";
 import "antd/dist/reset.css";
 import "./style.css";
@@ -14,6 +15,25 @@ import "./style.css";
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
 const client = url && key ? createClient(url, key) : undefined;
+const authProvider: AuthProvider | undefined = client ? {
+  login: async ({ email, password }) => {
+    const { error } = await client.auth.signInWithPassword({ email, password });
+    return error ? { success: false, error: { name: "LoginError", message: "تعذر تسجيل الدخول" } } : { success: true, redirectTo: "/" };
+  },
+  logout: async () => {
+    const { error } = await client.auth.signOut();
+    return error ? { success: false, error: { name: "LogoutError", message: "تعذر تسجيل الخروج" } } : { success: true, redirectTo: "/login" };
+  },
+  check: async () => {
+    const { data, error } = await client.auth.getSession();
+    return !error && data.session ? { authenticated: true } : { authenticated: false, redirectTo: "/login" };
+  },
+  onError: async () => ({ error: undefined }),
+  getIdentity: async () => {
+    const { data } = await client.auth.getUser();
+    return data.user ? { id: data.user.id, name: data.user.email || "مستخدم" } : null;
+  },
+} : undefined;
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
 const items = [
@@ -76,7 +96,8 @@ function ConnectionDiagnostics() {
     </Space>
   </Card>;
 }
-function Dashboard({ session }: { session: Session | null }) {
+function Dashboard() {
+  const { mutate: logout } = useLogout();
   const [page, setPage] = useState("home");
   const [drawer, setDrawer] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -95,7 +116,7 @@ function Dashboard({ session }: { session: Session | null }) {
             {mobile && <Button onClick={() => setDrawer(true)} aria-label="فتح القائمة">☰</Button>}
             <Text strong>Flexy Mini</Text>
           </Space>
-          <Space><Tag color={session ? "green" : "blue"}>v0.4.0 · {session ? "جلسة نشطة" : "معاينة"}</Tag>{session && client && <Button size="small" onClick={() => { void client.auth.signOut(); }}>خروج</Button>}</Space>
+          <Space><Tag color={client ? "green" : "blue"}>v0.5.0 · {client ? "مصادقة" : "معاينة"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
         </Header>
         <Content className="app-content">
           <div className="page-heading"><Title level={mobile ? 3 : 2}>{names[page]}</Title><Text type="secondary">نسخة معاينة · بدون معاملات</Text></div>
@@ -125,10 +146,13 @@ function Dashboard({ session }: { session: Session | null }) {
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <BrowserRouter basename={import.meta.env.BASE_URL}>
-      <Refine routerProvider={routerProvider} dataProvider={client ? dataProvider(client) : undefined}
+      <Refine routerProvider={routerProvider} authProvider={authProvider} dataProvider={client ? dataProvider(client) : undefined}
         liveProvider={client ? liveProvider(client) : undefined}
         resources={[]} options={{ syncWithLocation: true, warnWhenUnsavedChanges: true }}>
-        <AuthGate client={client}>{(session) => <Routes><Route path="/" element={<Dashboard session={session} />} /></Routes>}</AuthGate>
+        <Routes>
+          <Route path="/login" element={client ? <AuthPage type="login" registerLink={false} forgotPasswordLink={false} /> : <Dashboard />} />
+          <Route path="/" element={client ? <Authenticated key="protected" fallback={<AuthPage type="login" registerLink={false} forgotPasswordLink={false} />}><Dashboard /></Authenticated> : <Dashboard />} />
+        </Routes>
       </Refine>
     </BrowserRouter>
   </React.StrictMode>
