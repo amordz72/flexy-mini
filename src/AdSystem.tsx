@@ -1,4 +1,4 @@
-import React,{useEffect,useState} from "react";
+import React,{useEffect,useState,useRef} from "react";
 import {Button,Card,Form,Input,Select,Switch,Table,Space,Alert,message} from "antd";
 import {SupabaseClient} from "@supabase/supabase-js";
 type Ad={is_fallback:boolean;id:number;title:string;body:string|null;image_url:string|null;link_url:string|null;content_display_mode:string;enabled:boolean;display_mode:string;start_at:string|null;end_at:string|null;week_start:number;week_end:number;sort_index:number};
@@ -7,6 +7,7 @@ function shown(a:Ad,d:Date){if(!a.enabled)return false;if(a.display_mode==="peri
 export default function AdSystem({db,admin=false}:{db:SupabaseClient;admin?:boolean}){
  const [ads,setAds]=useState<Ad[]>([]),[now,setNow]=useState(new Date()),[idx,setIdx]=useState(0),[edit,setEdit]=useState<number|null>(null),[error,setError]=useState("");
  const [form]=Form.useForm();
+ const editorRef=useRef<HTMLDivElement|null>(null);
  const [uploading,setUploading]=useState(false);
  const [preview,setPreview]=useState("");
  const [slideError,setSlideError]=useState(false);
@@ -24,6 +25,8 @@ export default function AdSystem({db,admin=false}:{db:SupabaseClient;admin?:bool
  const mode=current?.content_display_mode||"auto";
  const imageVisible=!!current?.image_url&&!slideError&&mode!=="text";
  const textVisible=mode==="text"||mode==="both"||!imageVisible;
+ const toggleStatus=async(a:Ad)=>{if(savingId!==null)return;setSavingId(a.id);const next=!a.enabled;setAds(old=>old.map(x=>x.id===a.id?{...x,enabled:next}:x));const r=await db.from("flexy_mini_ads").update({enabled:next}).eq("id",a.id).select("id,enabled").single();if(r.error){setAds(old=>old.map(x=>x.id===a.id?{...x,enabled:a.enabled}:x));message.error("تعذر تغيير الحالة: "+r.error.message);}else{setAds(old=>old.map(x=>x.id===a.id?{...x,enabled:r.data.enabled}:x));message.success(r.data.enabled?"الإعلان ظاهر":"الإعلان مخفي");}setSavingId(null);};
+ const startEdit=(a:Ad)=>{setEdit(a.id);setPreview(a.image_url||"");form.setFieldsValue({...a,start_at:a.start_at?.slice(0,16),end_at:a.end_at?.slice(0,16)});requestAnimationFrame(()=>editorRef.current?.scrollIntoView({behavior:"smooth",block:"start"}));};
  const save=async(v:any)=>{if(!v.body?.trim()&&!v.image_url){message.error("أدخل نص الإعلان أو ارفع صورة");return;}if(v.content_display_mode==="text"&&!v.body?.trim()){message.error("وضع النص فقط يحتاج نص الإعلان");return;}if(v.content_display_mode==="image"&&!v.image_url){message.error("وضع الصورة فقط يحتاج صورة");return;}const link=(v.link_url||"").trim();if(link&&!/^https:\/\/[^\s]+$/i.test(link)){message.error("الرابط يجب أن يبدأ بـ https://");return;}const title=v.title?.trim()||null;const data={...v,content_display_mode:v.content_display_mode||"auto",link_url:link||null,title:title||"إعلان جديد",body:v.body||"",image_url:v.image_url||null,sort_index:Number(v.sort_index)||0,start_at:v.display_mode==="period"&&v.start_at?new Date(v.start_at).toISOString():null,end_at:v.display_mode==="period"&&v.end_at?new Date(v.end_at).toISOString():null};const r=edit===null?await db.from("flexy_mini_ads").insert(data).select("id").single():await db.from("flexy_mini_ads").update(data).eq("id",edit).select("id").single();if(r.error){message.error(r.error.message);return;}if(!title&&r.data?.id){const name="إعلان #"+r.data.id;const named=await db.from("flexy_mini_ads").update({title:name}).eq("id",r.data.id);if(named.error)message.warning("حُفظ الإعلان لكن تعذر تحديث اسمه التلقائي");}message.success("تم الحفظ");setEdit(null);setPreview("");form.resetFields();await reload();};
  return <Space direction="vertical" style={{width:"100%"}} size="large">
  {!loaded?<div style={{minHeight:190}} aria-label="جاري تحميل الإعلانات"/>:current?<div style={{borderRadius:18,background:imageVisible?"transparent":"#243b78",color:"white",padding:imageVisible?0:24,minHeight:imageVisible?0:190,position:"relative",overflow:"hidden",display:"flex",flexDirection:"column",justifyContent:"center",gap:12}}>
@@ -31,7 +34,7 @@ export default function AdSystem({db,admin=false}:{db:SupabaseClient;admin?:bool
  {textVisible&&<div style={{padding:imageVisible?16:0,background:imageVisible?"#243b78":"transparent",color:"white"}}><strong style={{fontSize:25}}>{current?.body||"مرحبًا بك"}</strong>{current.link_url&&!imageVisible&&<div><a href={current.link_url} target="_blank" rel="noopener noreferrer" style={{color:"white",textDecoration:"underline"}}>افتح الرابط ↗</a></div>}</div>}
  {slides.length>1&&<Space style={{position:imageVisible?"absolute":"relative",bottom:imageVisible?10:undefined,left:imageVisible?12:undefined,right:imageVisible?12:undefined,justifyContent:"space-between",background:imageVisible?"#0007":"transparent",borderRadius:14,padding:4}}><Button onClick={()=>setIdx(i=>(i+slides.length-1)%slides.length)}>❯</Button><span>{idx%slides.length+1} / {slides.length}</span><Button onClick={()=>setIdx(i=>(i+1)%slides.length)}>❮</Button></Space>}
  </div>:null}
- {admin&&<Card title="إدارة الإعلانات">{error&&<Alert type="warning" message={error} style={{marginBottom:12}}/>}
+ {admin&&<div ref={editorRef}><Card title={edit===null?"إدارة الإعلانات":"تعديل الإعلان #"+edit}>{error&&<Alert type="warning" message={error} style={{marginBottom:12}}/>}
  <Form form={form} layout="vertical" initialValues={{enabled:true,display_mode:"always",content_display_mode:"auto",week_start:4,week_end:5,sort_index:0}} onFinish={save}>
  <Form.Item name="title" label="اسم داخلي للإعلان (اختياري، لا يظهر للزبون)"><Input/></Form.Item>
  <Form.Item name="body" label="نص الإعلان"><Input.TextArea/></Form.Item>
@@ -45,7 +48,11 @@ export default function AdSystem({db,admin=false}:{db:SupabaseClient;admin?:bool
  <Form.Item name="sort_index" label="الترتيب"><Input type="number"/></Form.Item>
  <Space><Button type="primary" htmlType="submit">{edit===null?"إضافة إعلان":"حفظ"}</Button>{edit!==null&&<Button onClick={()=>{setEdit(null);form.resetFields()}}>إلغاء</Button>}</Space>
  </Form>
- <Table style={{marginTop:16}} rowKey="id" dataSource={ads} pagination={{pageSize:8}} scroll={{x:460}} columns={[{title:"الإعلان",render:(_,a:Ad)=><span>{a.title}{a.is_fallback?" (افتراضي)":""}</span>},{title:"الحالة",render:(_,a:Ad)=>a.is_fallback?"احتياطي":shown(a,now)?"ظاهر":a.enabled?"مجدول":"مخفي"},{title:"الإجراءات",render:(_,a:Ad)=><Space><Button size="small" onClick={()=>{setEdit(a.id);setPreview(a.image_url||"");form.setFieldsValue({...a,start_at:a.start_at?.slice(0,16),end_at:a.end_at?.slice(0,16)})}}>تعديل</Button><Button size="small" loading={savingId===a.id} onClick={async()=>{setSavingId(a.id);const r=await db.from("flexy_mini_ads").update({enabled:!a.enabled}).eq("id",a.id).select("id,enabled").single();if(r.error)message.error("فشل تغيير الحالة: "+r.error.message);else{setAds(old=>old.map(x=>x.id===a.id?{...x,enabled:r.data.enabled}:x));message.success(r.data.enabled?"تم الإظهار":"تم الإخفاء");}setSavingId(null);}}>{a.enabled?"إخفاء":"إظهار"}</Button></Space>}]}/>
- </Card>}
+ <Table style={{marginTop:16}} rowKey="id" dataSource={ads} pagination={{pageSize:8}} scroll={{x:460}} columns={[
+ {title:"الإعلان",render:(_,a:Ad)=><span>{a.title}{a.is_fallback?" (افتراضي)":""}</span>},
+ {title:"الحالة",render:(_,a:Ad)=><Button type="link" size="small" loading={savingId===a.id} disabled={savingId!==null&&savingId!==a.id} onClick={()=>void toggleStatus(a)} aria-label={"تغيير حالة "+a.title} style={{fontWeight:700,color:a.enabled?"#1677ff":"#777"}}>{a.enabled?(a.is_fallback?"احتياطي · مفعّل":shown(a,now)?"ظاهر":"مجدول"):"مخفي"}</Button>},
+ {title:"الإجراءات",render:(_,a:Ad)=><Button size="small" onClick={()=>startEdit(a)}>تعديل</Button>}
+ ]}/>
+ </Card></div>}
  </Space>;
 }
