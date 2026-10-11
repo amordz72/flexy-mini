@@ -261,8 +261,33 @@ function CustomerDashboard() {
   const { mutate: logout } = useLogout();
   const [status, setStatus] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState("");
-  useEffect(() => { if (!client) return; void client.rpc("flexy_mini_credit_status").then(({data,error}) => {if(error)setError("تعذر تحميل الحساب"); else setStatus(data && typeof data === "object" ? data as Record<string,unknown> : null);}); }, []);
-  return <ConfigProvider direction="rtl"><div dir="rtl" style={{padding:20,maxWidth:700,margin:"auto"}}><Space style={{width:"100%",justifyContent:"space-between"}}><Typography.Title level={3}>حسابي — فليكسي ميني</Typography.Title><Button onClick={()=>logout()}>خروج</Button></Space><Alert type="info" showIcon message="واجهة العميل للعرض فقط. الشحن بالدين والتنفيذ المالي غير مفعّلين." style={{marginBottom:16}}/>{error?<Alert type="error" message={error}/>:status?<Card title="حالة حسابي"><Descriptions column={1} bordered size="small">{Object.entries(status).filter(([k,v])=>["enabled","credit_limit","debt","wallet_balance"].includes(k)&&["number","boolean"].includes(typeof v)).map(([k,v])=><Descriptions.Item key={k} label={{enabled:"صلاحية الشحن",credit_limit:"سقف الدين",debt:"الدين المسجل",wallet_balance:"الرصيد"}[k]}>{typeof v==="boolean"?(v?"مسموح":"موقوف"):Number(v).toLocaleString("en-US")+" دج"}</Descriptions.Item>)}</Descriptions></Card>:<Card loading title="تحميل الحساب"/>}</div></ConfigProvider>;
+  useEffect(() => {
+    if (!client) return;
+    let active = true;
+    void client.rpc("flexy_mini_credit_status").then(({ data, error }) => {
+      if (!active) return;
+      if (error) { setError("تعذر تحميل حساب العميل"); return; }
+      const record = Array.isArray(data) ? data[0] : data;
+      if (record && typeof record === "object" && !Array.isArray(record)) setStatus(record as Record<string, unknown>);
+      else setError("لم يتم العثور على حساب عميل مربوط");
+    });
+    return () => { active = false; };
+  }, []);
+  const money = (key: string) => {
+    const value = status?.[key];
+    const number = typeof value === "number" || typeof value === "string" ? Number(value) : NaN;
+    return Number.isFinite(number) ? number.toLocaleString("en-US") + " دج" : "غير متاح";
+  };
+  return <ConfigProvider direction="rtl"><div dir="rtl" style={{padding:20,maxWidth:700,margin:"auto"}}>
+    <Space style={{width:"100%",justifyContent:"space-between"}}><Typography.Title level={3}>حسابي — فليكسي ميني</Typography.Title><Button onClick={()=>logout()}>خروج</Button></Space>
+    <Alert type="info" showIcon message="عرض حساب العميل فقط. لا يوجد شحن أو تنفيذ مالي مفعّل." style={{marginBottom:16}}/>
+    {error ? <Alert type="error" message={error}/> : status ? <Card title="حالة حسابي"><Descriptions column={1} bordered size="small">
+      <Descriptions.Item label="صلاحية الشحن">{status.enabled === true ? "مسموح مبدئيًا — التنفيذ معطّل" : "غير مفعّلة"}</Descriptions.Item>
+      <Descriptions.Item label="سقف الدين">{money("credit_limit")}</Descriptions.Item>
+      <Descriptions.Item label="الدين المسجل">{money("debt")}</Descriptions.Item>
+      <Descriptions.Item label="الرصيد">{money("wallet_balance")}</Descriptions.Item>
+    </Descriptions></Card> : <Card loading title="تحميل الحساب"/>}
+  </div></ConfigProvider>;
 }
 function HomeByRole() {
   const [admin,setAdmin] = useState<boolean|null>(null);
