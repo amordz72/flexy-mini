@@ -32,8 +32,11 @@ const authProvider: AuthProvider | undefined = client ? {
     const { error } = await client.auth.signInWithPassword(credentials);
     if (error) return { success: false, error: { name: "LoginError", message: "تعذر تسجيل الدخول" } };
     if (!(await isShopAdmin())) {
-      await client.auth.signOut();
-      return { success: false, error: { name: "AccessDenied", message: "هذا الحساب غير مخوّل للدخول إلى الإدارة" } };
+      const { data: status, error: statusError } = await client.rpc("flexy_mini_credit_status");
+      if (statusError || !status) {
+        await client.auth.signOut();
+        return { success: false, error: { name: "AccessDenied", message: "لا يوجد حساب عميل مربوط ومصرّح له بالدخول" } };
+      }
     }
     return { success: true, redirectTo: "/" };
   },
@@ -43,7 +46,10 @@ const authProvider: AuthProvider | undefined = client ? {
   },
   check: async () => {
     const { data, error } = await client.auth.getSession();
-    return !error && data.session && await isShopAdmin() ? { authenticated: true } : { authenticated: false, redirectTo: "/login" };
+    if (error || !data.session) return { authenticated: false, redirectTo: "/login" };
+    if (await isShopAdmin()) return { authenticated: true };
+    const status = await client.rpc("flexy_mini_credit_status");
+    return !status.error && !!status.data ? { authenticated: true } : { authenticated: false, redirectTo: "/login" };
   },
   onError: async () => ({ error: undefined }),
   getIdentity: async () => {
@@ -251,6 +257,18 @@ function ConnectionDiagnostics() {
     </Space>
   </Card>;
 }
+function CustomerDashboard() {
+  const { mutate: logout } = useLogout();
+  const [status, setStatus] = useState<Record<string, unknown> | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => { if (!client) return; void client.rpc("flexy_mini_credit_status").then(({data,error}) => {if(error)setError("تعذر تحميل الحساب"); else setStatus(data && typeof data === "object" ? data as Record<string,unknown> : null);}); }, []);
+  return <ConfigProvider direction="rtl"><div dir="rtl" style={{padding:20,maxWidth:700,margin:"auto"}}><Space style={{width:"100%",justifyContent:"space-between"}}><Typography.Title level={3}>حسابي — فليكسي ميني</Typography.Title><Button onClick={()=>logout()}>خروج</Button></Space><Alert type="info" showIcon message="واجهة العميل للعرض فقط. الشحن بالدين والتنفيذ المالي غير مفعّلين." style={{marginBottom:16}}/>{error?<Alert type="error" message={error}/>:status?<Card title="حالة حسابي"><Descriptions column={1} bordered size="small">{Object.entries(status).filter(([k,v])=>["enabled","credit_limit","debt","wallet_balance"].includes(k)&&["number","boolean"].includes(typeof v)).map(([k,v])=><Descriptions.Item key={k} label={{enabled:"صلاحية الشحن",credit_limit:"سقف الدين",debt:"الدين المسجل",wallet_balance:"الرصيد"}[k]}>{typeof v==="boolean"?(v?"مسموح":"موقوف"):Number(v).toLocaleString("en-US")+" دج"}</Descriptions.Item>)}</Descriptions></Card>:<Card loading title="تحميل الحساب"/>}</div></ConfigProvider>;
+}
+function HomeByRole() {
+  const [admin,setAdmin] = useState<boolean|null>(null);
+  useEffect(()=>{let active=true;void isShopAdmin().then(v=>{if(active)setAdmin(v);});return ()=>{active=false;};},[]);
+  return admin===null?<Card loading style={{margin:24}}/>:admin?<Dashboard/>:<CustomerDashboard/>;
+}
 function Dashboard() {
   const { mutate: logout } = useLogout();
   const validPages = new Set(["home","flexy","idoom","store","operations","cards","inventory","customers","stations","members","ads","settings"]);
@@ -324,7 +342,7 @@ createRoot(document.getElementById("root")!).render(
         resources={[]} options={{ syncWithLocation: true, warnWhenUnsavedChanges: true }}>
         <Routes>
           <Route path="/login" element={client ? <LoginPage /> : <Alert type="error" showIcon message="التطبيق غير مهيأ للاتصال. لا يمكن الدخول قبل إعداد Supabase." />} />
-          <Route path="/" element={client ? <Authenticated key="protected" fallback={<LoginPage />}><Dashboard /></Authenticated> : <Alert type="error" showIcon message="الاتصال غير مهيأ. تم تعطيل وضع المعاينة المفتوح." />} />
+          <Route path="/" element={client ? <Authenticated key="protected" fallback={<LoginPage />}><HomeByRole /></Authenticated> : <Alert type="error" showIcon message="الاتصال غير مهيأ. تم تعطيل وضع المعاينة المفتوح." />} />
         </Routes>
       </Refine>
     </HashRouter>
