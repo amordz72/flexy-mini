@@ -216,6 +216,37 @@ function CardsCatalog() {
     </Card>}
   </Space>;
 }
+function MasterCustomerLookup() {
+  const [query,setQuery]=useState("");
+  const [matches,setMatches]=useState<Array<{id:number;display_name:string;primary_phone?:string|null}>>([]);
+  const [selected,setSelected]=useState<number|null>(null);
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState("");
+  useEffect(()=>{
+    if(!client || query.trim().length<2){setMatches([]);return;}
+    let active=true;
+    const timer=window.setTimeout(async()=>{
+      setBusy(true);
+      const result=await client!.rpc("admin_customer_master_search",{p_query:query.trim(),p_limit:10});
+      if(!active)return;
+      setBusy(false);
+      if(result.error){setError("البحث غير متاح بهذه الصلاحيات");setMatches([]);}
+      else {setError("");setMatches(Array.isArray(result.data)?result.data:[]);}
+    },350);
+    return ()=>{active=false;window.clearTimeout(timer);};
+  },[query]);
+  return <Card title="ربط زبون بالماستر">
+    <Input value={query} onChange={e=>{setQuery(e.target.value);setSelected(null);}} placeholder="اسم الزبون أو الهاتف أو حساب المنصة" allowClear/>
+    {error&&<Alert style={{marginTop:12}} type="warning" message={error}/>}
+    <Table size="small" style={{marginTop:12}} rowKey="id" loading={busy} dataSource={matches} pagination={false} columns={[
+      {title:"الاسم",dataIndex:"display_name"},
+      {title:"الهاتف",dataIndex:"primary_phone"},
+      {title:"",render:(_:unknown,r:{id:number})=><Button type={selected===r.id?"primary":"default"} onClick={()=>setSelected(r.id)}>اختيار</Button>}
+    ]}/>
+    <Space style={{marginTop:12}}><Button onClick={()=>setSelected(null)}>بدون ماستر</Button><Text>{selected?"تم اختيار الماستر رقم "+selected:"بدون ربط"}</Text></Space>
+    <Alert style={{marginTop:12}} type="info" message="البحث فقط؛ لم يتم إنشاء حساب أو تغيير أي بيانات مالية."/>
+  </Card>;
+}
 function ConnectionDiagnostics() {
   const [status, setStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
   const [message, setMessage] = useState("");
@@ -345,7 +376,7 @@ function Dashboard() {
                 { title: "بطاقات رقمية", subtitle: "ألعاب، اتصالات وبرامج", color: "#625ee8", target: "store", symbol: "▣" }
               ].map(service => <Col xs={24} md={8} key={service.title}><div onClick={() => setPage(service.target)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter") setPage(service.target); }} style={{ background: service.color, borderRadius: 14, color: "white", padding: "22px 20px", minHeight: 112, cursor: "pointer", boxShadow: "0 6px 15px rgba(0,0,0,.08)" }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 20, fontWeight: 700 }}>{service.title}</span><span style={{ fontSize: 27 }}>{service.symbol}</span></div><div style={{ opacity: .9, marginTop: 9 }}>{service.subtitle}</div></div></Col>)}
             </Row>
-          </> : page === "ads" && client ? <AdSystem db={client} admin /> : page === "settings" ? <ConnectionDiagnostics /> : page === "members" ? <><MiniMembers />{client&&<CreditAdmin db={client}/>}</> : page === "cards" ? <CardsCatalog /> : page === "operations" ? <Card title="عملياتي"><Empty description="سجل عمليات حسابك لم يُفعّل بعد" /></Card> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز" /></Card>}
+          </> : page === "ads" && client ? <AdSystem db={client} admin /> : page === "settings" ? <ConnectionDiagnostics /> : page === "customers" ? <MasterCustomerLookup /> : page === "members" ? <><MiniMembers />{client&&<CreditAdmin db={client}/>}</> : page === "cards" ? <CardsCatalog /> : page === "operations" ? <Card title="عملياتي"><Empty description="سجل عمليات حسابك لم يُفعّل بعد" /></Card> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز" /></Card>}
           <div className="app-footer">Flexy Mini · Refine + Ant Design · عرض تجريبي فقط</div>
         </Content>
         <nav className="bottom-service-nav" aria-label="خدمات الموقع" dir="rtl">
