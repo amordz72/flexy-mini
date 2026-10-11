@@ -5,7 +5,7 @@ import { BrowserRouter, Route, Routes } from "react-router";
 import routerProvider from "@refinedev/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { dataProvider, liveProvider } from "@refinedev/supabase";
-import { ConfigProvider, Layout, Menu, Typography, Card, Row, Col, Table, Tag, Button, Space, Alert, Grid, Drawer, Empty } from "antd";
+import { ConfigProvider, Layout, Menu, Typography, Card, Row, Col, Table, Tag, Button, Space, Alert, Grid, Drawer, Empty, Descriptions } from "antd";
 import "antd/dist/reset.css";
 import "./style.css";
 
@@ -31,6 +31,49 @@ const sample = [
   { key: "2", name: "بطاقات موبيليس", kind: "بطاقات", state: "غير مربوط" },
   { key: "3", name: "Station Connect", kind: "محطات", state: "غير مربوط" },
 ];
+function ConnectionDiagnostics() {
+  const [status, setStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
+  const [message, setMessage] = useState("");
+  async function checkConnection() {
+    if (!url || !key) {
+      setStatus("error");
+      setMessage("متغيرات الاتصال العامة غير مضبوطة في إعدادات النشر.");
+      return;
+    }
+    setStatus("loading");
+    setMessage("");
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 8000);
+    try {
+      const response = await fetch(url.replace(/\\/$/, "") + "/auth/v1/settings", {
+        headers: { apikey: key },
+        method: "GET",
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      setStatus("ok");
+      setMessage("تم الوصول إلى خدمة Supabase Auth. لم يتم اختبار قاعدة البيانات أو الصلاحيات.");
+    } catch {
+      setStatus("error");
+      setMessage("تعذر الوصول إلى خدمة المصادقة. تحقق من إعدادات النشر والاتصال.");
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  }
+  return <Card title="فحص اتصال Supabase" className="section-card">
+    <Descriptions column={1} size="small" bordered>
+      <Descriptions.Item label="عنوان المشروع">{url ? "مضبوط" : "غير مضبوط"}</Descriptions.Item>
+      <Descriptions.Item label="المفتاح العام">{key ? "مضبوط" : "غير مضبوط"}</Descriptions.Item>
+      <Descriptions.Item label="قاعدة البيانات">غير مختبرة</Descriptions.Item>
+      <Descriptions.Item label="حماية الوصول">لم تُفعّل بعد</Descriptions.Item>
+    </Descriptions>
+    <Space direction="vertical" className="diagnostics-actions">
+      <Button type="primary" loading={status === "loading"} onClick={checkConnection}>اختبار الوصول لخدمة المصادقة</Button>
+      {status !== "idle" && status !== "loading" && <Alert showIcon type={status === "ok" ? "success" : "warning"} message={message} />}
+      <Text type="secondary">الفحص لا يقرأ جداول ولا يكتب بيانات، ولا يطلب كلمة مرور.</Text>
+    </Space>
+  </Card>;
+}
 function Dashboard() {
   const [page, setPage] = useState("home");
   const [drawer, setDrawer] = useState(false);
@@ -50,16 +93,16 @@ function Dashboard() {
             {mobile && <Button onClick={() => setDrawer(true)} aria-label="فتح القائمة">☰</Button>}
             <Text strong>Flexy Mini</Text>
           </Space>
-          <Tag color="blue">v0.2.1 · تجربة</Tag>
+          <Tag color="blue">v0.3.0 · تجربة</Tag>
         </Header>
         <Content className="app-content">
           <div className="page-heading"><Title level={mobile ? 3 : 2}>{names[page]}</Title><Text type="secondary">نسخة معاينة · بدون معاملات</Text></div>
           <Alert type="info" showIcon message="هذه لوحة إدارة تجريبية. لا توجد عمليات مالية أو شحن مفعّلة." className="notice" />
-          {page === "home" ? <>
+          {page === "settings" ? <ConnectionDiagnostics /> : page === "home" ? <>
             <Row gutter={[16, 16]}>
               <Col xs={24} sm={12} lg={8}><Card title="الفليكسي"><Title level={3}>تجريبي</Title><Text type="secondary">ربط التنفيذ في مرحلة لاحقة</Text></Card></Col>
               <Col xs={24} sm={12} lg={8}><Card title="البطاقات"><Title level={3}>غير مربوط</Title><Text type="secondary">المخزون لم يُربط بعد</Text></Card></Col>
-              <Col xs={24} sm={12} lg={8}><Card title="Supabase"><Title level={3}>{client ? "مهيأ" : "غير مهيأ"}</Title><Text type="secondary">{client ? "الإعدادات موجودة، الاتصال غير مختبر" : "يلزم إعداد الاتصال لاحقًا"}</Text></Card></Col>
+              <Col xs={24} sm={12} lg={8}><Card title="Supabase"><Title level={3}>{client ? "إعدادات موجودة" : "غير مهيأ"}</Title><Text type="secondary">{client ? "اختبر الوصول من صفحة الإعدادات" : "لا توجد متغيرات اتصال للنشر"}</Text></Card></Col>
             </Row>
             <Card title="الوحدات المخططة" className="section-card">
               <Table size="small" pagination={false} scroll={{ x: 450 }} dataSource={sample} columns={[
