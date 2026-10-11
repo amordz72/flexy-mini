@@ -330,3 +330,9 @@ createRoot(document.getElementById("root")!).render(
     </HashRouter>
   </React.StrictMode>
 );
+
+if ("serviceWorker" in navigator && import.meta.env.PROD) {
+  window.addEventListener("load", () => {
+    void navigator.serviceWorker.register("/flexy-mini/sw.js", { scope: "/flexy-mini/" }).catch((error: unknown) => console.warn("PWA service worker registration failed", error));
+  });
+}
