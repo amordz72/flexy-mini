@@ -116,6 +116,84 @@ function MiniMembers() {
     ]} />
   </Card>;
 }
+
+type CatalogCategory = { id: number; name: string; sort_index: number; active: boolean };
+type CatalogProduct = { id: number; category_id: number; name: string; sort_index: number; active: boolean };
+type CatalogVariant = { id: number; product_id: number; name: string; denomination: number | null; purchase_price: number; markup_percent: number; sort_index: number; active: boolean };
+function CardsCatalog() {
+  const [categories, setCategories] = useState<CatalogCategory[]>([]);
+  const [products, setProducts] = useState<CatalogProduct[]>([]);
+  const [variants, setVariants] = useState<CatalogVariant[]>([]);
+  const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [productId, setProductId] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [categoryForm] = Form.useForm();
+  const [productForm] = Form.useForm();
+  const [variantForm] = Form.useForm();
+  async function refresh() {
+    if (!client) return;
+    setBusy(true);
+    const [c, p, v] = await Promise.all([
+      client.from("flexy_mini_categories").select("*").order("sort_index").order("id"),
+      client.from("flexy_mini_products").select("*").order("sort_index").order("id"),
+      client.from("flexy_mini_variants").select("*").order("sort_index").order("denomination").order("id")
+    ]);
+    setBusy(false);
+    const issue = c.error || p.error || v.error;
+    if (issue) { setError(issue.message); return; }
+    setError("");
+    setCategories((c.data || []) as CatalogCategory[]);
+    setProducts((p.data || []) as CatalogProduct[]);
+    setVariants((v.data || []) as CatalogVariant[]);
+  }
+  useEffect(() => { void refresh(); }, []);
+  async function save(table: string, payload: Record<string, unknown>, form: ReturnType<typeof Form.useForm>[0]) {
+    if (!client) return;
+    setBusy(true);
+    const { error } = await client.from(table).insert(payload);
+    setBusy(false);
+    if (error) { setError(error.message); return; }
+    form.resetFields();
+    await refresh();
+  }
+  const visibleProducts = products.filter(p => p.category_id === categoryId && p.active);
+  const visibleVariants = variants.filter(v => v.product_id === productId && v.active)
+    .sort((a, b) => a.sort_index - b.sort_index || (a.denomination ?? 999999) - (b.denomination ?? 999999) || a.id - b.id);
+  return <Space direction="vertical" size="large" style={{ width: "100%" }}>
+    <Alert type="info" showIcon message="إدارة كتالوج البطاقات: قسم ← نوع ← بطاقة. لا توجد مبيعات أو أكواد شحن مفعّلة." />
+    {error && <Alert type="error" showIcon message={error} closable onClose={() => setError("")} />}
+    <Card title="1 — الأقسام" loading={busy && !categories.length}>
+      <Space wrap>{categories.filter(c => c.active).map(c => <Button key={c.id} type={categoryId === c.id ? "primary" : "default"} onClick={() => { setCategoryId(c.id); setProductId(null); }}>{c.name}</Button>)}</Space>
+      <Form form={categoryForm} layout="inline" style={{ marginTop: 16, gap: 8 }} onFinish={v => save("flexy_mini_categories", { name: v.name.trim(), sort_index: Number(v.sort_index || 0) }, categoryForm)}>
+        <Form.Item name="name" rules={[{ required: true }]}><Input placeholder="اسم القسم" /></Form.Item>
+        <Form.Item name="sort_index" initialValue={0}><Input type="number" placeholder="Index" style={{ width: 90 }} /></Form.Item>
+        <Button htmlType="submit" type="primary" disabled={busy}>إضافة قسم</Button>
+      </Form>
+    </Card>
+    {categoryId !== null && <Card title="2 — الأنواع">
+      <Space wrap>{visibleProducts.map(p => <Button key={p.id} type={productId === p.id ? "primary" : "default"} onClick={() => { setProductId(p.id); window.setTimeout(() => document.getElementById("mini-variants")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}>{p.name}</Button>)}</Space>
+      <Form form={productForm} layout="inline" style={{ marginTop: 16, gap: 8 }} onFinish={v => save("flexy_mini_products", { category_id: categoryId, name: v.name.trim(), sort_index: Number(v.sort_index || 0) }, productForm)}>
+        <Form.Item name="name" rules={[{ required: true }]}><Input placeholder="اسم النوع" /></Form.Item>
+        <Form.Item name="sort_index" initialValue={0}><Input type="number" placeholder="Index" style={{ width: 90 }} /></Form.Item>
+        <Button htmlType="submit" type="primary" disabled={busy}>إضافة نوع</Button>
+      </Form>
+    </Card>}
+    {productId !== null && <Card id="mini-variants" title="3 — البطاقات">
+      <Row gutter={[12, 12]}>{visibleVariants.map(v => <Col xs={24} sm={12} lg={8} key={v.id}><Card size="small" title={v.name}><Text>القيمة: {v.denomination ?? "—"}</Text><div>سعر الشراء: {v.purchase_price} دج</div><div>الربح: {v.markup_percent}%</div><Title level={5}>سعر البيع: {(Number(v.purchase_price) * (1 + Number(v.markup_percent) / 100)).toFixed(2)} دج</Title><Tag>Index {v.sort_index}</Tag></Card></Col>)}</Row>
+      <Form form={variantForm} layout="vertical" style={{ marginTop: 16 }} onFinish={v => save("flexy_mini_variants", { product_id: productId, name: v.name.trim(), denomination: Number(v.denomination || 0), purchase_price: Number(v.purchase_price), markup_percent: Number(v.markup_percent || 0), sort_index: Number(v.sort_index || 0) }, variantForm)}>
+        <Row gutter={8}>
+          <Col xs={24} sm={12}><Form.Item name="name" label="اسم البطاقة" rules={[{ required: true }]}><Input placeholder="مثلاً 60 UC" /></Form.Item></Col>
+          <Col xs={12} sm={6}><Form.Item name="denomination" label="القيمة"><Input type="number" min={0} /></Form.Item></Col>
+          <Col xs={12} sm={6}><Form.Item name="sort_index" label="Index" initialValue={0}><Input type="number" /></Form.Item></Col>
+          <Col xs={12}><Form.Item name="purchase_price" label="سعر الشراء (دج)" rules={[{ required: true }]}><Input type="number" min={0} step="0.01" /></Form.Item></Col>
+          <Col xs={12}><Form.Item name="markup_percent" label="نسبة الربح %" initialValue={0}><Input type="number" min={0} step="0.01" /></Form.Item></Col>
+        </Row>
+        <Button htmlType="submit" type="primary" disabled={busy}>إضافة بطاقة</Button>
+      </Form>
+    </Card>}
+  </Space>;
+}
 function ConnectionDiagnostics() {
   const [status, setStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
   const [message, setMessage] = useState("");
@@ -197,7 +275,7 @@ function Dashboard() {
                 { title: "الحالة", dataIndex: "state", render: (v: string) => <Tag>{v}</Tag> }
               ]} />
             </Card>
-          </> : page === "members" ? <MiniMembers /> : <Card title={names[page]}>
+          </> : page === "members" ? <MiniMembers /> : page === "cards" ? <CardsCatalog /> : <Card title={names[page]}>
             <Empty description="لا توجد بيانات متصلة بعد" /><div className="placeholder-note"><Text>قسم {names[page]} جاهز للتجهيز. لن يتم تنفيذ أي عملية أو تغيير بيانات في هذه النسخة.</Text></div>
           </Card>}
           <div className="app-footer">Flexy Mini · Refine + Ant Design · عرض تجريبي فقط</div>
