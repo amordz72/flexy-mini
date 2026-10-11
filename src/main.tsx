@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Authenticated, Refine, useLogout } from "@refinedev/core";
+import { Authenticated, Refine, useLogin, useLogout } from "@refinedev/core";
 import type { AuthProvider } from "@refinedev/core";
 import { AuthPage } from "@refinedev/antd";
 import { HashRouter, Route, Routes } from "react-router";
@@ -8,7 +8,7 @@ import routerProvider from "@refinedev/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { dataProvider, liveProvider } from "@refinedev/supabase";
 
-import { ConfigProvider, Layout, Menu, Typography, Card, Row, Col, Table, Tag, Button, Space, Alert, Grid, Drawer, Empty, Descriptions } from "antd";
+import { ConfigProvider, Form, Input, Layout, Menu, Typography, Card, Row, Col, Table, Tag, Button, Space, Alert, Grid, Drawer, Empty, Descriptions } from "antd";
 import "antd/dist/reset.css";
 import "./style.css";
 
@@ -22,8 +22,11 @@ async function isShopAdmin(): Promise<boolean> {
   return !error && data === true;
 }
 const authProvider: AuthProvider | undefined = client ? {
-  login: async ({ email, password }) => {
-    const { error } = await client.auth.signInWithPassword({ email, password });
+  login: async ({ identifier, email, password }) => {
+    const value = String(identifier || email || "").trim();
+    if (!value.includes("@") && !/^\+?[0-9]{8,15}$/.test(value)) return { success: false, error: { name: "UnlinkedUsername", message: "اسم المستخدم غير مربوط بحساب الإدارة بعد. استعمل البريد الإلكتروني حاليًا." } };
+    const credentials = value.includes("@") ? { email: value, password } : { phone: value, password };
+    const { error } = await client.auth.signInWithPassword(credentials);
     if (error) return { success: false, error: { name: "LoginError", message: "تعذر تسجيل الدخول" } };
     if (!(await isShopAdmin())) {
       await client.auth.signOut();
@@ -45,6 +48,27 @@ const authProvider: AuthProvider | undefined = client ? {
     return data.user ? { id: data.user.id, name: data.user.email || "مستخدم" } : null;
   },
 } : undefined;
+function LoginPage() {
+  const { mutate: login, isPending } = useLogin();
+  return <ConfigProvider direction="rtl" theme={{ token: { colorPrimary: "#2563eb" } }}>
+    <div dir="rtl" style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#f4f6fa", padding: 16 }}>
+      <Card title="⚡ فليكسي ميني — تسجيل الدخول" style={{ width: "100%", maxWidth: 420 }}>
+        <Form layout="vertical" onFinish={(values) => login(values)}>
+          <Form.Item label="البريد الإلكتروني أو اسم المستخدم أو رقم الهاتف" name="identifier" rules={[{ required: true, message: "أدخل معرّف الحساب" }]}>
+            <Input autoComplete="username" placeholder="البريد أو المستخدم أو الهاتف" size="large" dir="ltr" />
+          </Form.Item>
+          <Form.Item label="كلمة المرور" name="password" rules={[{ required: true, message: "أدخل كلمة المرور" }]}>
+            <Input.Password autoComplete="current-password" size="large" dir="ltr" />
+          </Form.Item>
+          <Button htmlType="submit" type="primary" size="large" loading={isPending} block>دخول</Button>
+          <Typography.Paragraph type="secondary" style={{ marginTop: 16, marginBottom: 0 }}>
+            البريد الإلكتروني يعمل حاليًا. رقم الهاتف يعمل إذا كان مسجلًا في حساب المصادقة، واسم المستخدم يحتاج ربطًا آمنًا قبل تفعيله.
+          </Typography.Paragraph>
+        </Form>
+      </Card>
+    </div>
+  </ConfigProvider>;
+}
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
 const items = [
@@ -127,7 +151,7 @@ function Dashboard() {
             {mobile && <Button onClick={() => setDrawer(true)} aria-label="فتح القائمة">☰</Button>}
             <Text strong>Flexy Mini</Text>
           </Space>
-          <Space><Tag color={client ? "green" : "blue"}>v0.6.3 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
+          <Space><Tag color={client ? "green" : "blue"}>v0.6.4 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
         </Header>
         <Content className="app-content">
           <div className="page-heading"><Title level={mobile ? 3 : 2}>{names[page]}</Title><Text type="secondary">نسخة معاينة · بدون معاملات</Text></div>
@@ -161,8 +185,8 @@ createRoot(document.getElementById("root")!).render(
         liveProvider={client ? liveProvider(client) : undefined}
         resources={[]} options={{ syncWithLocation: true, warnWhenUnsavedChanges: true }}>
         <Routes>
-          <Route path="/login" element={client ? <AuthPage type="login" registerLink={false} forgotPasswordLink={false} /> : <Alert type="error" showIcon message="التطبيق غير مهيأ للاتصال. لا يمكن الدخول قبل إعداد Supabase." />} />
-          <Route path="/" element={client ? <Authenticated key="protected" fallback={<AuthPage type="login" registerLink={false} forgotPasswordLink={false} />}><Dashboard /></Authenticated> : <Alert type="error" showIcon message="الاتصال غير مهيأ. تم تعطيل وضع المعاينة المفتوح." />} />
+          <Route path="/login" element={client ? <LoginPage /> : <Alert type="error" showIcon message="التطبيق غير مهيأ للاتصال. لا يمكن الدخول قبل إعداد Supabase." />} />
+          <Route path="/" element={client ? <Authenticated key="protected" fallback={<LoginPage />}><Dashboard /></Authenticated> : <Alert type="error" showIcon message="الاتصال غير مهيأ. تم تعطيل وضع المعاينة المفتوح." />} />
         </Routes>
       </Refine>
     </HashRouter>
