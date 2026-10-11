@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { Authenticated, Refine, useLogout } from "@refinedev/core";
 import type { AuthProvider } from "@refinedev/core";
 import { AuthPage } from "@refinedev/antd";
-import { BrowserRouter, Route, Routes } from "react-router";
+import { HashRouter, Route, Routes } from "react-router";
 import routerProvider from "@refinedev/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { dataProvider, liveProvider } from "@refinedev/supabase";
@@ -127,7 +127,7 @@ function Dashboard() {
             {mobile && <Button onClick={() => setDrawer(true)} aria-label="فتح القائمة">☰</Button>}
             <Text strong>Flexy Mini</Text>
           </Space>
-          <Space><Tag color={client ? "green" : "blue"}>v0.6.2 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
+          <Space><Tag color={client ? "green" : "blue"}>v0.6.3 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
         </Header>
         <Content className="app-content">
           <div className="page-heading"><Title level={mobile ? 3 : 2}>{names[page]}</Title><Text type="secondary">نسخة معاينة · بدون معاملات</Text></div>
@@ -156,7 +156,7 @@ function Dashboard() {
 }
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <BrowserRouter basename={import.meta.env.BASE_URL}>
+    <HashRouter>
       <Refine routerProvider={routerProvider} authProvider={authProvider} dataProvider={client ? dataProvider(client) : undefined}
         liveProvider={client ? liveProvider(client) : undefined}
         resources={[]} options={{ syncWithLocation: true, warnWhenUnsavedChanges: true }}>
@@ -165,6 +165,6 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/" element={client ? <Authenticated key="protected" fallback={<AuthPage type="login" registerLink={false} forgotPasswordLink={false} />}><Dashboard /></Authenticated> : <Alert type="error" showIcon message="الاتصال غير مهيأ. تم تعطيل وضع المعاينة المفتوح." />} />
         </Routes>
       </Refine>
-    </BrowserRouter>
+    </HashRouter>
   </React.StrictMode>
 );
