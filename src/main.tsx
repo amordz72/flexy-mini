@@ -5,7 +5,7 @@ import { BrowserRouter, Route, Routes } from "react-router";
 import routerProvider from "@refinedev/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { dataProvider, liveProvider } from "@refinedev/supabase";
-import { ConfigProvider, Layout, Menu, Typography, Card, Row, Col, Table, Tag, Button, Space, Alert, Grid, Drawer } from "antd";
+import { ConfigProvider, Layout, Menu, Typography, Card, Row, Col, Table, Tag, Button, Space, Alert, Grid, Drawer, Empty } from "antd";
 import "antd/dist/reset.css";
 import "./style.css";
 
@@ -34,13 +34,14 @@ const sample = [
 function Dashboard() {
   const [page, setPage] = useState("home");
   const [drawer, setDrawer] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const screens = Grid.useBreakpoint();
   const mobile = !screens.md;
-  const menu = <Menu mode="inline" selectedKeys={[page]} items={items} onClick={({ key }) => { setPage(key); setDrawer(false); }} />;
+  const menu = <Menu aria-label="أقسام لوحة الإدارة" mode="inline" selectedKeys={[page]} items={items} onClick={({ key }) => { setPage(key); setDrawer(false); }} />;
   return <ConfigProvider direction="rtl" theme={{ token: { colorPrimary: "#2563eb", borderRadius: 10 } }}>
     <Layout className="app-layout" dir="rtl">
-      {!mobile && <Sider width={242} theme="light" className="app-sider">
-        <div className="brand">⚡ فليكسي ميني</div>{menu}
+      {!mobile && <Sider width={242} collapsedWidth={76} collapsed={collapsed} theme="light" className="app-sider">
+        <div className="brand">{collapsed ? "⚡" : "⚡ فليكسي ميني"}</div><Button className="collapse-button" type="text" onClick={() => setCollapsed(!collapsed)} aria-label={collapsed ? "توسيع القائمة" : "تصغير القائمة"}>{collapsed ? "⇤" : "⇥"}</Button>{menu}
       </Sider>}
       <Drawer title="⚡ فليكسي ميني" placement="right" open={mobile && drawer} onClose={() => setDrawer(false)} width={260}>{menu}</Drawer>
       <Layout>
@@ -49,10 +50,10 @@ function Dashboard() {
             {mobile && <Button onClick={() => setDrawer(true)} aria-label="فتح القائمة">☰</Button>}
             <Text strong>Flexy Mini</Text>
           </Space>
-          <Tag color="blue">v0.2.0 · تجربة</Tag>
+          <Tag color="blue">v0.2.1 · تجربة</Tag>
         </Header>
         <Content className="app-content">
-          <Title level={mobile ? 3 : 2}>{names[page]}</Title>
+          <div className="page-heading"><Title level={mobile ? 3 : 2}>{names[page]}</Title><Text type="secondary">نسخة معاينة · بدون معاملات</Text></div>
           <Alert type="info" showIcon message="هذه لوحة إدارة تجريبية. لا توجد عمليات مالية أو شحن مفعّلة." className="notice" />
           {page === "home" ? <>
             <Row gutter={[16, 16]}>
@@ -68,7 +69,7 @@ function Dashboard() {
               ]} />
             </Card>
           </> : <Card title={names[page]}>
-            <Text>هذه مساحة {names[page]} ضمن لوحة Refine وAnt Design. البيانات والإجراءات الحقيقية غير مفعّلة بعد.</Text>
+            <Empty description="لا توجد بيانات متصلة بعد" /><div className="placeholder-note"><Text>قسم {names[page]} جاهز للتجهيز. لن يتم تنفيذ أي عملية أو تغيير بيانات في هذه النسخة.</Text></div>
           </Card>}
           <div className="app-footer">Flexy Mini · Refine + Ant Design · عرض تجريبي فقط</div>
         </Content>
