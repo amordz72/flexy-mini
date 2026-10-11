@@ -1,8 +1,8 @@
 import React,{useEffect,useState} from "react";
 import {Button,Card,Form,Input,Select,Switch,Table,Space,Alert,message} from "antd";
 import {SupabaseClient} from "@supabase/supabase-js";
-type Ad={id:number;title:string;body:string|null;image_url:string|null;link_url:string|null;content_display_mode:string;enabled:boolean;display_mode:string;start_at:string|null;end_at:string|null;week_start:number;week_end:number;sort_index:number};
-const fallback:Ad={id:-1,title:"مرحبًا بك في Flexy Mini",body:"الفليكسي وإيدوم والبطاقات الرقمية في مكان واحد",image_url:null,link_url:null,content_display_mode:"auto",enabled:true,display_mode:"always",start_at:null,end_at:null,week_start:4,week_end:5,sort_index:0};
+type Ad={is_fallback:boolean;id:number;title:string;body:string|null;image_url:string|null;link_url:string|null;content_display_mode:string;enabled:boolean;display_mode:string;start_at:string|null;end_at:string|null;week_start:number;week_end:number;sort_index:number};
+const fallback:Ad={is_fallback:true,id:-1,title:"مرحبًا بك في Flexy Mini",body:"الفليكسي وإيدوم والبطاقات الرقمية في مكان واحد",image_url:null,link_url:null,content_display_mode:"auto",enabled:true,display_mode:"always",start_at:null,end_at:null,week_start:4,week_end:5,sort_index:0};
 const days=["الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
 function shown(a:Ad,d:Date){if(!a.enabled)return false;if(a.display_mode==="period")return (!a.start_at||d>=new Date(a.start_at))&&(!a.end_at||d<=new Date(a.end_at));if(a.display_mode==="weekly"){const n=d.getDay();return a.week_start<=a.week_end?n>=a.week_start&&n<=a.week_end:n>=a.week_start||n<=a.week_end;}return true;}
 export default function AdSystem({db,admin=false}:{db:SupabaseClient;admin?:boolean}){
@@ -11,23 +11,27 @@ export default function AdSystem({db,admin=false}:{db:SupabaseClient;admin?:bool
  const [uploading,setUploading]=useState(false);
  const [preview,setPreview]=useState("");
  const [slideError,setSlideError]=useState(false);
+ const [loaded,setLoaded]=useState(false);
+ const [savingId,setSavingId]=useState<number|null>(null);
  const uploadImage=async(file:File)=>{if(!["image/jpeg","image/png","image/webp","image/gif"].includes(file.type)||file.size>5*1024*1024){message.error("اختر صورة بحجم أقل من 5 ميغابايت");return;}setUploading(true);try{const ext=({"image/jpeg":"jpg","image/png":"png","image/webp":"webp","image/gif":"gif"} as Record<string,string>)[file.type];const path=crypto.randomUUID()+"."+ext;const r=await db.storage.from("flexy-mini-ads").upload(path,file,{contentType:file.type,upsert:false});if(r.error)throw r.error;const publicUrl=db.storage.from("flexy-mini-ads").getPublicUrl(path).data.publicUrl;form.setFieldValue("image_url",publicUrl);setPreview(publicUrl);message.success("تم رفع الصورة");}catch{message.error("تعذر رفع الصورة. يجب تجهيز مساحة تخزين إعلانات Flexy Mini أولًا.");}finally{setUploading(false);}};
- const reload=async()=>{const r=await db.from("flexy_mini_ads").select("*").order("sort_index");if(r.error)setError("قاعدة بيانات الإعلانات غير مجهزة بعد");else{setAds((r.data||[]) as Ad[]);setError("");}};
+ const reload=async()=>{const r=await db.from("flexy_mini_ads").select("*").order("sort_index");if(r.error)setError("تعذر تحميل الإعلانات");else{setAds((r.data||[]) as Ad[]);setError("");}setLoaded(true);};
  useEffect(()=>{void reload();const t=setInterval(()=>setNow(new Date()),30000);return()=>clearInterval(t);},[]);
- const slides=ads.filter(a=>shown(a,now));if(!slides.length)slides.push(fallback);
+ const ordinary=ads.filter(a=>!a.is_fallback&&shown(a,now));
+ const savedFallback=ads.find(a=>a.is_fallback);
+ const slides=ordinary.length?ordinary:(savedFallback&&shown(savedFallback,now)?[savedFallback]:[]);
  useEffect(()=>{if(slides.length<2)return;const t=setInterval(()=>setIdx(i=>(i+1)%slides.length),5000);return()=>clearInterval(t);},[slides.map(a=>a.id).join(",")]);
- const current=slides[idx%slides.length];
- useEffect(()=>setSlideError(false),[current.id,current.image_url]);
- const mode=current.content_display_mode||"auto";
- const imageVisible=!!current.image_url&&!slideError&&mode!=="text";
+ const current=slides.length?slides[idx%slides.length]:null;
+ useEffect(()=>setSlideError(false),[current?.id,current?.image_url]);
+ const mode=current?.content_display_mode||"auto";
+ const imageVisible=!!current?.image_url&&!slideError&&mode!=="text";
  const textVisible=mode==="text"||mode==="both"||!imageVisible;
  const save=async(v:any)=>{if(!v.body?.trim()&&!v.image_url){message.error("أدخل نص الإعلان أو ارفع صورة");return;}if(v.content_display_mode==="text"&&!v.body?.trim()){message.error("وضع النص فقط يحتاج نص الإعلان");return;}if(v.content_display_mode==="image"&&!v.image_url){message.error("وضع الصورة فقط يحتاج صورة");return;}const link=(v.link_url||"").trim();if(link&&!/^https:\/\/[^\s]+$/i.test(link)){message.error("الرابط يجب أن يبدأ بـ https://");return;}const title=v.title?.trim()||null;const data={...v,content_display_mode:v.content_display_mode||"auto",link_url:link||null,title:title||"إعلان جديد",body:v.body||"",image_url:v.image_url||null,sort_index:Number(v.sort_index)||0,start_at:v.display_mode==="period"&&v.start_at?new Date(v.start_at).toISOString():null,end_at:v.display_mode==="period"&&v.end_at?new Date(v.end_at).toISOString():null};const r=edit===null?await db.from("flexy_mini_ads").insert(data).select("id").single():await db.from("flexy_mini_ads").update(data).eq("id",edit).select("id").single();if(r.error){message.error(r.error.message);return;}if(!title&&r.data?.id){const name="إعلان #"+r.data.id;const named=await db.from("flexy_mini_ads").update({title:name}).eq("id",r.data.id);if(named.error)message.warning("حُفظ الإعلان لكن تعذر تحديث اسمه التلقائي");}message.success("تم الحفظ");setEdit(null);setPreview("");form.resetFields();await reload();};
  return <Space direction="vertical" style={{width:"100%"}} size="large">
- <div style={{borderRadius:18,background:imageVisible?"transparent":"#243b78",color:"white",padding:imageVisible?0:24,minHeight:imageVisible?0:190,position:"relative",overflow:"hidden",display:"flex",flexDirection:"column",justifyContent:"center",gap:12}}>
- {imageVisible?(current.link_url?<a href={current.link_url} target="_blank" rel="noopener noreferrer" aria-label={"فتح رابط "+current.title} style={{display:"block",width:"100%"}}><img src={current.image_url||undefined} alt={current.title} onError={()=>setSlideError(true)} style={{width:"100%",height:"auto",display:"block",cursor:"pointer"}}/></a>:<img src={current.image_url||undefined} alt={current.title} onError={()=>setSlideError(true)} style={{width:"100%",height:"auto",display:"block"}}/> ):null}
- {textVisible&&<div style={{padding:imageVisible?16:0,background:imageVisible?"#243b78":"transparent",color:"white"}}><strong style={{fontSize:25}}>{current.body||"مرحبًا بك"}</strong>{current.link_url&&!imageVisible&&<div><a href={current.link_url} target="_blank" rel="noopener noreferrer" style={{color:"white",textDecoration:"underline"}}>افتح الرابط ↗</a></div>}</div>}
+ {!loaded?<div style={{minHeight:190}} aria-label="جاري تحميل الإعلانات"/>:current?<div style={{borderRadius:18,background:imageVisible?"transparent":"#243b78",color:"white",padding:imageVisible?0:24,minHeight:imageVisible?0:190,position:"relative",overflow:"hidden",display:"flex",flexDirection:"column",justifyContent:"center",gap:12}}>
+ {imageVisible?(current?.link_url?<a href={current.link_url} target="_blank" rel="noopener noreferrer" aria-label={"فتح رابط "+current?.title} style={{display:"block",width:"100%"}}><img src={current?.image_url||undefined} alt={current.title} onError={()=>setSlideError(true)} style={{width:"100%",height:"auto",display:"block",cursor:"pointer"}}/></a>:<img src={current.image_url||undefined} alt={current.title} onError={()=>setSlideError(true)} style={{width:"100%",height:"auto",display:"block"}}/> ):null}
+ {textVisible&&<div style={{padding:imageVisible?16:0,background:imageVisible?"#243b78":"transparent",color:"white"}}><strong style={{fontSize:25}}>{current?.body||"مرحبًا بك"}</strong>{current.link_url&&!imageVisible&&<div><a href={current.link_url} target="_blank" rel="noopener noreferrer" style={{color:"white",textDecoration:"underline"}}>افتح الرابط ↗</a></div>}</div>}
  {slides.length>1&&<Space style={{position:imageVisible?"absolute":"relative",bottom:imageVisible?10:undefined,left:imageVisible?12:undefined,right:imageVisible?12:undefined,justifyContent:"space-between",background:imageVisible?"#0007":"transparent",borderRadius:14,padding:4}}><Button onClick={()=>setIdx(i=>(i+slides.length-1)%slides.length)}>❯</Button><span>{idx%slides.length+1} / {slides.length}</span><Button onClick={()=>setIdx(i=>(i+1)%slides.length)}>❮</Button></Space>}
- </div>
+ </div>:null}
  {admin&&<Card title="إدارة الإعلانات">{error&&<Alert type="warning" message={error} style={{marginBottom:12}}/>}
  <Form form={form} layout="vertical" initialValues={{enabled:true,display_mode:"always",content_display_mode:"auto",week_start:4,week_end:5,sort_index:0}} onFinish={save}>
  <Form.Item name="title" label="اسم داخلي للإعلان (اختياري، لا يظهر للزبون)"><Input/></Form.Item>
@@ -42,7 +46,7 @@ export default function AdSystem({db,admin=false}:{db:SupabaseClient;admin?:bool
  <Form.Item name="sort_index" label="الترتيب"><Input type="number"/></Form.Item>
  <Space><Button type="primary" htmlType="submit">{edit===null?"إضافة إعلان":"حفظ"}</Button>{edit!==null&&<Button onClick={()=>{setEdit(null);form.resetFields()}}>إلغاء</Button>}</Space>
  </Form>
- <Table style={{marginTop:16}} rowKey="id" dataSource={ads} pagination={{pageSize:8}} scroll={{x:460}} columns={[{title:"الإعلان",dataIndex:"title"},{title:"الحالة",render:(_,a:Ad)=>shown(a,now)?"ظاهر":a.enabled?"مجدول":"مخفي"},{title:"الإجراءات",render:(_,a:Ad)=><Space><Button size="small" onClick={()=>{setEdit(a.id);setPreview(a.image_url||"");form.setFieldsValue({...a,start_at:a.start_at?.slice(0,16),end_at:a.end_at?.slice(0,16)})}}>تعديل</Button><Button size="small" onClick={async()=>{const r=await db.from("flexy_mini_ads").update({enabled:!a.enabled}).eq("id",a.id);if(r.error)message.error(r.error.message);else await reload();}}>{a.enabled?"إخفاء":"إظهار"}</Button></Space>}]}/>
+ <Table style={{marginTop:16}} rowKey="id" dataSource={ads} pagination={{pageSize:8}} scroll={{x:460}} columns={[{title:"الإعلان",render:(_,a:Ad)=><span>{a.title}{a.is_fallback?" (افتراضي)":""}</span>},{title:"الحالة",render:(_,a:Ad)=>a.is_fallback?"احتياطي":shown(a,now)?"ظاهر":a.enabled?"مجدول":"مخفي"},{title:"الإجراءات",render:(_,a:Ad)=><Space><Button size="small" onClick={()=>{setEdit(a.id);setPreview(a.image_url||"");form.setFieldsValue({...a,start_at:a.start_at?.slice(0,16),end_at:a.end_at?.slice(0,16)})}}>تعديل</Button><Button size="small" loading={savingId===a.id} onClick={async()=>{setSavingId(a.id);const r=await db.from("flexy_mini_ads").update({enabled:!a.enabled}).eq("id",a.id).select("id,enabled").single();if(r.error)message.error("فشل تغيير الحالة: "+r.error.message);else{setAds(old=>old.map(x=>x.id===a.id?{...x,enabled:r.data.enabled}:x));message.success(r.data.enabled?"تم الإظهار":"تم الإخفاء");}setSavingId(null);}}>{a.enabled?"إخفاء":"إظهار"}</Button></Space>}]}/>
  </Card>}
  </Space>;
 }
