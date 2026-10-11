@@ -226,6 +226,16 @@ function MasterCustomerLookup() {
   const [name,setName]=useState("");
   const [phone,setPhone]=useState("");
   const [username,setUsername]=useState("");
+  const [masterRecord,setMasterRecord]=useState<{id:number;display_name:string;primary_phone?:string|null;mytool_username?:string|null}|null>(null);
+  const assignMaster=(r:{id:number;display_name:string;primary_phone?:string|null;mytool_username?:string|null},overwrite=false)=>{
+    setSelected(r.id);setMasterRecord(r);
+    if(overwrite||!name.trim())setName(r.display_name||"");
+    const digits=(r.primary_phone||"").replace(/\D/g,"");
+    const normalized=digits.startsWith("213")?"0"+digits.slice(3):digits;
+    if(normalized&&(overwrite||!phone.trim()))setPhone(normalized);
+    const candidate=(r.mytool_username||"").trim();
+    if(candidate&&!/^mt\d*_\d+$/i.test(candidate)&&(overwrite||!username.trim()))setUsername(candidate);
+  };
   useEffect(()=>{
     if(!client || query.trim().length<2){setMatches([]);return;}
     let active=true;
@@ -262,8 +272,9 @@ function MasterCustomerLookup() {
         {title:"الماستر",dataIndex:"display_name"},
         {title:"الهاتف",dataIndex:"primary_phone",render:(v:string|null)=><span dir="ltr">{v||"—"}</span>},
         {title:"اسم المستخدم",dataIndex:"mytool_username"},
-        {title:"الربط",render:(_:unknown,r:{id:number})=><Button type={selected===r.id?"primary":"default"} onClick={()=>setSelected(r.id)}>{selected===r.id?"تم الاختيار":"اختيار"}</Button>}
+        {title:"الربط",render:(_:unknown,r:{id:number})=><Button type={selected===r.id?"primary":"default"} onClick={()=>assignMaster(r)}>{selected===r.id?"تم الاختيار":"اختيار"}</Button>}
       ]}/>
+      {masterRecord&&<Space wrap style={{marginTop:12}}><Button onClick={()=>assignMaster(masterRecord,true)}>إسناد بيانات الماستر</Button><Text type="secondary">تعبئة الاسم والهاتف واسم المستخدم غير التقني من الماستر</Text></Space>}
       <Alert style={{marginTop:12}} type={selected?"success":"info"} message={selected?"تم اختيار ماستر موجود. سيُربط عند الحفظ بعد تجهيز الخدمة.":"إذا لم يوجد تطابق، يلزم إنشاء ماستر جديد عند الحفظ. لا يُسمح بحساب دون ماستر."}/>
       <Button style={{marginTop:12}} type="primary" disabled>حفظ الزبون وإنشاء الحساب — قريبًا</Button>
     </Card>}
@@ -382,7 +393,7 @@ function Dashboard() {
             {mobile && <Button onClick={() => setDrawer(true)} aria-label="فتح القائمة">☰</Button>}
             <Text strong>Flexy Mini</Text>
           </Space>
-          <Space><Tag color={client ? "green" : "blue"}>v0.8.4 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
+          <Space><Tag color={client ? "green" : "blue"}>v0.8.5 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
         </Header>
         <Content className="app-content">
           {page !== "home" && <div className="page-heading"><Title level={mobile ? 3 : 2}>{names[page]}</Title></div>}
