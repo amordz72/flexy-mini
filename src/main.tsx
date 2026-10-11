@@ -253,7 +253,20 @@ function ConnectionDiagnostics() {
 }
 function Dashboard() {
   const { mutate: logout } = useLogout();
-  const [page, setPage] = useState("home");
+  const validPages = new Set(["home","flexy","idoom","store","operations","cards","inventory","customers","stations","members","ads","settings"]);
+  const readPage = () => { const value = new URLSearchParams(window.location.hash.split("?")[1] || "").get("page"); return value && validPages.has(value) ? value : "home"; };
+  const [page, setPageState] = useState(readPage);
+  const setPage = (next: string) => {
+    const safe = validPages.has(next) ? next : "home";
+    setPageState(safe);
+    const base = window.location.hash.split("?")[0] || "#/";
+    window.history.replaceState(null, "", base + (safe === "home" ? "" : "?page=" + encodeURIComponent(safe)));
+  };
+  useEffect(() => {
+    const sync = () => setPageState(readPage());
+    window.addEventListener("hashchange", sync);
+    return () => window.removeEventListener("hashchange", sync);
+  }, []);
   const [drawer, setDrawer] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const screens = Grid.useBreakpoint();
