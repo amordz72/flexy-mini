@@ -12,6 +12,7 @@ import { ConfigProvider, Form, Input, Layout, Menu, Typography, Card, Row, Col, 
 import "antd/dist/reset.css";
 import "./style.css";
 import AdSystem from "./AdSystem";
+import AdminWallet from "./AdminWallet";
 
 const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined) || "https://wqyebqzbbpohbnznqdjj.supabase.co";
 const key = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) || "sb_publishable_gO4umNBMJ0AWRk19HtKd7A_9X4DibYj";
@@ -275,11 +276,8 @@ function Dashboard() {
           {page !== "home" && <div className="page-heading"><Title level={mobile ? 3 : 2}>{names[page]}</Title></div>}
           {page === "home" ? <>
             {client && <div style={{marginBottom:18}}><AdSystem db={client}/></div>}
-            <Row gutter={[12, 12]} style={{ marginBottom: 24 }}>
-              {[
-                { title: "الرصيد", detail: "رصيد تجريبي للإدارة — غير قابل للاستخدام", icon: "◈", value: "100,000 دج" }
-              ].map(metric => <Col xs={24} sm={8} key={metric.title}><Card bordered={false} style={{ borderRadius: 14, height: "100%" }}><Space align="start" style={{ width: "100%", justifyContent: "space-between" }}><div><Text type="secondary">{metric.title}</Text><div style={{ fontSize: 24, fontWeight: 700, marginTop: 8, color: "#16a34a" }}>{metric.value}</div><Text type="secondary" style={{ fontSize: 12 }}>{metric.detail}</Text></div><span style={{ fontSize: 28, color: "#5676cb" }}>{metric.icon}</span></Space></Card></Col>)}
-            </Row>
+            {client && <AdminWallet db={client}/>}
+
             <Title level={4} style={{ marginBottom: 16 }}>الخدمات</Title>
             <Row gutter={[12, 12]}>
               {[
