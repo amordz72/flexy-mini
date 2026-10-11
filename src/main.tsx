@@ -79,7 +79,7 @@ const items = [
   {key:"cards",label:"إدارة البطاقات والأصناف"},{key:"inventory",label:"إضافة أكواد البطاقات"},{key:"customers",label:"إدارة الزبائن"},{key:"stations",label:"المحطات والشرائح"},{key:"members",label:"المستخدمون والصلاحيات"},{key:"settings",label:"الإعدادات"}
  ]}
 ];
-const names:Record<string,string>={home:"الرئيسية",flexy:"الفليكسي",idoom:"تعبئة إيدوم",store:"متجر البطاقات",cards:"إدارة البطاقات والأصناف",inventory:"إضافة أكواد البطاقات",customers:"إدارة الزبائن",stations:"المحطات والشرائح",members:"المستخدمون والصلاحيات",settings:"الإعدادات"};
+const names:Record<string,string>={home:"الرئيسية",flexy:"الفليكسي",idoom:"تعبئة إيدوم",store:"متجر البطاقات",operations:"العمليات",cards:"إدارة البطاقات والأصناف",inventory:"إضافة أكواد البطاقات",customers:"إدارة الزبائن",stations:"المحطات والشرائح",members:"المستخدمون والصلاحيات",settings:"الإعدادات"};
 const sample = [
   { key: "1", name: "موبيليس", kind: "فليكسي", state: "واجهة تجريبية" },
   { key: "2", name: "بطاقات موبيليس", kind: "بطاقات", state: "غير مربوط" },
@@ -258,7 +258,7 @@ function Dashboard() {
             {mobile && <Button onClick={() => setDrawer(true)} aria-label="فتح القائمة">☰</Button>}
             <Text strong>Flexy Mini</Text>
           </Space>
-          <Space><Tag color={client ? "green" : "blue"}>v0.7.3 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
+          <Space><Tag color={client ? "green" : "blue"}>v0.7.7 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
         </Header>
         <Content className="app-content">
           {page !== "home" && <div className="page-heading"><Title level={mobile ? 3 : 2}>{names[page]}</Title></div>}
@@ -284,9 +284,18 @@ function Dashboard() {
                 { title: "بطاقات رقمية", subtitle: "ألعاب، اتصالات وبرامج", color: "#625ee8", target: "store", symbol: "▣" }
               ].map(service => <Col xs={24} md={8} key={service.title}><div onClick={() => setPage(service.target)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter") setPage(service.target); }} style={{ background: service.color, borderRadius: 14, color: "white", padding: "22px 20px", minHeight: 112, cursor: "pointer", boxShadow: "0 6px 15px rgba(0,0,0,.08)" }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 20, fontWeight: 700 }}>{service.title}</span><span style={{ fontSize: 27 }}>{service.symbol}</span></div><div style={{ opacity: .9, marginTop: 9 }}>{service.subtitle}</div></div></Col>)}
             </Row>
-          </> : page === "settings" ? <ConnectionDiagnostics /> : page === "members" ? <MiniMembers /> : page === "cards" ? <CardsCatalog /> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز" /></Card>}
+          </> : page === "settings" ? <ConnectionDiagnostics /> : page === "members" ? <MiniMembers /> : page === "cards" ? <CardsCatalog /> : page === "operations" ? <Card title="عملياتي"><Empty description="سجل عمليات حسابك لم يُفعّل بعد" /></Card> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز" /></Card>}
           <div className="app-footer">Flexy Mini · Refine + Ant Design · عرض تجريبي فقط</div>
         </Content>
+        <nav className="bottom-service-nav" aria-label="خدمات الموقع" dir="rtl">
+          {[
+            {key:"flexy",label:"فليكسي",symbol:"▣"},
+            {key:"idoom",label:"تعبئة إيدوم",symbol:"◎"},
+            {key:"home",label:"الرئيسية",symbol:"⌂"},
+            {key:"store",label:"البطاقات",symbol:"▤"},
+            {key:"operations",label:"العمليات",symbol:"◷"}
+          ].map(item=><Button key={item.key} type="text" className={page===item.key?"service-nav-active":""} onClick={()=>setPage(item.key)}><span className="service-nav-icon">{item.symbol}</span><span>{item.label}</span></Button>)}
+        </nav>
       </Layout>
     </Layout>
   </ConfigProvider>;
