@@ -11,6 +11,7 @@ import { dataProvider, liveProvider } from "@refinedev/supabase";
 import { ConfigProvider, Form, Input, Layout, Menu, Typography, Card, Row, Col, Table, Tag, Button, Space, Alert, Grid, Drawer, Empty, Descriptions } from "antd";
 import "antd/dist/reset.css";
 import "./style.css";
+import AdSystem from "./AdSystem";
 
 const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined) || "https://wqyebqzbbpohbnznqdjj.supabase.co";
 const key = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) || "sb_publishable_gO4umNBMJ0AWRk19HtKd7A_9X4DibYj";
@@ -76,10 +77,10 @@ const items = [
   {key:"home",label:"الرئيسية"},{key:"flexy",label:"الفليكسي"},{key:"idoom",label:"تعبئة إيدوم"},{key:"store",label:"متجر البطاقات"}
  ]},
  {type:"group" as const,label:"خدمات الإدارة",children:[
-  {key:"cards",label:"إدارة البطاقات والأصناف"},{key:"inventory",label:"إضافة أكواد البطاقات"},{key:"customers",label:"إدارة الزبائن"},{key:"stations",label:"المحطات والشرائح"},{key:"members",label:"المستخدمون والصلاحيات"},{key:"settings",label:"الإعدادات"}
+  {key:"cards",label:"إدارة البطاقات والأصناف"},{key:"inventory",label:"إضافة أكواد البطاقات"},{key:"customers",label:"إدارة الزبائن"},{key:"stations",label:"المحطات والشرائح"},{key:"members",label:"المستخدمون والصلاحيات"},{key:"ads",label:"إدارة الإعلانات"},{key:"settings",label:"الإعدادات"}
  ]}
 ];
-const names:Record<string,string>={home:"الرئيسية",flexy:"الفليكسي",idoom:"تعبئة إيدوم",store:"متجر البطاقات",operations:"العمليات",cards:"إدارة البطاقات والأصناف",inventory:"إضافة أكواد البطاقات",customers:"إدارة الزبائن",stations:"المحطات والشرائح",members:"المستخدمون والصلاحيات",settings:"الإعدادات"};
+const names:Record<string,string>={home:"الرئيسية",flexy:"الفليكسي",idoom:"تعبئة إيدوم",store:"متجر البطاقات",operations:"العمليات",cards:"إدارة البطاقات والأصناف",inventory:"إضافة أكواد البطاقات",customers:"إدارة الزبائن",stations:"المحطات والشرائح",members:"المستخدمون والصلاحيات",ads:"إدارة الإعلانات",settings:"الإعدادات"};
 const sample = [
   { key: "1", name: "موبيليس", kind: "فليكسي", state: "واجهة تجريبية" },
   { key: "2", name: "بطاقات موبيليس", kind: "بطاقات", state: "غير مربوط" },
@@ -258,17 +259,12 @@ function Dashboard() {
             {mobile && <Button onClick={() => setDrawer(true)} aria-label="فتح القائمة">☰</Button>}
             <Text strong>Flexy Mini</Text>
           </Space>
-          <Space><Tag color={client ? "green" : "blue"}>v0.7.7 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
+          <Space><Tag color={client ? "green" : "blue"}>v0.8.0 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
         </Header>
         <Content className="app-content">
           {page !== "home" && <div className="page-heading"><Title level={mobile ? 3 : 2}>{names[page]}</Title></div>}
           {page === "home" ? <>
-            <Card bordered={false} style={{ marginBottom: 18, background: "linear-gradient(115deg,#152d60,#354fa9 55%,#7153be)", color: "white", borderRadius: 18, overflow: "hidden" }} bodyStyle={{ padding: mobile ? 22 : 34 }}>
-              <Text style={{ color: "#d9e7ff", fontSize: 13 }}>FLEXY MINI · متجرك الرقمي</Text>
-              <Title level={mobile ? 3 : 2} style={{ color: "white", marginTop: 12, marginBottom: 8 }}>بطاقاتك وخدماتك في مكان واحد</Title>
-              <Text style={{ color: "#e7eaff" }}>بطاقات الألعاب، الاتصالات والاشتراكات الرقمية</Text>
-              <div style={{ marginTop: 22 }}><Button type="primary" size="large" style={{ background: "white", color: "#243c83", fontWeight: 700 }} onClick={() => setPage("store")}>تصفح البطاقات ←</Button></div>
-            </Card>
+            {client && <div style={{marginBottom:18}}><AdSystem db={client}/></div>}
             <Row gutter={[12, 12]} style={{ marginBottom: 24 }}>
               {[
                 { title: "الرصيد", detail: "عند تفعيل المحفظة", icon: "◈" },
@@ -284,7 +280,7 @@ function Dashboard() {
                 { title: "بطاقات رقمية", subtitle: "ألعاب، اتصالات وبرامج", color: "#625ee8", target: "store", symbol: "▣" }
               ].map(service => <Col xs={24} md={8} key={service.title}><div onClick={() => setPage(service.target)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter") setPage(service.target); }} style={{ background: service.color, borderRadius: 14, color: "white", padding: "22px 20px", minHeight: 112, cursor: "pointer", boxShadow: "0 6px 15px rgba(0,0,0,.08)" }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 20, fontWeight: 700 }}>{service.title}</span><span style={{ fontSize: 27 }}>{service.symbol}</span></div><div style={{ opacity: .9, marginTop: 9 }}>{service.subtitle}</div></div></Col>)}
             </Row>
-          </> : page === "settings" ? <ConnectionDiagnostics /> : page === "members" ? <MiniMembers /> : page === "cards" ? <CardsCatalog /> : page === "operations" ? <Card title="عملياتي"><Empty description="سجل عمليات حسابك لم يُفعّل بعد" /></Card> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز" /></Card>}
+          </> : page === "ads" && client ? <AdSystem db={client} admin /> : page === "settings" ? <ConnectionDiagnostics /> : page === "members" ? <MiniMembers /> : page === "cards" ? <CardsCatalog /> : page === "operations" ? <Card title="عملياتي"><Empty description="سجل عمليات حسابك لم يُفعّل بعد" /></Card> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز" /></Card>}
           <div className="app-footer">Flexy Mini · Refine + Ant Design · عرض تجريبي فقط</div>
         </Content>
         <nav className="bottom-service-nav" aria-label="خدمات الموقع" dir="rtl">
