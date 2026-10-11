@@ -14,7 +14,7 @@ import "./style.css";
 
 const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined) || "https://wqyebqzbbpohbnznqdjj.supabase.co";
 const key = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) || "sb_publishable_gO4umNBMJ0AWRk19HtKd7A_9X4DibYj";
-const client = url && key ? createClient(url, key) : undefined;
+const client = url && key ? createClient(url, key, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } }) : undefined;
 // Existing MyTool RLS is the source of truth for admin access.
 async function isShopAdmin(): Promise<boolean> {
   if (!client) return false;
@@ -23,11 +23,7 @@ async function isShopAdmin(): Promise<boolean> {
   return !error && Array.isArray(data) && data.length > 0;
 }
 const authProvider: AuthProvider | undefined = client ? {
-  login: async ({ email, password, provider }) => {
-    if (provider === "google") {
-      const { error } = await client.auth.signInWithOAuth({ provider: "google", options: { redirectTo: window.location.origin + import.meta.env.BASE_URL } });
-      return error ? { success: false, error: { name: "GoogleLoginError", message: "تعذر الدخول بحساب Google" } } : { success: true };
-    }
+  login: async ({ email, password }) => {
     const { error } = await client.auth.signInWithPassword({ email, password });
     if (error) return { success: false, error: { name: "LoginError", message: "تعذر تسجيل الدخول" } };
     if (!(await isShopAdmin())) {
@@ -103,7 +99,7 @@ function ConnectionDiagnostics() {
       <Descriptions.Item label="عنوان المشروع">{url ? "مضبوط" : "غير مضبوط"}</Descriptions.Item>
       <Descriptions.Item label="المفتاح العام">{key ? "مضبوط" : "غير مضبوط"}</Descriptions.Item>
       <Descriptions.Item label="قاعدة البيانات">غير مختبرة</Descriptions.Item>
-      <Descriptions.Item label="حماية الوصول">لم تُفعّل بعد</Descriptions.Item>
+      <Descriptions.Item label="حماية الوصول">تحتاج اختبارًا عمليًا</Descriptions.Item>
     </Descriptions>
     <Space direction="vertical" className="diagnostics-actions">
       <Button type="primary" loading={status === "loading"} onClick={checkConnection}>اختبار الوصول لخدمة المصادقة</Button>
@@ -132,7 +128,7 @@ function Dashboard() {
             {mobile && <Button onClick={() => setDrawer(true)} aria-label="فتح القائمة">☰</Button>}
             <Text strong>Flexy Mini</Text>
           </Space>
-          <Space><Tag color={client ? "green" : "blue"}>v0.6.0 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
+          <Space><Tag color={client ? "green" : "blue"}>v0.6.1 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
         </Header>
         <Content className="app-content">
           <div className="page-heading"><Title level={mobile ? 3 : 2}>{names[page]}</Title><Text type="secondary">نسخة معاينة · بدون معاملات</Text></div>
@@ -166,8 +162,8 @@ createRoot(document.getElementById("root")!).render(
         liveProvider={client ? liveProvider(client) : undefined}
         resources={[]} options={{ syncWithLocation: true, warnWhenUnsavedChanges: true }}>
         <Routes>
-          <Route path="/login" element={client ? <AuthPage type="login" registerLink={false} forgotPasswordLink={false} providers={[{ name: "google", label: "Google" }]} /> : <Alert type="error" showIcon message="التطبيق غير مهيأ للاتصال. لا يمكن الدخول قبل إعداد Supabase." />} />
-          <Route path="/" element={client ? <Authenticated key="protected" fallback={<AuthPage type="login" registerLink={false} forgotPasswordLink={false} providers={[{ name: "google", label: "Google" }]} />}><Dashboard /></Authenticated> : <Alert type="error" showIcon message="الاتصال غير مهيأ. تم تعطيل وضع المعاينة المفتوح." />} />
+          <Route path="/login" element={client ? <AuthPage type="login" registerLink={false} forgotPasswordLink={false} /> : <Alert type="error" showIcon message="التطبيق غير مهيأ للاتصال. لا يمكن الدخول قبل إعداد Supabase." />} />
+          <Route path="/" element={client ? <Authenticated key="protected" fallback={<AuthPage type="login" registerLink={false} forgotPasswordLink={false} />}><Dashboard /></Authenticated> : <Alert type="error" showIcon message="الاتصال غير مهيأ. تم تعطيل وضع المعاينة المفتوح." />} />
         </Routes>
       </Refine>
     </BrowserRouter>
