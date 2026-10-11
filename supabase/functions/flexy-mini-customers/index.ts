@@ -48,6 +48,7 @@ Deno.serve(async(req)=>{
    if(action==="logout"){await admin.from("flexy_mini_customer_sessions").update({revoked_at:new Date().toISOString()}).eq("id",session.id);return respond(200,{ok:true});}
    const {data:account}=await admin.from("flexy_mini_customer_accounts").select("username,phone,party_id,active,credit_enabled").eq("id",session.customer_id).maybeSingle();
    if(!account?.active)return respond(401,{error:"Unauthorized"});
+   await admin.from("flexy_mini_trusted_devices").update({last_used_at:new Date().toISOString()}).eq("id",device.id);
    return respond(200,{username:account.username,phone:account.phone,party_id:account.party_id,credit_enabled:false});
  }
  const authorization=req.headers.get("authorization")||"";

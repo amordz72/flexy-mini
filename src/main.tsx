@@ -354,7 +354,7 @@ function TrustedDevices(){
     <Table rowKey="id" loading={busy} dataSource={devices} pagination={{pageSize:10}} scroll={{x:850}} columns={[
       {title:"الزبون",render:(_,d)=>d.flexy_mini_customer_accounts?.money_party_directory?.display_name||d.flexy_mini_customer_accounts?.username},
       {title:"المستخدم",render:(_,d)=>d.flexy_mini_customer_accounts?.username},
-      {title:"الجهاز",dataIndex:"device_label"},
+      {title:"الجهاز",render:(_,d)=>d.device_label+" #"+d.id},
       {title:"الحالة",render:(_,d)=><Tag color={state(d)==="معتمد"?"green":"orange"}>{state(d)}</Tag>},
       {title:"تاريخ الطلب",render:(_,d)=>new Date(d.created_at).toLocaleString("ar-DZ")},
       {title:"آخر استعمال",render:(_,d)=>d.last_used_at?new Date(d.last_used_at).toLocaleString("ar-DZ"):"لم يدخل بعد"},
