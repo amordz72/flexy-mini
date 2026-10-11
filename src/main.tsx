@@ -226,6 +226,10 @@ function MasterCustomerLookup() {
   const [name,setName]=useState("");
   const [phone,setPhone]=useState("");
   const [username,setUsername]=useState("");
+  const [password,setPassword]=useState("");
+  const [saving,setSaving]=useState(false);
+  const [savedMessage,setSavedMessage]=useState("");
+  const [accounts,setAccounts]=useState<Array<{id:number;party_id:number;username:string;phone:string;active:boolean}>>([]);
   const [masterRecord,setMasterRecord]=useState<{id:number;display_name:string;primary_phone?:string|null;mytool_username?:string|null}|null>(null);
   const assignMaster=(r:{id:number;display_name:string;primary_phone?:string|null;mytool_username?:string|null},overwrite=false)=>{
     setSelected(r.id);setMasterRecord(r);
@@ -249,10 +253,22 @@ function MasterCustomerLookup() {
     },350);
     return ()=>{active=false;window.clearTimeout(timer);};
   },[query]);
+  const loadAccounts=async()=>{if(!client)return;const {data,error}=await client.functions.invoke("flexy-mini-customers",{body:{action:"list"}});if(!error&&Array.isArray(data?.customers))setAccounts(data.customers);};
+  useEffect(()=>{void loadAccounts();},[]);
+  const createAccount=async()=>{
+    if(!client||!selected||!username.trim()||!/^0[567][0-9]{8}$/.test(phone)||password.length<10){setError("اختر الماستر وأدخل اسم مستخدم وهاتفًا جزائريًا صحيحًا وكلمة مرور من 10 أحرف على الأقل");return;}
+    setSaving(true);setError("");setSavedMessage("");
+    const {data,error}=await client.functions.invoke("flexy-mini-customers",{body:{action:"create",party_id:selected,username:username.trim(),phone,password}});
+    setSaving(false);
+    if(error||!data?.customer){setError(data?.error||"تعذر إنشاء الحساب. تأكد من عدم تكرار الاسم أو الهاتف أو الماستر.");return;}
+    setSavedMessage("تم إنشاء الحساب: "+data.customer.username+" — "+data.customer.phone);
+    setPassword("");setCreating(false);void loadAccounts();
+  };
   return <Space direction="vertical" size="middle" style={{width:"100%"}}>
     <Card title="زبائن Flexy Mini" extra={<Button type="primary" onClick={()=>setCreating(v=>!v)}>{creating?"إغلاق":"زبون جديد +"}</Button>}>
       <Alert type="info" showIcon message="الجدول يعرض حسابات Flexy Mini عند تفعيل خدمة الحسابات. لا نعرض كل الماستر كأنهم زبائن مسجلون."/>
-      <Table size="small" style={{marginTop:12}} dataSource={[]} columns={[
+      {savedMessage&&<Alert type="success" style={{marginTop:12}} message={savedMessage}/>}
+      <Table size="small" rowKey="id" style={{marginTop:12}} dataSource={accounts.map(a=>({...a,name:a.phone,master:a.party_id,status:a.active?"نشط":"معطل"}))} columns={[
         {title:"الزبون",dataIndex:"name"},
         {title:"اسم المستخدم",dataIndex:"username"},
         {title:"الماستر",dataIndex:"master"},
@@ -260,11 +276,12 @@ function MasterCustomerLookup() {
       ]} locale={{emptyText:"لا توجد حسابات Flexy Mini مؤكدة بعد"}}/>
     </Card>
     {creating&&<Card title="زبون جديد — مطابقة الماستر">
-      <Alert type="warning" showIcon message="هذه استمارة تحضير فقط؛ الحفظ وتسجيل الدخول غير مفعّلين حتى تجهيز خدمة الحسابات الآمنة."/>
+      <Alert type="info" showIcon message="اختر الماستر أولًا، ثم حدد اسم الدخول وكلمة المرور. كل حساب يجب أن يكون مرتبطًا بماستر."/>
       <Form layout="vertical" style={{marginTop:14}}>
         <Form.Item label="اسم الزبون"><Input value={name} onChange={e=>{setName(e.target.value);setSelected(null);setQuery(e.target.value);}} placeholder="الاسم الكامل"/></Form.Item>
         <Form.Item label="رقم الهاتف"><Input dir="ltr" value={phone} onChange={e=>{const v=e.target.value.replace(/[^0-9+]/g,"");setPhone(v);setSelected(null);if(v.replace(/\D/g,"").length>=5)setQuery(v);}} placeholder="0XXXXXXXXX"/></Form.Item>
         <Form.Item label="اسم المستخدم"><Input dir="ltr" value={username} onChange={e=>setUsername(e.target.value)} placeholder="username"/></Form.Item>
+        <Form.Item label="كلمة المرور (10 أحرف على الأقل)"><Input.Password value={password} onChange={e=>setPassword(e.target.value)} autoComplete="new-password"/></Form.Item>
         <Form.Item label="بحث إضافي في الماستر"><Input value={query} onChange={e=>{setQuery(e.target.value);setSelected(null);}} placeholder="اسم أو هاتف أو حساب منصة" allowClear/></Form.Item>
       </Form>
       {error&&<Alert type="warning" message={error}/>}
@@ -282,7 +299,7 @@ function MasterCustomerLookup() {
       </Space>
       {masterRecord&&<Space wrap style={{marginTop:12}}><Button onClick={()=>assignMaster(masterRecord,true)}>إسناد بيانات الماستر</Button><Text type="secondary">تعبئة الاسم والهاتف واسم المستخدم غير التقني من الماستر</Text></Space>}
       <Alert style={{marginTop:12}} type={selected?"success":"info"} message={selected?"تم اختيار ماستر موجود. سيُربط عند الحفظ بعد تجهيز الخدمة.":"إذا لم يوجد تطابق، يلزم إنشاء ماستر جديد عند الحفظ. لا يُسمح بحساب دون ماستر."}/>
-      <Button style={{marginTop:12}} type="primary" disabled>حفظ الزبون وإنشاء الحساب — قريبًا</Button>
+      <Button style={{marginTop:12}} type="primary" loading={saving} disabled={!selected||!username||!phone||password.length<10} onClick={()=>void createAccount()}>حفظ الزبون وإنشاء الحساب</Button>
     </Card>}
   </Space>;
 }
@@ -399,7 +416,7 @@ function Dashboard() {
             {mobile && <Button onClick={() => setDrawer(true)} aria-label="فتح القائمة">☰</Button>}
             <Text strong>Flexy Mini</Text>
           </Space>
-          <Space><Tag color={client ? "green" : "blue"}>v0.8.7 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
+          <Space><Tag color={client ? "green" : "blue"}>v0.9.0 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
         </Header>
         <Content className="app-content">
           {page !== "home" && <div className="page-heading"><Title level={mobile ? 3 : 2}>{names[page]}</Title></div>}
