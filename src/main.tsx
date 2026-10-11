@@ -235,7 +235,7 @@ function MasterCustomerLookup() {
     },350);
     return ()=>{active=false;window.clearTimeout(timer);};
   },[query]);
-  return <Card title="ربط زبون بالماستر">
+  return <Card title="الزبائن — البحث في الماستر">
     <Input value={query} onChange={e=>{setQuery(e.target.value);setSelected(null);}} placeholder="اسم الزبون أو الهاتف أو حساب المنصة" allowClear/>
     {error&&<Alert style={{marginTop:12}} type="warning" message={error}/>}
     <Table size="small" style={{marginTop:12}} rowKey="id" loading={busy} dataSource={matches} pagination={false} columns={[
@@ -244,7 +244,7 @@ function MasterCustomerLookup() {
       {title:"",render:(_:unknown,r:{id:number})=><Button type={selected===r.id?"primary":"default"} onClick={()=>setSelected(r.id)}>اختيار</Button>}
     ]}/>
     <Space style={{marginTop:12}}><Button onClick={()=>setSelected(null)}>بدون ماستر</Button><Text>{selected?"تم اختيار الماستر رقم "+selected:"بدون ربط"}</Text></Space>
-    <Alert style={{marginTop:12}} type="info" message="البحث فقط؛ لم يتم إنشاء حساب أو تغيير أي بيانات مالية."/>
+    <Alert style={{marginTop:12}} type="info" message="المرحلة الحالية: البحث والاختيار فقط. إنشاء اسم المستخدم وكلمة المرور يحتاج خدمة تحقق آمنة على الخادم، ولم يُفعّل بعد."/>
   </Card>;
 }
 function ConnectionDiagnostics() {
@@ -360,7 +360,7 @@ function Dashboard() {
             {mobile && <Button onClick={() => setDrawer(true)} aria-label="فتح القائمة">☰</Button>}
             <Text strong>Flexy Mini</Text>
           </Space>
-          <Space><Tag color={client ? "green" : "blue"}>v0.8.2 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
+          <Space><Tag color={client ? "green" : "blue"}>v0.8.3 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
         </Header>
         <Content className="app-content">
           {page !== "home" && <div className="page-heading"><Title level={mobile ? 3 : 2}>{names[page]}</Title></div>}
