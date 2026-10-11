@@ -1,8 +1,8 @@
 import React,{useEffect,useState} from "react";
 import {Button,Card,Form,Input,Select,Switch,Table,Space,Alert,message} from "antd";
 import {SupabaseClient} from "@supabase/supabase-js";
-type Ad={id:number;title:string;body:string|null;image_url:string|null;enabled:boolean;display_mode:string;start_at:string|null;end_at:string|null;week_start:number;week_end:number;sort_index:number};
-const fallback:Ad={id:-1,title:"مرحبًا بك في Flexy Mini",body:"الفليكسي وإيدوم والبطاقات الرقمية في مكان واحد",image_url:null,enabled:true,display_mode:"always",start_at:null,end_at:null,week_start:4,week_end:5,sort_index:0};
+type Ad={id:number;title:string;body:string|null;image_url:string|null;link_url:string|null;enabled:boolean;display_mode:string;start_at:string|null;end_at:string|null;week_start:number;week_end:number;sort_index:number};
+const fallback:Ad={id:-1,title:"مرحبًا بك في Flexy Mini",body:"الفليكسي وإيدوم والبطاقات الرقمية في مكان واحد",image_url:null,link_url:null,enabled:true,display_mode:"always",start_at:null,end_at:null,week_start:4,week_end:5,sort_index:0};
 const days=["الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
 function shown(a:Ad,d:Date){if(!a.enabled)return false;if(a.display_mode==="period")return (!a.start_at||d>=new Date(a.start_at))&&(!a.end_at||d<=new Date(a.end_at));if(a.display_mode==="weekly"){const n=d.getDay();return a.week_start<=a.week_end?n>=a.week_start&&n<=a.week_end:n>=a.week_start||n<=a.week_end;}return true;}
 export default function AdSystem({db,admin=false}:{db:SupabaseClient;admin?:boolean}){
@@ -16,17 +16,18 @@ export default function AdSystem({db,admin=false}:{db:SupabaseClient;admin?:bool
  const slides=ads.filter(a=>shown(a,now));if(!slides.length)slides.push(fallback);
  useEffect(()=>{if(slides.length<2)return;const t=setInterval(()=>setIdx(i=>(i+1)%slides.length),5000);return()=>clearInterval(t);},[slides.map(a=>a.id).join(",")]);
  const current=slides[idx%slides.length];
- const save=async(v:any)=>{if(!v.title?.trim()&&!v.image_url){message.error("أدخل نصًا أو ارفع صورة للإعلان");return;}const data={...v,title:v.title?.trim()||"إعلان مصور",body:v.body||"",image_url:v.image_url||null,sort_index:Number(v.sort_index)||0,start_at:v.display_mode==="period"&&v.start_at?new Date(v.start_at).toISOString():null,end_at:v.display_mode==="period"&&v.end_at?new Date(v.end_at).toISOString():null};const r=edit===null?await db.from("flexy_mini_ads").insert(data):await db.from("flexy_mini_ads").update(data).eq("id",edit);if(r.error){message.error(r.error.message);return;}message.success("تم الحفظ");setEdit(null);setPreview("");form.resetFields();await reload();};
+ const save=async(v:any)=>{if(!v.title?.trim()&&!v.image_url){message.error("أدخل نصًا أو ارفع صورة للإعلان");return;}const link=(v.link_url||"").trim();if(link&&!/^https:\/\/[^\s]+$/i.test(link)){message.error("الرابط يجب أن يبدأ بـ https://");return;}const data={...v,link_url:link||null,title:v.title?.trim()||"إعلان مصور",body:v.body||"",image_url:v.image_url||null,sort_index:Number(v.sort_index)||0,start_at:v.display_mode==="period"&&v.start_at?new Date(v.start_at).toISOString():null,end_at:v.display_mode==="period"&&v.end_at?new Date(v.end_at).toISOString():null};const r=edit===null?await db.from("flexy_mini_ads").insert(data):await db.from("flexy_mini_ads").update(data).eq("id",edit);if(r.error){message.error(r.error.message);return;}message.success("تم الحفظ");setEdit(null);setPreview("");form.resetFields();await reload();};
  return <Space direction="vertical" style={{width:"100%"}} size="large">
  <div style={{borderRadius:18,background:"#243b78",color:"white",padding:24,minHeight:190,display:"flex",flexDirection:"column",justifyContent:"center",gap:12}}>
- {current.image_url&&<img src={current.image_url} alt={current.title} style={{maxHeight:240,width:"100%",objectFit:"contain"}}/>}
- <strong style={{fontSize:25}}>{current.title}</strong><span>{current.body}</span>
+ {current.image_url&&(current.link_url?<a href={current.link_url} target="_blank" rel="noopener noreferrer" aria-label={"فتح رابط "+current.title}><img src={current.image_url} alt={current.title} style={{maxHeight:240,width:"100%",objectFit:"contain",cursor:"pointer"}}/></a>:<img src={current.image_url} alt={current.title} style={{maxHeight:240,width:"100%",objectFit:"contain"}}/>)}
+ <strong style={{fontSize:25}}>{current.title}</strong><span>{current.body}</span>{current.link_url&&!current.image_url&&<a href={current.link_url} target="_blank" rel="noopener noreferrer" style={{color:"white",textDecoration:"underline"}}>افتح الرابط ↗</a>}
  {slides.length>1&&<Space style={{justifyContent:"space-between"}}><Button onClick={()=>setIdx(i=>(i+slides.length-1)%slides.length)}>❯</Button><span>{idx%slides.length+1} / {slides.length}</span><Button onClick={()=>setIdx(i=>(i+1)%slides.length)}>❮</Button></Space>}
  </div>
  {admin&&<Card title="إدارة الإعلانات">{error&&<Alert type="warning" message={error} style={{marginBottom:12}}/>}
  <Form form={form} layout="vertical" initialValues={{enabled:true,display_mode:"always",week_start:4,week_end:5,sort_index:0}} onFinish={save}>
  <Form.Item name="title" label="عنوان الإعلان (اختياري إذا توجد صورة)"><Input/></Form.Item>
  <Form.Item name="body" label="النص"><Input.TextArea/></Form.Item>
+ <Form.Item name="link_url" label="رابط الإعلان عند الضغط على الصورة (اختياري)"><Input type="url" dir="ltr" placeholder="https://example.com"/></Form.Item>
  <Form.Item name="image_url" label="صورة الإعلان (اختيارية)" hidden><Input/></Form.Item>
  <Space direction="vertical" style={{width:"100%"}}><input aria-label="تحميل صورة الإعلان" type="file" accept="image/*" disabled={uploading} onChange={e=>{const file=e.target.files?.[0];if(file)void uploadImage(file);e.target.value="";}}/>{uploading&&<span>جاري رفع الصورة...</span>}{preview&&<><img src={preview} alt="معاينة الإعلان" style={{maxWidth:"100%",maxHeight:190,borderRadius:12}}/><Button onClick={()=>{setPreview("");form.setFieldValue("image_url",null)}}>إزالة الصورة من الإعلان</Button></>}</Space>
  <Form.Item name="enabled" label="ظاهر" valuePropName="checked"><Switch/></Form.Item>
