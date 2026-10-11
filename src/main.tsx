@@ -118,8 +118,8 @@ function MiniMembers() {
 }
 
 type CatalogCategory = { id: number; name: string; sort_index: number; active: boolean };
-type CatalogProduct = { id: number; category_id: number; name: string; sort_index: number; active: boolean };
-type CatalogVariant = { id: number; product_id: number; name: string; denomination: number | null; purchase_price: number; markup_percent: number; sort_index: number; active: boolean };
+type CatalogProduct = { id: number; category_id: number; name: string; sort_index: number; active: boolean; display_mode: string };
+type CatalogVariant = { id: number; product_id: number; name: string; denomination: number | null; purchase_price: number; markup_percent: number; sort_index: number; active: boolean; display_mode: string; stock_quantity: number };
 function CardsCatalog() {
   const [categories, setCategories] = useState<CatalogCategory[]>([]);
   const [products, setProducts] = useState<CatalogProduct[]>([]);
@@ -157,6 +157,11 @@ function CardsCatalog() {
     form.resetFields();
     await refresh();
   }
+  async function toggleVisibility(table: "flexy_mini_products" | "flexy_mini_variants", id: number, mode: string) {
+    if (!client) return;
+    const { error } = await client.from(table).update({ display_mode: mode === "hidden" ? "visible" : "hidden" }).eq("id", id);
+    if (error) setError(error.message); else await refresh();
+  }
   const visibleProducts = products.filter(p => p.category_id === categoryId && p.active);
   const visibleVariants = variants.filter(v => v.product_id === productId && v.active)
     .sort((a, b) => a.sort_index - b.sort_index || (a.denomination ?? 999999) - (b.denomination ?? 999999) || a.id - b.id);
@@ -172,7 +177,7 @@ function CardsCatalog() {
       </Form>
     </Card>
     {categoryId !== null && <Card title="2 — الأنواع">
-      <Space wrap>{visibleProducts.map(p => <Button key={p.id} type={productId === p.id ? "primary" : "default"} onClick={() => { setProductId(p.id); window.setTimeout(() => document.getElementById("mini-variants")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}>{p.name}</Button>)}</Space>
+      <Space wrap>{visibleProducts.map(p => <Space key={p.id} size={4}><Button type={productId === p.id ? "primary" : "default"} onClick={() => { setProductId(p.id); window.setTimeout(() => document.getElementById("mini-variants")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}>{p.name}</Button><Button size="small" onClick={() => toggleVisibility("flexy_mini_products", p.id, p.display_mode)}>{p.display_mode === "hidden" ? "إظهار" : "تجميد"}</Button></Space>)}</Space>
       <Form form={productForm} layout="inline" style={{ marginTop: 16, gap: 8 }} onFinish={v => save("flexy_mini_products", { category_id: categoryId, name: v.name.trim(), sort_index: Number(v.sort_index || 0) }, productForm)}>
         <Form.Item name="name" rules={[{ required: true }]}><Input placeholder="اسم النوع" /></Form.Item>
         <Form.Item name="sort_index" initialValue={0}><Input type="number" placeholder="Index" style={{ width: 90 }} /></Form.Item>
@@ -180,7 +185,7 @@ function CardsCatalog() {
       </Form>
     </Card>}
     {productId !== null && <Card id="mini-variants" title="3 — البطاقات">
-      <Row gutter={[12, 12]}>{visibleVariants.map(v => <Col xs={24} sm={12} lg={8} key={v.id}><Card size="small" title={v.name}><Text>القيمة: {v.denomination ?? "—"}</Text><div>سعر الشراء: {v.purchase_price} دج</div><div>الربح: {v.markup_percent}%</div><Title level={5}>سعر البيع: {(Number(v.purchase_price) * (1 + Number(v.markup_percent) / 100)).toFixed(2)} دج</Title><Tag>Index {v.sort_index}</Tag></Card></Col>)}</Row>
+      <Row gutter={[12, 12]}>{visibleVariants.map(v => <Col xs={24} sm={12} lg={8} key={v.id}><Card size="small" title={v.name}><Text>القيمة: {v.denomination ?? "—"}</Text><div>سعر الشراء: {v.purchase_price} دج</div><div>الربح: {v.markup_percent}%</div><Title level={5}>سعر البيع: {(Number(v.purchase_price) * (1 + Number(v.markup_percent) / 100)).toFixed(2)} دج</Title><Tag>Index {v.sort_index}</Tag><Tag color={v.display_mode === "hidden" ? "red" : v.stock_quantity > 0 ? "green" : "orange"}>{v.display_mode === "hidden" ? "مجمّدة" : v.stock_quantity > 0 ? "متوفرة" : "غير متوفرة"}</Tag><Button size="small" onClick={() => toggleVisibility("flexy_mini_variants", v.id, v.display_mode)}>{v.display_mode === "hidden" ? "إظهار" : "تجميد"}</Button></Card></Col>)}</Row>
       <Form form={variantForm} layout="vertical" style={{ marginTop: 16 }} onFinish={v => save("flexy_mini_variants", { product_id: productId, name: v.name.trim(), denomination: Number(v.denomination || 0), purchase_price: Number(v.purchase_price), markup_percent: Number(v.markup_percent || 0), sort_index: Number(v.sort_index || 0) }, variantForm)}>
         <Row gutter={8}>
           <Col xs={24} sm={12}><Form.Item name="name" label="اسم البطاقة" rules={[{ required: true }]}><Input placeholder="مثلاً 60 UC" /></Form.Item></Col>
