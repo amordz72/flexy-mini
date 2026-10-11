@@ -1,6 +1,6 @@
 {
   "name": "flexy-mini",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -16,7 +16,8 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router": "^7.0.0",
-    "antd": "^5.27.0"
+    "antd": "^5.27.0",
+    "@refinedev/antd": "^6.0.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
