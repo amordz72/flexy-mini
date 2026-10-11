@@ -5,7 +5,7 @@ export default function AdminWallet({db}:{db:SupabaseClient}){
  const [open,setOpen]=useState(false);const [balance,setBalance]=useState<number|null>(null),[amount,setAmount]=useState<number|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState("");
  const load=async()=>{setBusy(true);const r=await db.rpc("flexy_mini_demo_wallet_topup",{p_amount:0});setBusy(false);if(r.error)setError("تعذر تحميل المحفظة: "+r.error.message);else{setBalance(Number(r.data));setError("");}};
  useEffect(()=>{void load();},[]);
- const topup=async()=>{if(!amount||amount<=0||amount>10000000){message.error("أدخل مبلغًا صحيحًا");return;}setBusy(true);const r=await db.rpc("flexy_mini_demo_wallet_topup",{p_amount:amount});setBusy(false);if(r.error)message.error("فشل الشحن: "+r.error.message);else{setBalance(Number(r.data));setAmount(null);setOpen(false);message.success("تم تسجيل الشحن التجريبي");}};
+ const topup=async()=>{if(!amount||amount<5000||amount>10000000||!Number.isInteger(amount)||amount%5000!==0){message.error("الشحن يبدأ من 5,000 دج وبمضاعفات 5,000 فقط");return;}setBusy(true);const r=await db.rpc("flexy_mini_demo_wallet_topup",{p_amount:amount});setBusy(false);if(r.error)message.error("فشل الشحن: "+r.error.message);else{setBalance(Number(r.data));setAmount(null);setOpen(false);message.success("تم تسجيل الشحن التجريبي");}};
  return <><Card bordered={false} style={{borderRadius:14,marginBottom:18,cursor:"pointer"}} onClick={()=>setOpen(true)} hoverable>
  <Space direction="vertical" style={{width:"100%"}}>
  <Typography.Text type="secondary">رصيدي · اضغط للشحن الذاتي</Typography.Text>
@@ -15,10 +15,10 @@ export default function AdminWallet({db}:{db:SupabaseClient}){
  <Modal title="شحن رصيدي" open={open} onCancel={()=>setOpen(false)} footer={null} destroyOnClose>
  <Space direction="vertical" style={{width:"100%"}} size="middle">
  <Typography.Text>الرصيد الحالي: {balance===null?"—":balance.toLocaleString("en-US")+" دج"}</Typography.Text>
- <InputNumber aria-label="مبلغ الشحن" min={0.01} max={10000000} precision={2} placeholder="أدخل مبلغ الشحن بالدينار" value={amount} onChange={setAmount} style={{width:"100%"}}/>
- {amount!==null&&amount>0&&<Typography.Text strong>الرصيد بعد الشحن: {((balance??0)+amount).toLocaleString("en-US")} دج</Typography.Text>}
- <Alert type="info" showIcon message="شحن داخلي تجريبي، وليس تحويلًا ماليًا حقيقيًا"/>
+ <InputNumber aria-label="مبلغ الشحن" min={5000} max={10000000} step={5000} precision={0} placeholder="5,000 أو 10,000 أو 15,000..." value={amount} onChange={setAmount} style={{width:"100%"}}/>
+ {amount!==null&&amount>=5000&&amount%5000===0&&<Typography.Text strong>الرصيد بعد الشحن: {((balance??0)+amount).toLocaleString("en-US")} دج</Typography.Text>}
+ <Alert type="info" showIcon message="أقل شحن 5,000 دج وبمضاعفات 5,000 فقط. شحن داخلي تجريبي."/>
  {error&&<Alert type="error" showIcon message={error}/>}
- <Button block type="primary" loading={busy} disabled={!amount||amount<=0} onClick={()=>void topup()}>تأكيد الشحن</Button>
+ <Button block type="primary" loading={busy} disabled={!amount||amount<5000||amount>10000000||!Number.isInteger(amount)||amount%5000!==0} onClick={()=>void topup()}>تأكيد الشحن</Button>
  </Space></Modal></>;
 }
