@@ -73,11 +73,21 @@ function LoginPage() {
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
 const items = [
- {type:"group" as const,label:"خدمات الموقع",children:[
-  {key:"home",label:"الرئيسية"},{key:"flexy",label:"الفليكسي"},{key:"idoom",label:"تعبئة إيدوم"},{key:"store",label:"متجر البطاقات"}
+ {type:"group" as const,label:"الخدمات",children:[
+  {key:"home",icon:<span>⌂</span>,label:"الرئيسية"},
+  {key:"flexy",icon:<span>☎</span>,label:"فليكسي"},
+  {key:"idoom",icon:<span>◉</span>,label:"تعبئة إيدوم"},
+  {key:"store",icon:<span>▤</span>,label:"البطاقات"},
+  {key:"operations",icon:<span>◷</span>,label:"عملياتي"}
  ]},
- {type:"group" as const,label:"خدمات الإدارة",children:[
-  {key:"cards",label:"إدارة البطاقات والأصناف"},{key:"inventory",label:"إضافة أكواد البطاقات"},{key:"customers",label:"إدارة الزبائن"},{key:"stations",label:"المحطات والشرائح"},{key:"members",label:"المستخدمون والصلاحيات"},{key:"ads",label:"إدارة الإعلانات"},{key:"settings",label:"الإعدادات"}
+ {type:"group" as const,label:"الإدارة",children:[
+  {key:"cards",icon:<span>▦</span>,label:"إدارة البطاقات والأصناف"},
+  {key:"inventory",icon:<span>＋</span>,label:"أكواد البطاقات"},
+  {key:"customers",icon:<span>♙</span>,label:"الزبائن"},
+  {key:"stations",icon:<span>▣</span>,label:"المحطات والشرائح"},
+  {key:"members",icon:<span>♧</span>,label:"المستخدمون والصلاحيات"},
+  {key:"ads",icon:<span>◈</span>,label:"إدارة الإعلانات"},
+  {key:"settings",icon:<span>⚙</span>,label:"الإعدادات"}
  ]}
 ];
 const names:Record<string,string>={home:"الرئيسية",flexy:"الفليكسي",idoom:"تعبئة إيدوم",store:"متجر البطاقات",operations:"العمليات",cards:"إدارة البطاقات والأصناف",inventory:"إضافة أكواد البطاقات",customers:"إدارة الزبائن",stations:"المحطات والشرائح",members:"المستخدمون والصلاحيات",ads:"إدارة الإعلانات",settings:"الإعدادات"};
@@ -259,7 +269,7 @@ function Dashboard() {
             {mobile && <Button onClick={() => setDrawer(true)} aria-label="فتح القائمة">☰</Button>}
             <Text strong>Flexy Mini</Text>
           </Space>
-          <Space><Tag color={client ? "green" : "blue"}>v0.8.0 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
+          <Space><Tag color={client ? "green" : "blue"}>v0.8.1 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
         </Header>
         <Content className="app-content">
           {page !== "home" && <div className="page-heading"><Title level={mobile ? 3 : 2}>{names[page]}</Title></div>}
