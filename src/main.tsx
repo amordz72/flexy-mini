@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Authenticated, Refine, useLogin, useLogout } from "@refinedev/core";
 import type { AuthProvider } from "@refinedev/core";
@@ -78,16 +78,44 @@ const items = [
   { key: "customers", label: "الزبائن" },
   { key: "stations", label: "المحطات والشرائح" },
   { key: "settings", label: "الإعدادات" },
+  { key: "members", label: "صلاحيات فليكسي ميني" },
 ];
 const names: Record<string, string> = {
   home: "لوحة التحكم", flexy: "عمليات الفليكسي", cards: "مخزون البطاقات",
-  customers: "الزبائن", stations: "المحطات والشرائح", settings: "الإعدادات"
+  customers: "الزبائن", stations: "المحطات والشرائح", settings: "الإعدادات", members: "صلاحيات فليكسي ميني"
 };
 const sample = [
   { key: "1", name: "موبيليس", kind: "فليكسي", state: "واجهة تجريبية" },
   { key: "2", name: "بطاقات موبيليس", kind: "بطاقات", state: "غير مربوط" },
   { key: "3", name: "Station Connect", kind: "محطات", state: "غير مربوط" },
 ];
+type MiniMember = { id: number; party_id: number; role: string; active: boolean };
+function MiniMembers() {
+  const [members, setMembers] = useState<MiniMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let live = true;
+    if (!client) return;
+    client.from("flexy_mini_members").select("id,party_id,role,active").order("id", { ascending: false }).limit(50)
+      .then(({ data, error }) => {
+        if (!live) return;
+        setLoading(false);
+        if (error) setError("تعذر تحميل العضويات: " + error.message);
+        else setMembers((data || []) as MiniMember[]);
+      });
+    return () => { live = false; };
+  }, []);
+  return <Card title="عضويات Flexy Mini">
+    <Alert type="info" showIcon message="العضويات مستقلة عن MyTool. الدخول بالـPIN لم يُفعّل بعد. لا تمنح العضوية وحدها دخولًا." style={{ marginBottom: 16 }} />
+    {error && <Alert type="warning" showIcon message={error} style={{ marginBottom: 16 }} />}
+    <Table loading={loading} rowKey="id" dataSource={members} pagination={{ pageSize: 10 }} size="small" scroll={{ x: 430 }} columns={[
+      { title: "معرّف الماستر", dataIndex: "party_id" },
+      { title: "الدور", dataIndex: "role" },
+      { title: "الحالة", dataIndex: "active", render: (v: boolean) => <Tag color={v ? "green" : "default"}>{v ? "مفعّل" : "غير مفعّل"}</Tag> }
+    ]} />
+  </Card>;
+}
 function ConnectionDiagnostics() {
   const [status, setStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
   const [message, setMessage] = useState("");
@@ -169,7 +197,7 @@ function Dashboard() {
                 { title: "الحالة", dataIndex: "state", render: (v: string) => <Tag>{v}</Tag> }
               ]} />
             </Card>
-          </> : <Card title={names[page]}>
+          </> : page === "members" ? <MiniMembers /> : <Card title={names[page]}>
             <Empty description="لا توجد بيانات متصلة بعد" /><div className="placeholder-note"><Text>قسم {names[page]} جاهز للتجهيز. لن يتم تنفيذ أي عملية أو تغيير بيانات في هذه النسخة.</Text></div>
           </Card>}
           <div className="app-footer">Flexy Mini · Refine + Ant Design · عرض تجريبي فقط</div>
