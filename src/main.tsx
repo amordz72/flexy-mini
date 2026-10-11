@@ -229,10 +229,10 @@ function MasterCustomerLookup() {
   const [masterRecord,setMasterRecord]=useState<{id:number;display_name:string;primary_phone?:string|null;mytool_username?:string|null}|null>(null);
   const assignMaster=(r:{id:number;display_name:string;primary_phone?:string|null;mytool_username?:string|null},overwrite=false)=>{
     setSelected(r.id);setMasterRecord(r);
-    if(overwrite||!name.trim())setName(r.display_name||"");
+    if(overwrite||name.trim()!==r.display_name)setName(r.display_name||"");
     const digits=(r.primary_phone||"").replace(/\D/g,"");
     const normalized=digits.startsWith("213")?"0"+digits.slice(3):digits;
-    if(normalized&&(overwrite||!phone.trim()))setPhone(normalized);
+    if(normalized)setPhone(normalized);
     const candidate=(r.mytool_username||"").trim();
     if(candidate&&!/^mt\d*_\d+$/i.test(candidate)&&(overwrite||!username.trim()))setUsername(candidate);
   };
@@ -399,7 +399,7 @@ function Dashboard() {
             {mobile && <Button onClick={() => setDrawer(true)} aria-label="فتح القائمة">☰</Button>}
             <Text strong>Flexy Mini</Text>
           </Space>
-          <Space><Tag color={client ? "green" : "blue"}>v0.8.6 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
+          <Space><Tag color={client ? "green" : "blue"}>v0.8.7 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
         </Header>
         <Content className="app-content">
           {page !== "home" && <div className="page-heading"><Title level={mobile ? 3 : 2}>{names[page]}</Title></div>}
