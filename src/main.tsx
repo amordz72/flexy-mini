@@ -5,6 +5,8 @@ import { BrowserRouter, Route, Routes } from "react-router";
 import routerProvider from "@refinedev/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { dataProvider, liveProvider } from "@refinedev/supabase";
+import { AuthGate } from "./AuthGate";
+import type { Session } from "@supabase/supabase-js";
 import { ConfigProvider, Layout, Menu, Typography, Card, Row, Col, Table, Tag, Button, Space, Alert, Grid, Drawer, Empty, Descriptions } from "antd";
 import "antd/dist/reset.css";
 import "./style.css";
@@ -74,7 +76,7 @@ function ConnectionDiagnostics() {
     </Space>
   </Card>;
 }
-function Dashboard() {
+function Dashboard({ session }: { session: Session | null }) {
   const [page, setPage] = useState("home");
   const [drawer, setDrawer] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -93,7 +95,7 @@ function Dashboard() {
             {mobile && <Button onClick={() => setDrawer(true)} aria-label="فتح القائمة">☰</Button>}
             <Text strong>Flexy Mini</Text>
           </Space>
-          <Tag color="blue">v0.3.0 · تجربة</Tag>
+          <Space><Tag color={session ? "green" : "blue"}>v0.4.0 · {session ? "جلسة نشطة" : "معاينة"}</Tag>{session && client && <Button size="small" onClick={() => { void client.auth.signOut(); }}>خروج</Button>}</Space>
         </Header>
         <Content className="app-content">
           <div className="page-heading"><Title level={mobile ? 3 : 2}>{names[page]}</Title><Text type="secondary">نسخة معاينة · بدون معاملات</Text></div>
@@ -126,7 +128,7 @@ createRoot(document.getElementById("root")!).render(
       <Refine routerProvider={routerProvider} dataProvider={client ? dataProvider(client) : undefined}
         liveProvider={client ? liveProvider(client) : undefined}
         resources={[]} options={{ syncWithLocation: true, warnWhenUnsavedChanges: true }}>
-        <Routes><Route path="/" element={<Dashboard />} /></Routes>
+        <AuthGate client={client}>{(session) => <Routes><Route path="/" element={<Dashboard session={session} />} /></Routes>}</AuthGate>
       </Refine>
     </BrowserRouter>
   </React.StrictMode>
