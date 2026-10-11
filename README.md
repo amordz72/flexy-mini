@@ -3,7 +3,7 @@
 Standalone Refine + React + Vite application, designed for Supabase and GitHub Pages.
 
 ## Status
-Arabic responsive Refine + Ant Design dashboard and optional read-only Supabase Auth endpoint diagnostics are implemented. **No login, CRUD resources, financial execution, or Station Connect integration is implemented yet.** No production data is modified.
+Arabic responsive Refine + Ant Design dashboard and optional read-only Supabase Auth endpoint diagnostics are implemented. **A Supabase Auth login/session UI is implemented but unconfigured and untested; no CRUD resources, financial execution, or Station Connect integration is implemented yet.** No production data is modified.
 
 ## Local
 ```bash
@@ -26,3 +26,7 @@ MyTool remains separate. Refer to `amordz72/developer/projects/flexy/FLEXY-FAST-
 ## Supabase diagnostic (v0.3.0)
 
 The Settings screen can check reachability of Supabase Auth's public settings endpoint, without reading any database table or writing records. It does **not** prove database connectivity, table access, RLS or authenticated sessions. The public GitHub Pages deployment requires repository Actions variables `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` to be configured before the diagnostic can contact Supabase. Do not add service-role/secret keys. The existing `amor-manager` project may contain shared business data; do not automatically connect this pilot to its production tables. Prefer an isolated project or approved RLS-protected test resource after explicit review.
+
+## Authentication preview (v0.4.0)
+
+If no Supabase public environment variables are configured, the dashboard is a **public demonstration only**. If valid variables are configured, the dashboard requires a Supabase Auth session; users sign in with email/password and can sign out. This is **not** a completed authorization system: server-side RLS and user provisioning must be configured and tested before any business tables are connected. No self-registration UI is exposed. Never add a service-role key to the client.
