@@ -15,6 +15,9 @@ Deno.serve(async(req)=>{
  try{body=await req.json();}catch{return respond(400,{error:"Invalid request"});}
  const action=String(body.action||"");
  if(action==="login"){
+   return respond(423,{error:"Device approval required before customer login is enabled"});
+ }
+ if(action==="legacy_login_disabled"){
    const identifier=String(body.identifier||"").trim().toLowerCase();
    const password=String(body.password||"");
    if(!identifier||!password)return respond(401,{error:"Invalid credentials"});
