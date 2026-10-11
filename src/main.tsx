@@ -45,7 +45,7 @@ function ConnectionDiagnostics() {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 8000);
     try {
-      const response = await fetch(url.replace(/\\/$/, "") + "/auth/v1/settings", {
+      const response = await fetch(url.replace(/\/$/, "") + "/auth/v1/settings", {
         headers: { apikey: key },
         method: "GET",
         signal: controller.signal,
