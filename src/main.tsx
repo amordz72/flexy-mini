@@ -18,9 +18,8 @@ const client = url && key ? createClient(url, key, { auth: { storage: window.ses
 // Existing MyTool RLS is the source of truth for admin access.
 async function isShopAdmin(): Promise<boolean> {
   if (!client) return false;
-  const { data, error } = await client.from("flexy_accounts").select("id").limit(1);
-  // RLS returns no rows for non-admins. Existing project has admin-only SELECT policy.
-  return !error && Array.isArray(data) && data.length > 0;
+  const { data, error } = await client.rpc("flexy_mini_is_admin");
+  return !error && data === true;
 }
 const authProvider: AuthProvider | undefined = client ? {
   login: async ({ email, password }) => {
@@ -99,7 +98,7 @@ function ConnectionDiagnostics() {
       <Descriptions.Item label="عنوان المشروع">{url ? "مضبوط" : "غير مضبوط"}</Descriptions.Item>
       <Descriptions.Item label="المفتاح العام">{key ? "مضبوط" : "غير مضبوط"}</Descriptions.Item>
       <Descriptions.Item label="قاعدة البيانات">غير مختبرة</Descriptions.Item>
-      <Descriptions.Item label="حماية الوصول">تحتاج اختبارًا عمليًا</Descriptions.Item>
+      <Descriptions.Item label="حماية الوصول">التحقق من إدارة الحساب عبر RPC</Descriptions.Item>
     </Descriptions>
     <Space direction="vertical" className="diagnostics-actions">
       <Button type="primary" loading={status === "loading"} onClick={checkConnection}>اختبار الوصول لخدمة المصادقة</Button>
@@ -128,7 +127,7 @@ function Dashboard() {
             {mobile && <Button onClick={() => setDrawer(true)} aria-label="فتح القائمة">☰</Button>}
             <Text strong>Flexy Mini</Text>
           </Space>
-          <Space><Tag color={client ? "green" : "blue"}>v0.6.1 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
+          <Space><Tag color={client ? "green" : "blue"}>v0.6.2 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
         </Header>
         <Content className="app-content">
           <div className="page-heading"><Title level={mobile ? 3 : 2}>{names[page]}</Title><Text type="secondary">نسخة معاينة · بدون معاملات</Text></div>
