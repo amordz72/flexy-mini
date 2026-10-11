@@ -2,7 +2,6 @@ import React,{useEffect,useState} from "react";
 import {Button,Card,Form,Input,Select,Switch,Table,Space,Alert,message} from "antd";
 import {SupabaseClient} from "@supabase/supabase-js";
 type Ad={is_fallback:boolean;id:number;title:string;body:string|null;image_url:string|null;link_url:string|null;content_display_mode:string;enabled:boolean;display_mode:string;start_at:string|null;end_at:string|null;week_start:number;week_end:number;sort_index:number};
-const fallback:Ad={is_fallback:true,id:-1,title:"مرحبًا بك في Flexy Mini",body:"الفليكسي وإيدوم والبطاقات الرقمية في مكان واحد",image_url:null,link_url:null,content_display_mode:"auto",enabled:true,display_mode:"always",start_at:null,end_at:null,week_start:4,week_end:5,sort_index:0};
 const days=["الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
 function shown(a:Ad,d:Date){if(!a.enabled)return false;if(a.display_mode==="period")return (!a.start_at||d>=new Date(a.start_at))&&(!a.end_at||d<=new Date(a.end_at));if(a.display_mode==="weekly"){const n=d.getDay();return a.week_start<=a.week_end?n>=a.week_start&&n<=a.week_end:n>=a.week_start||n<=a.week_end;}return true;}
 export default function AdSystem({db,admin=false}:{db:SupabaseClient;admin?:boolean}){
