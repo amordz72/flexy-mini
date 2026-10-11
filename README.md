@@ -3,7 +3,7 @@
 Standalone Refine + React + Vite application, designed for Supabase and GitHub Pages.
 
 ## Status
-Scaffold only. **No authentication, CRUD resources, financial execution, or Station Connect integration is implemented yet.** No production data is modified.
+Arabic responsive Refine + Ant Design dashboard and optional read-only Supabase Auth endpoint diagnostics are implemented. **No login, CRUD resources, financial execution, or Station Connect integration is implemented yet.** No production data is modified.
 
 ## Local
 ```bash
@@ -22,3 +22,7 @@ Vite base defaults to `/flexy-mini/`. GitHub Pages deployment can use GitHub Act
 Refine (business UI) -> Supabase (auth/data/authorization) -> Station Connect (station jobs) -> Station Services (local hardware).
 
 MyTool remains separate. Refer to `amordz72/developer/projects/flexy/FLEXY-FAST-LAUNCH-STARTER-DECISION-2026-10-10.md`.
+
+## Supabase diagnostic (v0.3.0)
+
+The Settings screen can check reachability of Supabase Auth's public settings endpoint, without reading any database table or writing records. It does **not** prove database connectivity, table access, RLS or authenticated sessions. The public GitHub Pages deployment requires repository Actions variables `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` to be configured before the diagnostic can contact Supabase. Do not add service-role/secret keys. The existing `amor-manager` project may contain shared business data; do not automatically connect this pilot to its production tables. Prefer an isolated project or approved RLS-protected test resource after explicit review.
