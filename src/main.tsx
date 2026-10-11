@@ -15,10 +15,22 @@ import "./style.css";
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
 const client = url && key ? createClient(url, key) : undefined;
+// Existing MyTool RLS is the source of truth for admin access.
+async function isShopAdmin(): Promise<boolean> {
+  if (!client) return false;
+  const { data, error } = await client.from("flexy_accounts").select("id").limit(1);
+  // RLS returns no rows for non-admins. Existing project has admin-only SELECT policy.
+  return !error && Array.isArray(data) && data.length > 0;
+}
 const authProvider: AuthProvider | undefined = client ? {
   login: async ({ email, password }) => {
     const { error } = await client.auth.signInWithPassword({ email, password });
-    return error ? { success: false, error: { name: "LoginError", message: "تعذر تسجيل الدخول" } } : { success: true, redirectTo: "/" };
+    if (error) return { success: false, error: { name: "LoginError", message: "تعذر تسجيل الدخول" } };
+    if (!(await isShopAdmin())) {
+      await client.auth.signOut();
+      return { success: false, error: { name: "AccessDenied", message: "هذا الحساب غير مخوّل للدخول إلى الإدارة" } };
+    }
+    return { success: true, redirectTo: "/" };
   },
   logout: async () => {
     const { error } = await client.auth.signOut();
@@ -26,7 +38,7 @@ const authProvider: AuthProvider | undefined = client ? {
   },
   check: async () => {
     const { data, error } = await client.auth.getSession();
-    return !error && data.session ? { authenticated: true } : { authenticated: false, redirectTo: "/login" };
+    return !error && data.session && await isShopAdmin() ? { authenticated: true } : { authenticated: false, redirectTo: "/login" };
   },
   onError: async () => ({ error: undefined }),
   getIdentity: async () => {
@@ -116,7 +128,7 @@ function Dashboard() {
             {mobile && <Button onClick={() => setDrawer(true)} aria-label="فتح القائمة">☰</Button>}
             <Text strong>Flexy Mini</Text>
           </Space>
-          <Space><Tag color={client ? "green" : "blue"}>v0.5.0 · {client ? "مصادقة" : "معاينة"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
+          <Space><Tag color={client ? "green" : "blue"}>v0.6.0 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
         </Header>
         <Content className="app-content">
           <div className="page-heading"><Title level={mobile ? 3 : 2}>{names[page]}</Title><Text type="secondary">نسخة معاينة · بدون معاملات</Text></div>
@@ -150,8 +162,8 @@ createRoot(document.getElementById("root")!).render(
         liveProvider={client ? liveProvider(client) : undefined}
         resources={[]} options={{ syncWithLocation: true, warnWhenUnsavedChanges: true }}>
         <Routes>
-          <Route path="/login" element={client ? <AuthPage type="login" registerLink={false} forgotPasswordLink={false} /> : <Dashboard />} />
-          <Route path="/" element={client ? <Authenticated key="protected" fallback={<AuthPage type="login" registerLink={false} forgotPasswordLink={false} />}><Dashboard /></Authenticated> : <Dashboard />} />
+          <Route path="/login" element={client ? <AuthPage type="login" registerLink={false} forgotPasswordLink={false} /> : <Alert type="error" showIcon message="التطبيق غير مهيأ للاتصال. لا يمكن الدخول قبل إعداد Supabase." />} />
+          <Route path="/" element={client ? <Authenticated key="protected" fallback={<AuthPage type="login" registerLink={false} forgotPasswordLink={false} />}><Dashboard /></Authenticated> : <Alert type="error" showIcon message="الاتصال غير مهيأ. تم تعطيل وضع المعاينة المفتوح." />} />
         </Routes>
       </Refine>
     </BrowserRouter>
