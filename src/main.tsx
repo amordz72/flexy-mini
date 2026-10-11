@@ -13,6 +13,7 @@ import "antd/dist/reset.css";
 import "./style.css";
 import AdSystem from "./AdSystem";
 import AdminWallet from "./AdminWallet";
+import CreditAdmin from "./CreditAdmin";
 
 const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined) || "https://wqyebqzbbpohbnznqdjj.supabase.co";
 const key = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) || "sb_publishable_gO4umNBMJ0AWRk19HtKd7A_9X4DibYj";
@@ -286,7 +287,7 @@ function Dashboard() {
                 { title: "بطاقات رقمية", subtitle: "ألعاب، اتصالات وبرامج", color: "#625ee8", target: "store", symbol: "▣" }
               ].map(service => <Col xs={24} md={8} key={service.title}><div onClick={() => setPage(service.target)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter") setPage(service.target); }} style={{ background: service.color, borderRadius: 14, color: "white", padding: "22px 20px", minHeight: 112, cursor: "pointer", boxShadow: "0 6px 15px rgba(0,0,0,.08)" }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 20, fontWeight: 700 }}>{service.title}</span><span style={{ fontSize: 27 }}>{service.symbol}</span></div><div style={{ opacity: .9, marginTop: 9 }}>{service.subtitle}</div></div></Col>)}
             </Row>
-          </> : page === "ads" && client ? <AdSystem db={client} admin /> : page === "settings" ? <ConnectionDiagnostics /> : page === "members" ? <MiniMembers /> : page === "cards" ? <CardsCatalog /> : page === "operations" ? <Card title="عملياتي"><Empty description="سجل عمليات حسابك لم يُفعّل بعد" /></Card> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز" /></Card>}
+          </> : page === "ads" && client ? <AdSystem db={client} admin /> : page === "settings" ? <ConnectionDiagnostics /> : page === "members" ? <><MiniMembers />{client&&<CreditAdmin db={client}/>}</> : page === "cards" ? <CardsCatalog /> : page === "operations" ? <Card title="عملياتي"><Empty description="سجل عمليات حسابك لم يُفعّل بعد" /></Card> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز" /></Card>}
           <div className="app-footer">Flexy Mini · Refine + Ant Design · عرض تجريبي فقط</div>
         </Content>
         <nav className="bottom-service-nav" aria-label="خدمات الموقع" dir="rtl">
