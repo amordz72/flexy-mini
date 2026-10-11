@@ -8,12 +8,13 @@ import routerProvider from "@refinedev/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { dataProvider, liveProvider } from "@refinedev/supabase";
 
-import { ConfigProvider, Form, Input, Layout, Menu, Typography, Card, Row, Col, Table, Tag, Button, Space, Alert, Grid, Drawer, Empty, Descriptions } from "antd";
+import { ConfigProvider, Form, Input, Layout, Menu, Typography, Card, Row, Col, Table, Tag, Button, Space, Alert, Grid, Drawer, Empty, Descriptions, Select } from "antd";
 import "antd/dist/reset.css";
 import "./style.css";
 import AdSystem from "./AdSystem";
 import AdminWallet from "./AdminWallet";
 import CreditAdmin from "./CreditAdmin";
+import { supportPhone, supportWhatsApp } from "./settings";
 
 const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined) || "https://wqyebqzbbpohbnznqdjj.supabase.co";
 const key = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) || "sb_publishable_gO4umNBMJ0AWRk19HtKd7A_9X4DibYj";
@@ -31,14 +32,7 @@ const authProvider: AuthProvider | undefined = client ? {
     const credentials = value.includes("@") ? { email: value, password } : { phone: value, password };
     const { error } = await client.auth.signInWithPassword(credentials);
     if (error) return { success: false, error: { name: "LoginError", message: "تعذر تسجيل الدخول" } };
-    if (!(await isShopAdmin())) {
-      const { data: status, error: statusError } = await client.rpc("flexy_mini_credit_status");
-      const account = Array.isArray(status) ? status[0] : status;
-      if (statusError || !account || typeof account !== "object" || Array.isArray(account)) {
-        await client.auth.signOut();
-        return { success: false, error: { name: "AccessDenied", message: "لا يوجد حساب عميل مربوط ومصرّح له بالدخول" } };
-      }
-    }
+    if (!(await isShopAdmin())) {await client.auth.signOut();return {success:false,error:{name:"AccessDenied",message:"دخول الإدارة فقط. استعمل صفحة دخول الزبون"}};}
     return { success: true, redirectTo: "/" };
   },
   logout: async () => {
@@ -49,9 +43,7 @@ const authProvider: AuthProvider | undefined = client ? {
     const { data, error } = await client.auth.getSession();
     if (error || !data.session) return { authenticated: false, redirectTo: "/login" };
     if (await isShopAdmin()) return { authenticated: true };
-    const status = await client.rpc("flexy_mini_credit_status");
-    const account = Array.isArray(status.data) ? status.data[0] : status.data;
-    return !status.error && !!account && typeof account === "object" && !Array.isArray(account) ? { authenticated: true } : { authenticated: false, redirectTo: "/login" };
+    await client.auth.signOut();return {authenticated:false,redirectTo:"/customer-login"};
   },
   onError: async () => ({ error: undefined }),
   getIdentity: async () => {
@@ -94,13 +86,14 @@ const items = [
   {key:"cards",icon:<span>▦</span>,label:"إدارة البطاقات والأصناف"},
   {key:"inventory",icon:<span>＋</span>,label:"أكواد البطاقات"},
   {key:"customers",icon:<span>♙</span>,label:"الزبائن"},
+  {key:"devices",icon:<span>▣</span>,label:"الأجهزة الموثوقة"},
   {key:"stations",icon:<span>▣</span>,label:"المحطات والشرائح"},
   {key:"members",icon:<span>♧</span>,label:"المستخدمون والصلاحيات"},
   {key:"ads",icon:<span>◈</span>,label:"إدارة الإعلانات"},
   {key:"settings",icon:<span>⚙</span>,label:"الإعدادات"}
  ]}
 ];
-const names:Record<string,string>={home:"الرئيسية",flexy:"الفليكسي",idoom:"تعبئة إيدوم",store:"متجر البطاقات",operations:"العمليات",cards:"إدارة البطاقات والأصناف",inventory:"إضافة أكواد البطاقات",customers:"إدارة الزبائن",stations:"المحطات والشرائح",members:"المستخدمون والصلاحيات",ads:"إدارة الإعلانات",settings:"الإعدادات"};
+const names:Record<string,string>={devices:"الأجهزة الموثوقة وطلبات الاعتماد",home:"الرئيسية",flexy:"الفليكسي",idoom:"تعبئة إيدوم",store:"متجر البطاقات",operations:"العمليات",cards:"إدارة البطاقات والأصناف",inventory:"إضافة أكواد البطاقات",customers:"إدارة الزبائن",stations:"المحطات والشرائح",members:"المستخدمون والصلاحيات",ads:"إدارة الإعلانات",settings:"الإعدادات"};
 const sample = [
   { key: "1", name: "موبيليس", kind: "فليكسي", state: "واجهة تجريبية" },
   { key: "2", name: "بطاقات موبيليس", kind: "بطاقات", state: "غير مربوط" },
@@ -334,6 +327,7 @@ function ConnectionDiagnostics() {
   }
   return <Card title="فحص اتصال Supabase" className="section-card">
     <Descriptions column={1} size="small" bordered>
+      <Descriptions.Item label="رقم دعم واتساب"><span dir="ltr">{supportPhone}</span></Descriptions.Item>
       <Descriptions.Item label="عنوان المشروع">{url ? "مضبوط" : "غير مضبوط"}</Descriptions.Item>
       <Descriptions.Item label="المفتاح العام">{key ? "مضبوط" : "غير مضبوط"}</Descriptions.Item>
       <Descriptions.Item label="قاعدة البيانات">غير مختبرة</Descriptions.Item>
@@ -346,19 +340,51 @@ function ConnectionDiagnostics() {
     </Space>
   </Card>;
 }
+type TrustedDevice={id:number;customer_id:number;device_label:string;approved_at:string|null;revoked_at:string|null;expires_at:string|null;created_at:string;last_used_at:string|null;flexy_mini_customer_accounts:{username:string;phone:string;money_party_directory:{display_name:string}}};
+function TrustedDevices(){
+  const [kinds,setKinds]=useState<Record<number,string>>({});
+  const [devices,setDevices]=useState<TrustedDevice[]>([]),[error,setError]=useState(""),[busy,setBusy]=useState(false);
+  const load=async()=>{setBusy(true);try{const {data,error}=await client!.functions.invoke("flexy-mini-customers",{body:{action:"devices"}});if(error||!data?.devices)throw new Error(data?.error||"تعذر تحميل الأجهزة");setDevices(data.devices);}catch(e){setError(e instanceof Error?e.message:"تعذر الاتصال");}finally{setBusy(false);}};
+  useEffect(()=>{void load();},[]);
+  const change=async(id:number,action:string)=>{setBusy(true);setError("");try{const {data,error}=await client!.functions.invoke("flexy-mini-customers",{body:{action,device_id:id,device_kind:kinds[id]||"desktop"}});if(error){let message=data?.error;try{message=(await error.context.json()).error;}catch{}throw new Error(message||"تعذر تحديث الجهاز");}await load();}catch(e){setError(e instanceof Error?e.message:"تعذر الاتصال");}finally{setBusy(false);}};
+  const state=(d:TrustedDevice)=>d.revoked_at?"ملغى":!d.approved_at?"بانتظار الاعتماد":new Date(d.expires_at||0).getTime()<=Date.now()?"منتهي":"معتمد";
+  return <Card title="الأجهزة الموثوقة" extra={<Button loading={busy} onClick={()=>void load()}>تحديث</Button>}>
+    <Alert type="info" message="جهازان كحد أقصى لكل زبون. اعتماد الكمبيوتر 7 أيام والهاتف 30 يومًا، وإلغاء الاعتماد يبطل كل جلسات الجهاز." style={{marginBottom:12}}/>
+    {error&&<Alert type="error" message={error} style={{marginBottom:12}}/>}
+    <Table rowKey="id" loading={busy} dataSource={devices} pagination={{pageSize:10}} scroll={{x:850}} columns={[
+      {title:"الزبون",render:(_,d)=>d.flexy_mini_customer_accounts?.money_party_directory?.display_name||d.flexy_mini_customer_accounts?.username},
+      {title:"المستخدم",render:(_,d)=>d.flexy_mini_customer_accounts?.username},
+      {title:"الجهاز",dataIndex:"device_label"},
+      {title:"الحالة",render:(_,d)=><Tag color={state(d)==="معتمد"?"green":"orange"}>{state(d)}</Tag>},
+      {title:"تاريخ الطلب",render:(_,d)=>new Date(d.created_at).toLocaleString("ar-DZ")},
+      {title:"آخر استعمال",render:(_,d)=>d.last_used_at?new Date(d.last_used_at).toLocaleString("ar-DZ"):"لم يدخل بعد"},
+      {title:"الإجراءات",render:(_,d)=><Space>{state(d)!=="معتمد"&&<Select value={kinds[d.id]||"desktop"} onChange={v=>setKinds({...kinds,[d.id]:v})} options={[{value:"desktop",label:"كمبيوتر · 7 أيام"},{value:"mobile",label:"هاتف · 30 يومًا"}]} />}{state(d)!=="معتمد"&&<Button disabled={busy} onClick={()=>void change(d.id,"approve_device")}>اعتماد الجهاز</Button>}{!d.revoked_at&&<Button danger disabled={busy} onClick={()=>void change(d.id,"revoke_device")}>إلغاء الاعتماد</Button>}</Space>}
+    ]}/>
+  </Card>;
+}
+function deviceSecret(){
+  let value=localStorage.getItem("flexy_mini_device_secret");
+  if(!value||! /^[0-9a-f]{64}$/.test(value)){value=Array.from(crypto.getRandomValues(new Uint8Array(32)),x=>x.toString(16).padStart(2,"0")).join("");localStorage.setItem("flexy_mini_device_secret",value);}
+  return value;
+}
 function TableCustomerLogin(){
   const [identifier,setIdentifier]=useState("");
+  const [blocked,setBlocked]=useState(false);
   const [password,setPassword]=useState("");
   const [token,setToken]=useState(()=>window.sessionStorage.getItem("flexy_mini_customer_token")||"");
   const [account,setAccount]=useState<{username:string;phone?:string;party_id:number}|null>(null);
   const [error,setError]=useState("");
   const [busy,setBusy]=useState(false);
   const call=async(body:Record<string,unknown>)=>{
-    const response=await fetch(url+"/functions/v1/flexy-mini-customers",{method:"POST",headers:{"Content-Type":"application/json",apikey:key},body:JSON.stringify(body)});
+    const response=await fetch(url+"/functions/v1/flexy-mini-customers",{method:"POST",headers:{"Content-Type":"application/json",apikey:key},body:JSON.stringify({...body,device_secret:deviceSecret(),device_label:/Android|iPhone|iPad/i.test(navigator.userAgent)?"هاتف / متصفح":"كمبيوتر / متصفح"})});
     return {ok:response.ok,data:await response.json()};
   };
-  useEffect(()=>{if(!token)return;let active=true;void call({action:"me",token}).then(r=>{if(!active)return;if(r.ok)setAccount(r.data);else {window.sessionStorage.removeItem("flexy_mini_customer_token");setToken("");}}).catch(()=>{if(active)setError("تعذر التحقق من الجلسة");});return()=>{active=false};},[token]);
-  const login=async()=>{setBusy(true);setError("");try{const r=await call({action:"login",identifier,password});if(!r.ok){setError("بيانات الدخول غير صحيحة");return;}window.sessionStorage.setItem("flexy_mini_customer_token",r.data.token);setToken(r.data.token);setPassword("");}catch{setError("تعذر الاتصال بالخادم");}finally{setBusy(false);}};
+  useEffect(()=>{if(!token)return;let active=true;
+    const check=()=>void call({action:"me",token}).then(r=>{if(!active)return;if(r.ok)setAccount(r.data);else{window.sessionStorage.removeItem("flexy_mini_customer_token");setToken("");setAccount(null);setError(r.data.error||"انتهت الجلسة");}}).catch(()=>{if(active){setAccount(null);setError("تعذر التحقق من الجلسة");}});
+    check();const timer=window.setInterval(check,15000);window.addEventListener("focus",check);
+    return()=>{active=false;clearInterval(timer);window.removeEventListener("focus",check);};
+  },[token]);
+  const login=async()=>{setBusy(true);setError("");try{const r=await call({action:"login",identifier,password});if(!r.ok){setBlocked(r.data.code==="DEVICE_PENDING"||r.data.code==="DEVICE_REVOKED");setError(r.data.error||"بيانات الدخول غير صحيحة");return;}window.sessionStorage.setItem("flexy_mini_customer_token",r.data.token);setToken(r.data.token);setPassword("");}catch{setError("تعذر الاتصال بالخادم");}finally{setBusy(false);}};
   const logout=async()=>{try{await call({action:"logout",token});}catch{}window.sessionStorage.removeItem("flexy_mini_customer_token");setToken("");setAccount(null);};
   return <ConfigProvider direction="rtl"><div style={{maxWidth:460,margin:"60px auto",padding:16}}>
     <Card title="Flexy Mini — دخول الزبون">
@@ -366,6 +392,7 @@ function TableCustomerLogin(){
         <Input value={identifier} onChange={e=>setIdentifier(e.target.value)} placeholder="اسم المستخدم أو رقم الهاتف" dir="ltr"/>
         <Input.Password value={password} onChange={e=>setPassword(e.target.value)} placeholder="كلمة المرور"/>
         {error&&<Alert type="error" message={error}/>}
+        {blocked&&<><Button block href={supportWhatsApp} target="_blank" rel="noopener noreferrer">طلب الدعم عبر واتساب</Button><Text type="secondary">دعم: <span dir="ltr">{supportPhone}</span></Text></>}
         <Button type="primary" block loading={busy} onClick={()=>void login()}>دخول</Button>
       </Space>}
       <a href="#/login">دخول الإدارة</a>
@@ -411,7 +438,7 @@ function HomeByRole() {
 }
 function Dashboard() {
   const { mutate: logout } = useLogout();
-  const validPages = new Set(["home","flexy","idoom","store","operations","cards","inventory","customers","stations","members","ads","settings"]);
+  const validPages = new Set(["home","flexy","idoom","store","operations","cards","inventory","customers","devices","stations","members","ads","settings"]);
   const readPage = () => { const value = new URLSearchParams(window.location.hash.split("?")[1] || "").get("page"); return value && validPages.has(value) ? value : "home"; };
   const [page, setPageState] = useState(readPage);
   const setPage = (next: string) => {
@@ -442,7 +469,7 @@ function Dashboard() {
             {mobile && <Button onClick={() => setDrawer(true)} aria-label="فتح القائمة">☰</Button>}
             <Text strong>Flexy Mini</Text>
           </Space>
-          <Space><Tag color={client ? "green" : "blue"}>v0.9.1 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
+          <Space><Tag color={client ? "green" : "blue"}>v0.9.2 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
         </Header>
         <Content className="app-content">
           {page !== "home" && <div className="page-heading"><Title level={mobile ? 3 : 2}>{names[page]}</Title></div>}
@@ -458,7 +485,7 @@ function Dashboard() {
                 { title: "بطاقات رقمية", subtitle: "ألعاب، اتصالات وبرامج", color: "#625ee8", target: "store", symbol: "▣" }
               ].map(service => <Col xs={24} md={8} key={service.title}><div onClick={() => setPage(service.target)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter") setPage(service.target); }} style={{ background: service.color, borderRadius: 14, color: "white", padding: "22px 20px", minHeight: 112, cursor: "pointer", boxShadow: "0 6px 15px rgba(0,0,0,.08)" }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 20, fontWeight: 700 }}>{service.title}</span><span style={{ fontSize: 27 }}>{service.symbol}</span></div><div style={{ opacity: .9, marginTop: 9 }}>{service.subtitle}</div></div></Col>)}
             </Row>
-          </> : page === "ads" && client ? <AdSystem db={client} admin /> : page === "settings" ? <ConnectionDiagnostics /> : page === "customers" ? <MasterCustomerLookup /> : page === "members" ? <><MiniMembers />{client&&<CreditAdmin db={client}/>}</> : page === "cards" ? <CardsCatalog /> : page === "operations" ? <Card title="عملياتي"><Empty description="سجل عمليات حسابك لم يُفعّل بعد" /></Card> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز" /></Card>}
+          </> : page === "ads" && client ? <AdSystem db={client} admin /> : page === "settings" ? <ConnectionDiagnostics /> : page === "devices" ? <TrustedDevices /> : page === "customers" ? <MasterCustomerLookup /> : page === "members" ? <><MiniMembers />{client&&<CreditAdmin db={client}/>}</> : page === "cards" ? <CardsCatalog /> : page === "operations" ? <Card title="عملياتي"><Empty description="سجل عمليات حسابك لم يُفعّل بعد" /></Card> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز" /></Card>}
           <div className="app-footer">Flexy Mini · Refine + Ant Design · عرض تجريبي فقط</div>
         </Content>
         <nav className="bottom-service-nav" aria-label="خدمات الموقع" dir="rtl">

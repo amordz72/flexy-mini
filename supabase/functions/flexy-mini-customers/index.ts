@@ -15,29 +15,36 @@ Deno.serve(async(req)=>{
  try{body=await req.json();}catch{return respond(400,{error:"Invalid request"});}
  const action=String(body.action||"");
  if(action==="login"){
-   return respond(423,{error:"Device approval required before customer login is enabled"});
- }
- if(action==="legacy_login_disabled"){
-   const identifier=String(body.identifier||"").trim().toLowerCase();
-   const password=String(body.password||"");
-   if(!identifier||!password)return respond(401,{error:"Invalid credentials"});
-   const normalized=phone(identifier);
-   const {data:account}=await admin.from("flexy_mini_customer_accounts").select("id,party_id,username,phone,password_hash,active").or("username.eq."+identifier+",phone.eq."+normalized).limit(1).maybeSingle();
-   if(!account||!account.active)return respond(401,{error:"Invalid credentials"});
-   // Password verification is delegated to a restricted SQL function, never exposed in browser.
-   const {data:valid,error:verifyError}=await admin.rpc("flexy_mini_customer_verify_password",{p_account_id:account.id,p_password:password});
-   if(verifyError||valid!==true)return respond(401,{error:"Invalid credentials"});
+   const identifier=String(body.identifier||"").trim().toLowerCase(),password=String(body.password||""),credential=String(body.device_secret||"");
+   if(!/^[0-9a-f]{64}$/.test(credential)||!password||password.length>128)return respond(401,{error:"بيانات الدخول غير صحيحة"});
+   const isPhone=/^[+0-9 ()-]+$/.test(identifier);
+   if(!isPhone&&!/^[a-z0-9_]{3,32}$/.test(identifier))return respond(401,{error:"بيانات الدخول غير صحيحة"});
+   const {data:account}=await admin.from("flexy_mini_customer_accounts").select("id,party_id,username,active").eq(isPhone?"phone":"username",isPhone?phone(identifier):identifier).maybeSingle();
+   if(!account?.active)return respond(401,{error:"بيانات الدخول غير صحيحة"});
+   const {data:valid,error:verifyError}=await admin.rpc("flexy_mini_customer_check_login",{p_account_id:account.id,p_password:password});
+   if(verifyError||valid!==true)return respond(401,{error:"بيانات الدخول غير صحيحة"});
+   const credentialHash=await sha256(credential);
+   const {data:existing,error:deviceError}=await admin.from("flexy_mini_trusted_devices").select("id,approved_at,revoked_at,expires_at").eq("customer_id",account.id).eq("credential_hash",credentialHash).maybeSingle();
+   if(deviceError)return respond(503,{error:"تعذر فحص الجهاز"});
+   if(!existing){
+     const {error}=await admin.from("flexy_mini_trusted_devices").insert({customer_id:account.id,credential_hash:credentialHash,device_label:String(body.device_label||"متصفح").slice(0,80)});
+     if(error&&error.code!=="23505")return respond(503,{error:"تعذر تسجيل طلب الجهاز"});
+     return respond(423,{code:"DEVICE_PENDING",error:"تم تسجيل طلب اعتماد الجهاز. انتظر موافقة الإدارة"});
+   }
    const token=Array.from(crypto.getRandomValues(new Uint8Array(32)),x=>x.toString(16).padStart(2,"0")).join("");
-   const {error:sessionError}=await admin.from("flexy_mini_customer_sessions").insert({customer_id:account.id,token_hash:await sha256(token),expires_at:new Date(Date.now()+12*60*60*1000).toISOString()});
-   if(sessionError)return respond(503,{error:"Session unavailable"});
+   const {data:result,error}=await admin.rpc("flexy_mini_device_session",{p_customer_id:account.id,p_credential_hash:credentialHash,p_token_hash:await sha256(token)});
+   if(error)return respond(503,{error:"تعذر إنشاء الجلسة"});
+   if(!result?.allowed)return respond(423,{code:existing.revoked_at?"DEVICE_REVOKED":"DEVICE_PENDING",error:existing.revoked_at?"تم إلغاء اعتماد هذا الجهاز. تواصل مع الإدارة":"الجهاز ينتظر الاعتماد أو انتهت مدة ثقته. تواصل مع الإدارة"});
    return respond(200,{token,username:account.username,party_id:account.party_id});
  }
  if(action==="me"||action==="logout"){
    const token=String(body.token||"");
    if(!/^[0-9a-f]{64}$/.test(token))return respond(401,{error:"Unauthorized"});
    const hash=await sha256(token);
-   const {data:session}=await admin.from("flexy_mini_customer_sessions").select("id,customer_id,expires_at,revoked_at").eq("token_hash",hash).maybeSingle();
+   const {data:session}=await admin.from("flexy_mini_customer_sessions").select("id,customer_id,device_id,expires_at,revoked_at").eq("token_hash",hash).maybeSingle();
    if(!session||session.revoked_at||new Date(session.expires_at).getTime()<Date.now())return respond(401,{error:"Unauthorized"});
+   const {data:device}=await admin.from("flexy_mini_trusted_devices").select("id,customer_id,credential_hash,approved_at,revoked_at,expires_at").eq("id",session.device_id||0).maybeSingle();
+   if(!device||device.customer_id!==session.customer_id||!device.approved_at||device.revoked_at||new Date(device.expires_at||new Date(new Date(device.approved_at).getTime()+7*86400000).toISOString()).getTime()<=Date.now()||device.credential_hash!==await sha256(String(body.device_secret||"")))return respond(401,{error:"الجهاز غير معتمد"});
    if(action==="logout"){await admin.from("flexy_mini_customer_sessions").update({revoked_at:new Date().toISOString()}).eq("id",session.id);return respond(200,{ok:true});}
    const {data:account}=await admin.from("flexy_mini_customer_accounts").select("username,phone,party_id,active,credit_enabled").eq("id",session.customer_id).maybeSingle();
    if(!account?.active)return respond(401,{error:"Unauthorized"});
@@ -49,6 +56,17 @@ Deno.serve(async(req)=>{
  if(!user)return respond(401,{error:"Unauthorized"});
  const {data:isAdmin}=await caller.rpc("flexy_mini_is_admin");
  if(isAdmin!==true)return respond(403,{error:"Admin only"});
+ if(action==="devices"){
+   const {data,error}=await admin.from("flexy_mini_trusted_devices").select("id,customer_id,device_label,approved_at,revoked_at,expires_at,created_at,last_used_at,flexy_mini_customer_accounts(username,phone,party_id,money_party_directory(display_name))").order("created_at",{ascending:false}).limit(500);
+   return error?respond(503,{error:"تعذر تحميل الأجهزة"}):respond(200,{devices:data});
+ }
+ if(action==="approve_device"||action==="revoke_device"){
+   const id=Number(body.device_id);
+   if(!Number.isSafeInteger(id)||id<1)return respond(400,{error:"جهاز غير صالح"});
+   const {data,error}=await admin.rpc("flexy_mini_manage_device",{p_device_id:id,p_approve:action==="approve_device",p_mobile:body.device_kind==="mobile"});
+   if(error)return respond(error.message.includes("MAX_TWO_TRUSTED_DEVICES")?409:503,{error:error.message.includes("MAX_TWO_TRUSTED_DEVICES")?"يوجد جهازان معتمدان. ألغ اعتماد أحدهما أولًا":"تعذر تحديث الجهاز"});
+   return data?respond(200,{ok:true}):respond(404,{error:"الجهاز غير موجود"});
+ }
  if(action==="list"){
    const {data,error}=await admin.from("flexy_mini_customer_accounts").select("id,party_id,username,phone,active,created_at").order("id",{ascending:false}).limit(100);
    return error?respond(503,{error:"List unavailable"}):respond(200,{customers:data});
