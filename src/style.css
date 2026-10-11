@@ -14,3 +14,12 @@ html{direction:rtl}body{overflow-x:hidden}.app-layout{min-width:0}.app-sider{pos
 .bottom-service-nav .ant-btn.service-nav-active{color:#2459c8;background:#edf3ff;font-weight:700}
 .app-content{padding-bottom:110px!important}
 @media(min-width:768px){.bottom-service-nav{padding-bottom:7px}.bottom-service-nav .ant-btn{height:61px;font-size:12px}}
+
+/* Comfortable navigation: service/admin groups clearly separated */
+.app-sider .ant-menu-item,.ant-drawer .ant-menu-item{min-height:52px!important;height:auto!important;line-height:1.45!important;margin-block:5px!important;padding-block:12px!important;font-size:15px!important;font-weight:550;border-radius:12px}
+.app-sider .ant-menu-item .ant-menu-title-content,.ant-drawer .ant-menu-item .ant-menu-title-content{white-space:normal!important;overflow:visible!important;text-overflow:clip!important}
+.app-sider .ant-menu-item .ant-menu-item-icon,.ant-drawer .ant-menu-item .ant-menu-item-icon{font-size:21px!important;min-width:26px!important;display:inline-flex;justify-content:center}
+.app-sider .ant-menu-item-group-title,.ant-drawer .ant-menu-item-group-title{font-size:13px!important;font-weight:700!important;color:#7b8598!important;padding-block:16px 7px!important;border-bottom:1px solid #e7eaf0;margin-bottom:8px}
+.ant-drawer .ant-drawer-body{padding:14px!important}
+.ant-drawer .ant-menu{font-size:15px!important}
+@media(max-width:767px){.ant-drawer .ant-menu-item{min-height:56px!important;font-size:16px!important}.ant-drawer .ant-menu-item-group-title{font-size:14px!important}}
