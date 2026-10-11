@@ -269,7 +269,7 @@ function Dashboard() {
             {mobile && <Button onClick={() => setDrawer(true)} aria-label="فتح القائمة">☰</Button>}
             <Text strong>Flexy Mini</Text>
           </Space>
-          <Space><Tag color={client ? "green" : "blue"}>v0.8.1 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
+          <Space><Tag color={client ? "green" : "blue"}>v0.8.2 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
         </Header>
         <Content className="app-content">
           {page !== "home" && <div className="page-heading"><Title level={mobile ? 3 : 2}>{names[page]}</Title></div>}
