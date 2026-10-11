@@ -262,27 +262,33 @@ function Dashboard() {
             {mobile && <Button onClick={() => setDrawer(true)} aria-label="فتح القائمة">☰</Button>}
             <Text strong>Flexy Mini</Text>
           </Space>
-          <Space><Tag color={client ? "green" : "blue"}>v0.6.4 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
+          <Space><Tag color={client ? "green" : "blue"}>v0.7.0 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
         </Header>
         <Content className="app-content">
-          <div className="page-heading"><Title level={mobile ? 3 : 2}>{names[page]}</Title><Text type="secondary">نسخة معاينة · بدون معاملات</Text></div>
-          <Alert type="info" showIcon message="هذه لوحة إدارة تجريبية. لا توجد عمليات مالية أو شحن مفعّلة." className="notice" />
-          {page === "settings" ? <ConnectionDiagnostics /> : page === "home" ? <>
-            <Row gutter={[16, 16]}>
-              <Col xs={24} sm={12} lg={8}><Card title="الفليكسي"><Title level={3}>تجريبي</Title><Text type="secondary">ربط التنفيذ في مرحلة لاحقة</Text></Card></Col>
-              <Col xs={24} sm={12} lg={8}><Card title="البطاقات"><Title level={3}>غير مربوط</Title><Text type="secondary">المخزون لم يُربط بعد</Text></Card></Col>
-              <Col xs={24} sm={12} lg={8}><Card title="Supabase"><Title level={3}>{client ? "إعدادات موجودة" : "غير مهيأ"}</Title><Text type="secondary">{client ? "اختبر الوصول من صفحة الإعدادات" : "لا توجد متغيرات اتصال للنشر"}</Text></Card></Col>
-            </Row>
-            <Card title="الوحدات المخططة" className="section-card">
-              <Table size="small" pagination={false} scroll={{ x: 450 }} dataSource={sample} columns={[
-                { title: "الوحدة", dataIndex: "name" },
-                { title: "النوع", dataIndex: "kind" },
-                { title: "الحالة", dataIndex: "state", render: (v: string) => <Tag>{v}</Tag> }
-              ]} />
+          {page !== "home" && <div className="page-heading"><Title level={mobile ? 3 : 2}>{names[page]}</Title></div>}
+          {page === "home" ? <>
+            <Card bordered={false} style={{ marginBottom: 18, background: "linear-gradient(115deg,#152d60,#354fa9 55%,#7153be)", color: "white", borderRadius: 18, overflow: "hidden" }} bodyStyle={{ padding: mobile ? 22 : 34 }}>
+              <Text style={{ color: "#d9e7ff", fontSize: 13 }}>FLEXY MINI · متجرك الرقمي</Text>
+              <Title level={mobile ? 3 : 2} style={{ color: "white", marginTop: 12, marginBottom: 8 }}>بطاقاتك وخدماتك في مكان واحد</Title>
+              <Text style={{ color: "#e7eaff" }}>بطاقات الألعاب، الاتصالات والاشتراكات الرقمية</Text>
+              <div style={{ marginTop: 22 }}><Button type="primary" size="large" style={{ background: "white", color: "#243c83", fontWeight: 700 }} onClick={() => setPage("cards")}>تصفح البطاقات ←</Button></div>
             </Card>
-          </> : page === "members" ? <MiniMembers /> : page === "cards" ? <CardsCatalog /> : <Card title={names[page]}>
-            <Empty description="لا توجد بيانات متصلة بعد" /><div className="placeholder-note"><Text>قسم {names[page]} جاهز للتجهيز. لن يتم تنفيذ أي عملية أو تغيير بيانات في هذه النسخة.</Text></div>
-          </Card>}
+            <Row gutter={[12, 12]} style={{ marginBottom: 24 }}>
+              {[
+                { title: "الرصيد", detail: "عند تفعيل المحفظة", icon: "◈" },
+                { title: "الديون", detail: "عند ربط الحسابات", icon: "▤" },
+                { title: "الأرباح", detail: "عند تفعيل المبيعات", icon: "↗" }
+              ].map(metric => <Col xs={24} sm={8} key={metric.title}><Card bordered={false} style={{ borderRadius: 14, height: "100%" }}><Space align="start" style={{ width: "100%", justifyContent: "space-between" }}><div><Text type="secondary">{metric.title}</Text><div style={{ fontSize: 17, fontWeight: 700, marginTop: 8 }}>غير مربوط بعد</div><Text type="secondary" style={{ fontSize: 12 }}>{metric.detail}</Text></div><span style={{ fontSize: 28, color: "#5676cb" }}>{metric.icon}</span></Space></Card></Col>)}
+            </Row>
+            <Title level={4} style={{ marginBottom: 16 }}>الخدمات</Title>
+            <Row gutter={[12, 12]}>
+              {[
+                { title: "الفليكسي", subtitle: "عمليات الشحن", color: "#f0523b", target: "flexy", symbol: "↗" },
+                { title: "تعبئة إيدوم", subtitle: "خدمات الإنترنت", color: "#41b95a", target: "cards", symbol: "◎" },
+                { title: "بطاقات رقمية", subtitle: "ألعاب، اتصالات وبرامج", color: "#625ee8", target: "cards", symbol: "▣" }
+              ].map(service => <Col xs={24} md={8} key={service.title}><div onClick={() => setPage(service.target)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter") setPage(service.target); }} style={{ background: service.color, borderRadius: 14, color: "white", padding: "22px 20px", minHeight: 112, cursor: "pointer", boxShadow: "0 6px 15px rgba(0,0,0,.08)" }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 20, fontWeight: 700 }}>{service.title}</span><span style={{ fontSize: 27 }}>{service.symbol}</span></div><div style={{ opacity: .9, marginTop: 9 }}>{service.subtitle}</div></div></Col>)}
+            </Row>
+          </> : page === "settings" ? <ConnectionDiagnostics /> : page === "members" ? <MiniMembers /> : page === "cards" ? <CardsCatalog /> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز" /></Card>}
           <div className="app-footer">Flexy Mini · Refine + Ant Design · عرض تجريبي فقط</div>
         </Content>
       </Layout>
