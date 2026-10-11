@@ -1,4 +1,4 @@
-import React,{useEffect,useState} from "react";
+import {useEffect,useState} from "react";
 import {Alert,Button,Card,Form,Input,InputNumber,Switch,Table,Tag,Typography,message} from "antd";
 import type {SupabaseClient} from "@supabase/supabase-js";
 type Credit={user_id:string;party_id:number;enabled:boolean;credit_limit:number;debt:number;wallet_balance:number};
@@ -6,7 +6,7 @@ export default function CreditAdmin({db}:{db:SupabaseClient}){
  const [form]=Form.useForm();const [rows,setRows]=useState<Credit[]>([]);const [busy,setBusy]=useState(false);
  const load=async()=>{const r=await db.from("flexy_mini_credit_accounts").select("user_id,party_id,enabled,credit_limit,debt,wallet_balance").order("updated_at",{ascending:false});if(r.error)message.error(r.error.message);else setRows((r.data||[]) as Credit[]);};
  useEffect(()=>{void load();},[]);
- const save=async(v:any)=>{setBusy(true);const r=await db.rpc("flexy_mini_admin_set_credit",{p_user_id:v.user_id.trim(),p_party_id:v.party_id,p_enabled:!!v.enabled,p_limit:v.credit_limit});setBusy(false);if(r.error)message.error("تعذر الحفظ: "+r.error.message);else{message.success("تم حفظ صلاحية وسقف الدين");form.resetFields();void load();}};
+ const save=async(v:{user_id:string;party_id:number;enabled:boolean;credit_limit:number})=>{setBusy(true);const r=await db.rpc("flexy_mini_admin_set_credit",{p_user_id:v.user_id.trim(),p_party_id:v.party_id,p_enabled:!!v.enabled,p_limit:v.credit_limit});setBusy(false);if(r.error)message.error("تعذر الحفظ: "+r.error.message);else{message.success("تم حفظ صلاحية وسقف الدين");form.resetFields();void load();}};
  return <Card title="الشحن الذاتي بالدَّين — صلاحيات العملاء">
  <Alert type="warning" showIcon style={{marginBottom:16}} message="هذه محفظة ائتمان داخلية تجريبية، وليست تحويل أموال حقيقيًا. لا تفعل حساب عميل قبل التأكد من هويته."/>
  <Form form={form} layout="vertical" onFinish={save} initialValues={{enabled:false,credit_limit:10000}}>
