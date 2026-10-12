@@ -54,7 +54,7 @@ export default function SamaOfferDiscoveries({ db, stationUuid }: {
 
   const loadHistory = useCallback(async () => {
     setLoading(true);
-    const response = await db.rpc("flexy_mini_admin_sama_offer_discoveries", { p_limit: 10 });
+    const response = await db.rpc("flexy_mini_admin_sama_offer_discoveries", { p_limit: 20 });
     setLoading(false);
     if (response.error) {
       setError("تعذر قراءة سجل عروض Sama: " + response.error.message);
@@ -138,7 +138,7 @@ export default function SamaOfferDiscoveries({ db, stationUuid }: {
     extra={<Button onClick={() => void refresh()} loading={loading}>تحديث النتائج</Button>}
   >
     <Space direction="vertical" size="middle" style={{ width: "100%" }}>
-      <Alert type="info" showIcon message="عرض النتائج المسجلة" description="تظهر آخر عمليات استكشاف Sama من Station Connect. نعرض العروض ابتداءً من 500 دج. لا يتم إرسال أي استعلام بمجرد فتح هذه الصفحة." />
+      <Alert type="info" showIcon message="سجل Sama — للقراءة فقط" description="تظهر آخر 20 عملية استكشاف محفوظة في Station Connect، بما فيها النتائج القديمة. نعرض العروض ابتداءً من 500 دج؛ وجود عرض بالسجل لا يعني توفره الآن. لا يُرسل أي USSD عند فتح الصفحة أو الضغط على تحديث النتائج." />
       {error && <Alert type="error" showIcon message={error} />}
       <Typography.Text strong>طلب استكشاف جديد (إدارة فقط)</Typography.Text>
       <Space.Compact style={{ width: "100%" }}>
@@ -178,6 +178,7 @@ export default function SamaOfferDiscoveries({ db, stationUuid }: {
         ]}
       />}
       {current && <Card size="small" title={"عروض العملية المحددة — " + (current.family || "كل الفئات")}>
+        {(!current.completed_at || !Number.isFinite(Date.parse(current.completed_at)) || Date.now() - Date.parse(current.completed_at) > 7 * 24 * 60 * 60 * 1000) && <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="بيانات اكتشاف قديمة أو غير مؤرخة" description="هذه نتيجة محفوظة، وليست تأكيدًا حيًا لتوفر العرض. لا نستعمل ترتيب القائمة في تنفيذ شحن دون تحقق جديد وصريح." />}
         {offersOf(current).length === 0 ? <Empty description="لا توجد عروض قابلة للعرض في هذه النتيجة" /> : <Table<Offer>
           rowKey={(offer, index) => String(offer.family || "") + ":" + String(offer.index || index) + ":" + String(offer.amount || "")}
           dataSource={offersOf(current)}
@@ -185,6 +186,8 @@ export default function SamaOfferDiscoveries({ db, stationUuid }: {
           pagination={false}
           columns={[
             { title: "العرض", render: (_: unknown, offer: Offer) => offer.label || offer.family || "غير مسمى" },
+            { title: "الفئة", dataIndex: "family", render: (v: string | null) => v || "—" },
+            { title: "الترتيب المحفوظ", dataIndex: "index", render: (v: string | null) => v || "—" },
             { title: "القيمة (دج)", dataIndex: "amount", render: (v: number | string | null) => v ?? "—" },
           ]}
         />}
