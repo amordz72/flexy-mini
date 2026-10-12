@@ -83,7 +83,7 @@ function LoginPage() {
     try{
       const response=await fetch(url+"/functions/v1/flexy-mini-customers",{
         method:"POST",headers:{"Content-Type":"application/json",apikey:key},
-        body:JSON.stringify({action:"login",identifier,password:values.password})
+        body:JSON.stringify({action:"login",identifier,password:values.password,device_secret:(()=>{const k="flexy_mini_device_secret";let v=window.localStorage.getItem(k);if(!v){v=Array.from(crypto.getRandomValues(new Uint8Array(32)),x=>x.toString(16).padStart(2,"0")).join("");window.localStorage.setItem(k,v);}return v;})(),device_label:"متصفح الزبون"})
       });
       const data=await response.json().catch(()=>({}));
       if(!response.ok||!data.token){setLoginError(data.error||"تعذر تسجيل الدخول. تحقق من بيانات الحساب.");return;}
