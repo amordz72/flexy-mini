@@ -54,7 +54,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
     {title:"PIN",dataIndex:"has_pin",render:(v:boolean)=><Tag>{v?"مسجل بأمان":"غير مسجل"}</Tag>},
     {title:"آخر ظهور",dataIndex:"modem_last_seen_at",render:dateLabel},
     {title:"الاتصال",render:(_:unknown,r:Hardware)=><Tag color={online(r.modem_last_seen_at)?"green":"orange"}>{online(r.modem_last_seen_at)?"متصل حديثًا":"غير متصل"}</Tag>}
-   ]}/>
+   ]}/>}
   </Card>}
  </Space>;
 }
