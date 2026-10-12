@@ -23,3 +23,8 @@ html{direction:rtl}body{overflow-x:hidden}.app-layout{min-width:0}.app-sider{pos
 .ant-drawer .ant-drawer-body{padding:14px!important}
 .ant-drawer .ant-menu{font-size:15px!important}
 @media(max-width:767px){.ant-drawer .ant-menu-item{min-height:56px!important;font-size:16px!important}.ant-drawer .ant-menu-item-group-title{font-size:14px!important}}
+
+/* Stable PWA/browser typography and navigation symbols */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+.service-nav-icon{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;min-width:28px;font-family:"Segoe UI Symbol","Noto Sans Symbols 2",sans-serif;font-size:24px!important;font-weight:400;line-height:1!important;font-variant-emoji:text}
+.bottom-service-nav .ant-btn{font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
