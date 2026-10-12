@@ -493,7 +493,7 @@ function TrustedDevices(){
     ]}/>
   </Card>;
 }
-function CustomerCardsCatalog({token}:{token:string}){
+function SharedCardsStore({token}:{token?:string}){
   type Category={id:number;name:string};
   type Product={id:number;category_id:number;name:string};
   type Variant={id:number;product_id:number;name:string;denomination:number|null;stock_quantity:number};
@@ -503,6 +503,7 @@ function CustomerCardsCatalog({token}:{token:string}){
   const [busy,setBusy]=useState(true);
   useEffect(()=>{
     let active=true;setBusy(true);
+    if(!token){void (async()=>{if(!client)throw new Error("لا يوجد اتصال");const [p,v]=await Promise.all([client.from("flexy_mini_products").select("id,category_id,name,active,display_mode"),client.from("flexy_mini_variants").select("id,product_id,name,denomination,stock_quantity,active,display_mode")]);if(p.error||v.error)throw new Error(p.error?.message||v.error?.message);return {categories:[],products:(p.data||[]).filter(x=>x.active&&x.display_mode==="visible"),variants:(v.data||[]).filter(x=>x.active&&x.display_mode==="visible")};})().then(data=>{if(active)setCatalog(data);}).catch(e=>{if(active)setError(e instanceof Error?e.message:"تعذر تحميل البطاقات");}).finally(()=>{if(active)setBusy(false);});return()=>{active=false;};}
     void fetch(url+"/functions/v1/flexy-mini-customers",{method:"POST",headers:{"Content-Type":"application/json",apikey:key},body:JSON.stringify({action:"catalog",token})})
       .then(async r=>{const data=await r.json();if(!r.ok)throw new Error(data.error||"تعذر تحميل البطاقات");if(active)setCatalog(data);})
       .catch(e=>{if(active)setError(e instanceof Error?e.message:"تعذر الاتصال");})
@@ -632,7 +633,7 @@ function Dashboard({customerToken,customerAccount,customerError,onCustomerLogout
                 { title: "بطاقات رقمية", subtitle: "ألعاب، اتصالات وبرامج", color: "#625ee8", target: "store", symbol: "AppstoreOutlined" }
               ].map(service => <Col xs={24} md={8} key={service.title}><div onClick={() => setPage(service.target)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter") setPage(service.target); }} style={{ background: service.color, borderRadius: 14, color: "white", padding: "22px 20px", minHeight: 112, cursor: "pointer", boxShadow: "0 6px 15px rgba(0,0,0,.08)" }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 20, fontWeight: 700 }}>{service.title}</span><span style={{ fontSize: 27 }}>{service.symbol==="PhoneOutlined"?<PhoneOutlined/>:service.symbol==="WifiOutlined"?<WifiOutlined/>:<AppstoreOutlined/>}</span></div><div style={{ opacity: .9, marginTop: 9 }}>{service.subtitle}</div></div></Col>)}
             </Row>
-          </> : isCustomer ? (page==="store"||page==="cards" ? <CustomerCardsCatalog token={customerToken!}/> : page==="operations" ? <Card title="عملياتي"><Empty description="سجل العمليات غير مفعّل بعد"/></Card> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز"/></Card>) : page === "ads" && client ? <AdSystem db={client} admin /> : page === "settings" ? <ConnectionDiagnostics /> : page === "devices" ? <TrustedDevices /> : page === "customers" ? <MasterCustomerLookup /> : page === "members" ? <><MiniMembers />{client&&<CreditAdmin db={client}/>}</> : page === "cards" ? <CardsCatalog /> : page === "operations" ? <Card title="عملياتي"><Empty description="سجل عمليات حسابك لم يُفعّل بعد" /></Card> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز" /></Card>}
+          </> : isCustomer ? (page==="store"||page==="cards" ? <SharedCardsStore token={customerToken!}/> : page==="operations" ? <Card title="عملياتي"><Empty description="سجل العمليات غير مفعّل بعد"/></Card> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز"/></Card>) : page === "store" ? <SharedCardsStore/> : page === "ads" && client ? <AdSystem db={client} admin /> : page === "settings" ? <ConnectionDiagnostics /> : page === "devices" ? <TrustedDevices /> : page === "customers" ? <MasterCustomerLookup /> : page === "members" ? <><MiniMembers />{client&&<CreditAdmin db={client}/>}</> : page === "cards" ? <CardsCatalog /> : page === "operations" ? <Card title="عملياتي"><Empty description="سجل عمليات حسابك لم يُفعّل بعد" /></Card> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز" /></Card>}
           <div className="app-footer">Flexy Mini · Refine + Ant Design · عرض تجريبي فقط</div>
         </Content>
         <nav className="bottom-service-nav" aria-label="خدمات الموقع" dir="rtl">
