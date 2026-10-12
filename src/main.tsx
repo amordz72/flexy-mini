@@ -17,6 +17,7 @@ import AdminWallet from "./AdminWallet";
 import SupplierSites from "./SupplierSites";
 import CreditAdmin from "./CreditAdmin";
 import StationOverview from "./StationOverview";
+import BuildCopyButton from "./BuildCopyButton";
 import { supportPhone, supportWhatsApp } from "./settings";
 
 const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined) || "https://wqyebqzbbpohbnznqdjj.supabase.co";
@@ -699,6 +700,7 @@ function Dashboard({customerToken,customerAccount,customerError,onCustomerLogout
   const menu = <Menu aria-label="أقسام التطبيق" mode="inline" selectedKeys={[page]} items={isCustomer?customerItems:items} onClick={({ key }) => { setPage(key); setDrawer(false); }} />;
   return <ConfigProvider direction="rtl" theme={{ token: { colorPrimary: "#2563eb", borderRadius: 10 } }}>
     <Layout className="app-layout" dir="rtl">
+      {!isCustomer && <BuildCopyButton />}
       {!mobile && <Sider width={242} collapsedWidth={76} collapsed={collapsed} theme="light" className="app-sider">
         <div className="brand">{collapsed ? "⚡" : "⚡ فليكسي ميني"}</div><Button className="collapse-button" type="text" onClick={() => setCollapsed(!collapsed)} aria-label={collapsed ? "توسيع القائمة" : "تصغير القائمة"}>{collapsed ? "⇤" : "⇥"}</Button>{menu}
       </Sider>}
