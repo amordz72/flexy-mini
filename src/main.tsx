@@ -624,6 +624,7 @@ function Dashboard({customerToken,customerAccount,customerError,onCustomerLogout
           {page === "home" ? <>
             {!isCustomer && client && <div style={{marginBottom:18}}><AdSystem db={client}/></div>}
             {!isCustomer && client && <AdminWallet db={client}/>}
+            {!isCustomer && <Card style={{marginBottom:18}} title="أرباح الإدارة"><Row gutter={[12,12]}><Col xs={24}><Text type="secondary">صافي أرباح المنصة من عمليات الفليكسي والبطاقات الناجحة</Text><div><Text strong>غير متاح حاليًا</Text></div></Col></Row><Alert style={{marginTop:12}} type="info" showIcon message="لم يُفعّل بعد سجل تكاليف البيع والأرباح المعتمدة؛ لن تُعرض أرباح تقديرية." /></Card>}
             {isCustomer && <Card style={{marginBottom:18}} title="ملخص حسابي"><Row gutter={[12,12]}>{["الرصيد","الديون","الأرباح"].map(label=><Col xs={8} key={label}><div style={{textAlign:"center"}}><Text type="secondary">{label}</Text><div><Text strong>غير متاح حاليًا</Text></div></div></Col>)}</Row><Alert style={{marginTop:12}} type="info" showIcon message="لم تُربط مبالغ الحساب المالية بمصدر معتمد بعد؛ لا تُعرض أرقام تقديرية." /></Card>}
 
             <Title level={4} style={{ marginBottom: 16 }}>الخدمات</Title>
