@@ -1,6 +1,7 @@
 import {useCallback,useEffect,useState} from "react";
 import {Alert,Button,Card,Descriptions,Empty,Grid,Input,Modal,Space,Table,Tag,Typography,message} from "antd";
 import type {SupabaseClient} from "@supabase/supabase-js";
+import SamaOfferDiscoveries from "./SamaOfferDiscoveries";
 
 type Station={station_uuid:string;status:string;computer_name:string|null;last_seen_at:string|null;agent_version:string|null};
 type Hardware={modem_uuid:string;modem_ip:string|null;device_name:string|null;modem_last_seen_at:string|null;sim_uuid:string|null;msisdn:string|null;imsi:string|null;sim_type:string|null;has_pin:boolean;sim_last_seen_at:string|null};
@@ -205,5 +206,6 @@ export default function StationOverview({db}:{db:SupabaseClient}){
     {title:"الاتصال",render:(_:unknown,r:Hardware)=><Tag color={online(r.modem_last_seen_at)?"green":"orange"}>{online(r.modem_last_seen_at)?"متصل حديثًا":"غير متصل"}</Tag>}
    ]}/>}
   </Card>}
+  <SamaOfferDiscoveries db={db} stationUuid={selected}/>
  </Space>;
 }
