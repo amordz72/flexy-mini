@@ -56,6 +56,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
  const [manualBusy,setManualBusy]=useState<string|null>(null);
  const [rearmBusy,setRearmBusy]=useState<string|null>(null);
  const [samaConfigSim,setSamaConfigSim]=useState<string|null>(null);
+ const [samaPhone,setSamaPhone]=useState("");
  const [servicePin,setServicePin]=useState("");
  const [samaConfigBusy,setSamaConfigBusy]=useState(false);
  const loadOoredooGuards=useCallback(async()=>{
@@ -146,6 +147,8 @@ export default function StationOverview({db}:{db:SupabaseClient}){
  };
  const configureSama=async()=>{
   if(!samaConfigSim||!selected)return;
+  const number=normalizePhone(samaPhone);
+  if(!/^0[5-7]\d{8}$/.test(number)){message.warning("أدخل رقم الشريحة الصحيح من 10 أرقام أولًا");return;}
   if(!/^[0-9]{4,8}$/.test(servicePin)){message.warning("أدخل PIN الخدمة من 4 إلى 8 أرقام");return;}
   const sim=(hardware[selected]||[]).find(item=>item.sim_uuid===samaConfigSim);
   if(!sim||sim.sim_type!=="unknown"||!sim.imsi?.startsWith("60301")||!online(sim.sim_last_seen_at)||!online(sim.modem_last_seen_at)){
@@ -158,19 +161,19 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   setSamaConfigBusy(true);
   try{
    const {error}=await db.rpc("station_connect_admin_update_sim",{
-    p_sim_uuid:sim.sim_uuid,p_sim_type:"mobilis-sama",p_service_pin:servicePin
+    p_sim_uuid:sim.sim_uuid,p_msisdn:number,p_sim_type:"mobilis-sama",p_service_pin:servicePin
    });
    if(error)throw error;
-   setHardware(old=>Object.fromEntries(Object.entries(old).map(([uuid,items])=>[uuid,items.map(item=>item.sim_uuid===samaConfigSim?{...item,sim_type:"mobilis-sama",has_pin:true}:item)])));
-   setSamaConfigSim(null);setServicePin("");
-   message.success("تم حفظ نوع Sama وPIN الخدمة. لم يُرسل أي استعلام USSD.");
+   setHardware(old=>Object.fromEntries(Object.entries(old).map(([uuid,items])=>[uuid,items.map(item=>item.sim_uuid===samaConfigSim?{...item,msisdn:number,sim_type:"mobilis-sama",has_pin:true}:item)])));
+   setSamaConfigSim(null);setSamaPhone("");setServicePin("");
+   message.success("تم تسجيل رقم الشريحة ونوع Sama وPIN الخدمة، دون إرسال USSD.");
   }catch(cause){message.error("تعذر تجهيز Sama: "+(cause instanceof Error?cause.message:String(cause)));}
   finally{setSamaConfigBusy(false);}
  };
  const typeAction=(sim:Hardware)=><Space direction="vertical" size={4}>
   <span>{sim.sim_type||"غير محدد"}</span>
   {sim.sim_uuid&&sim.sim_type==="unknown"&&sim.imsi?.startsWith("60301")&&online(sim.sim_last_seen_at)&&online(sim.modem_last_seen_at)&&
-   <Button size="small" onClick={()=>{setServicePin("");setSamaConfigSim(sim.sim_uuid);}}>تجهيز Mobilis Sama</Button>}
+   <Button size="small" onClick={()=>{setSamaPhone(sim.msisdn||"");setServicePin("");setSamaConfigSim(sim.sim_uuid);}}>تجهيز Mobilis Sama</Button>}
  </Space>;
  const phoneAction=(sim:Hardware)=>{
   if(!sim.sim_uuid)return <Typography.Text type="secondary">الشريحة غير محددة</Typography.Text>;
@@ -243,17 +246,25 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   <Modal
    title="تجهيز شريحة Mobilis Sama"
    open={Boolean(samaConfigSim)}
-   onCancel={()=>{if(!samaConfigBusy){setSamaConfigSim(null);setServicePin("");}}}
+   onCancel={()=>{if(!samaConfigBusy){setSamaConfigSim(null);setSamaPhone("");setServicePin("");}}}
    onOk={()=>void configureSama()}
-   okText="تأكيد النوع وحفظ PIN"
-   okButtonProps={{disabled:!(/^[0-9]{4,8}$/.test(servicePin))}}
+   okText="حفظ الرقم والنوع وPIN"
+   okButtonProps={{disabled:!(/^0[5-7]\d{8}$/.test(normalizePhone(samaPhone))&&/^[0-9]{4,8}$/.test(servicePin))}}
    confirmLoading={samaConfigBusy}
    cancelText="إلغاء"
    maskClosable={!samaConfigBusy}
    closable={!samaConfigBusy}
   >
    <Alert type="warning" showIcon message="تأكيد هوية الشريحة" description="تحقق أن الشريحة المتصلة حاليًا هي Mobilis Sama فعلًا. هذا الحفظ يحدّث أيضًا سجل الشرائح المشترك مع MyTool. لا يتم إرسال USSD ولا تنفيذ شحن." style={{marginBottom:12}}/>
-   <Typography.Text>PIN خدمة Sama (4 إلى 8 أرقام)</Typography.Text>
+   <Typography.Text strong>1. رقم هاتف الشريحة</Typography.Text>
+   <Input
+    aria-label="رقم هاتف شريحة Sama" dir="ltr" inputMode="tel" maxLength={20}
+    style={{marginTop:8,marginBottom:16}}
+    placeholder="0XXXXXXXXX"
+    value={samaPhone} onChange={event=>setSamaPhone(event.target.value)}
+   />
+   <Typography.Text type="secondary">اكتب رقم الشريحة نفسها، وليس رقم الزبون المراد شحنه.</Typography.Text>
+   <div style={{marginTop:16}}><Typography.Text strong>2. PIN خدمة Sama (4 إلى 8 أرقام)</Typography.Text></div>
    <Input.Password
     style={{marginTop:8}} inputMode="numeric" autoComplete="new-password" maxLength={8}
     value={servicePin} onChange={event=>setServicePin(event.target.value.replace(/\D/g,""))}
