@@ -474,18 +474,20 @@ function ConnectionDiagnostics() {
 }
 type TrustedDevice={id:number;customer_id:number;device_label:string;approved_at:string|null;revoked_at:string|null;expires_at:string|null;created_at:string;last_used_at:string|null;flexy_mini_customer_accounts:{username:string;phone:string;money_party_directory:{display_name:string}}};
 function TrustedDevices(){
-  const [view,setView]=useState<"pending"|"approved"|"history">("pending");
+  const [view,setView]=useState<"pending"|"approved"|"history">("approved");
   const [kinds,setKinds]=useState<Record<number,string>>({});
   const [devices,setDevices]=useState<TrustedDevice[]>([]),[error,setError]=useState(""),[busy,setBusy]=useState(false);
   const load=async()=>{setBusy(true);try{const {data,error}=await customerAdminRequest({action:"devices"});if(error||!data?.devices)throw new Error(data?.error||"تعذر تحميل الأجهزة");setDevices(data.devices);}catch(e){setError(e instanceof Error?e.message:"تعذر الاتصال");}finally{setBusy(false);}};
   useEffect(()=>{void load();},[]);
   const change=async(id:number,action:string)=>{setBusy(true);setError("");try{const {data,error}=await customerAdminRequest({action,device_id:id,device_kind:kinds[id]||"desktop"});if(error){let message=data?.error;try{if(error.context)message=(await error.context.clone().json()).error;}catch{}throw new Error(message||error.message||"تعذر تحديث الجهاز");}await load();}catch(e){setError(e instanceof Error?e.message:"تعذر الاتصال");}finally{setBusy(false);}};
   const state=(d:TrustedDevice)=>d.revoked_at?"ملغى":!d.approved_at?"بانتظار الاعتماد":new Date(d.expires_at||0).getTime()<=Date.now()?"منتهي":"معتمد";
+  const pendingCount=devices.filter(d=>state(d)==="بانتظار الاعتماد").length;
+  useEffect(()=>{if(!busy&&view==="pending"&&pendingCount===0)setView("approved");},[busy,view,pendingCount]);
   const visibleDevices=devices.filter(d=>(view==="pending"?state(d)==="بانتظار الاعتماد":view==="approved"?state(d)==="معتمد":state(d)==="ملغى"||state(d)==="منتهي"));
   return <Card title="الأجهزة الموثوقة" extra={<Button loading={busy} onClick={()=>void load()}>تحديث</Button>}>
     <Alert type="info" message="جهازان كحد أقصى لكل زبون. اعتماد الكمبيوتر 7 أيام والهاتف 30 يومًا، وإلغاء الاعتماد يبطل كل جلسات الجهاز." style={{marginBottom:12}}/>
     {error&&<Alert type="error" message={error} style={{marginBottom:12}}/>}
-    <Space direction="vertical" style={{width:"100%",marginBottom:16}}><Button block type={view==="pending"?"primary":"default"} onClick={()=>setView("pending")}>طلبات الاعتماد ({devices.filter(d=>state(d)==="بانتظار الاعتماد").length})</Button><Button block type={view==="approved"?"primary":"default"} onClick={()=>setView("approved")}>الأجهزة المعتمدة ({devices.filter(d=>state(d)==="معتمد").length})</Button><Button block type={view==="history"?"primary":"default"} onClick={()=>setView("history")}>سجل الأجهزة ({devices.filter(d=>["ملغى","منتهي"].includes(state(d))).length})</Button></Space>
+    <Space direction="vertical" style={{width:"100%",marginBottom:16}}>{pendingCount>0&&<Button block type={view==="pending"?"primary":"default"} onClick={()=>setView("pending")}>طلبات الاعتماد ({pendingCount})</Button>}<Button block type={view==="approved"?"primary":"default"} onClick={()=>setView("approved")}>الأجهزة المعتمدة ({devices.filter(d=>state(d)==="معتمد").length})</Button><Button block type={view==="history"?"primary":"default"} onClick={()=>setView("history")}>سجل الأجهزة ({devices.filter(d=>["ملغى","منتهي"].includes(state(d))).length})</Button></Space>
     <Table rowKey="id" loading={busy} dataSource={visibleDevices} pagination={{pageSize:10}} scroll={{x:850}} columns={[
       {title:"الزبون",render:(_,d)=>d.flexy_mini_customer_accounts?.money_party_directory?.display_name||d.flexy_mini_customer_accounts?.username},
       {title:"المستخدم",render:(_,d)=>d.flexy_mini_customer_accounts?.username},
