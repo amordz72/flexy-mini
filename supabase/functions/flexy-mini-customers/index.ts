@@ -19,10 +19,12 @@ Deno.serve(async(req)=>{
    if(!/^[0-9a-f]{64}$/.test(credential)||!password||password.length>128)return respond(401,{error:"بيانات الدخول غير صحيحة"});
    const isPhone=/^[+0-9 ()-]+$/.test(identifier);
    if(!isPhone&&!/^[a-z0-9_]{3,32}$/.test(identifier))return respond(401,{error:"بيانات الدخول غير صحيحة"});
-   const {data:account}=await admin.from("flexy_mini_customer_accounts").select("id,party_id,username,active").eq(isPhone?"phone":"username",isPhone?phone(identifier):identifier).maybeSingle();
+   const {data:account,error:accountError}=await admin.from("flexy_mini_customer_accounts").select("id,party_id,username,active").eq(isPhone?"phone":"username",isPhone?phone(identifier):identifier).maybeSingle();
+   if(accountError){console.error("customer_login_account_lookup_failed",{code:accountError.code});return respond(503,{code:"AUTH_SERVICE_UNAVAILABLE",error:"تعذر الاتصال بخدمة تسجيل الدخول. حاول لاحقًا"});}
    if(!account?.active)return respond(401,{error:"بيانات الدخول غير صحيحة"});
    const {data:valid,error:verifyError}=await admin.rpc("flexy_mini_customer_check_login",{p_account_id:account.id,p_password:password});
-   if(verifyError||valid!==true)return respond(401,{error:"بيانات الدخول غير صحيحة"});
+   if(verifyError){console.error("customer_login_password_check_failed",{code:verifyError.code});return respond(503,{code:"AUTH_SERVICE_UNAVAILABLE",error:"تعذر التحقق من تسجيل الدخول حاليًا. حاول لاحقًا"});}
+   if(valid!==true)return respond(401,{error:"بيانات الدخول غير صحيحة"});
    const credentialHash=await sha256(credential);
    const {data:existing,error:deviceError}=await admin.from("flexy_mini_trusted_devices").select("id,approved_at,revoked_at,expires_at").eq("customer_id",account.id).eq("credential_hash",credentialHash).maybeSingle();
    if(deviceError)return respond(503,{error:"تعذر فحص الجهاز"});
