@@ -535,10 +535,10 @@ function TableCustomerLogin(){
   const [error,setError]=useState("");
   const call=async(body:Record<string,unknown>)=>{
     const response=await fetch(url+"/functions/v1/flexy-mini-customers",{method:"POST",headers:{"Content-Type":"application/json",apikey:key},body:JSON.stringify({...body,device_secret:window.localStorage.getItem("flexy_mini_device_secret")||""})});
-    return {ok:response.ok,data:await response.json()};
+    return {ok:response.ok,status:response.status,data:await response.json()};
   };
   useEffect(()=>{if(!token)return;let active=true;
-    const check=()=>void call({action:"me",token}).then(r=>{if(!active)return;if(r.ok)setAccount(r.data);else{window.localStorage.removeItem("flexy_mini_customer_token");setToken("");setAccount(null);setError(r.data.error||"انتهت الجلسة");}}).catch(()=>{if(active){setAccount(null);setError("تعذر التحقق من الجلسة");}});
+    const check=()=>void call({action:"me",token}).then(r=>{if(!active)return;if(r.ok){setAccount(r.data);setError("");}else if([401,403,423].includes(r.status)){window.localStorage.removeItem("flexy_mini_customer_token");setToken("");setAccount(null);setError(r.data.error||"انتهت الجلسة");}else{setError("تعذر التحقق مؤقتًا. سنعيد المحاولة دون تسجيل خروجك.");}}).catch(()=>{if(active){setAccount(null);setError("تعذر التحقق من الجلسة");}});
     check();const timer=window.setInterval(check,15000);window.addEventListener("focus",check);
     return()=>{active=false;clearInterval(timer);window.removeEventListener("focus",check);};
   },[token]);
@@ -709,7 +709,7 @@ createRoot(document.getElementById("root")!).render(
         <Routes>
           <Route path="/customer-login" element={<TableCustomerLogin />} />
           <Route path="/login" element={client ? <LoginPage /> : <Alert type="error" showIcon message="التطبيق غير مهيأ للاتصال. لا يمكن الدخول قبل إعداد Supabase." />} />
-          <Route path="/" element={client ? <Authenticated key="protected" fallback={<LoginPage />}><HomeByRole /></Authenticated> : <Alert type="error" showIcon message="الاتصال غير مهيأ. تم تعطيل وضع المعاينة المفتوح." />} />
+          <Route path="/" element={client ? (window.localStorage.getItem("flexy_mini_customer_token") ? <Navigate to="/customer-login" replace /> : <Authenticated key="protected" fallback={<LoginPage />}><HomeByRole /></Authenticated>) : <Alert type="error" showIcon message="الاتصال غير مهيأ. تم تعطيل وضع المعاينة المفتوح." />} />
         </Routes>
       </Refine>
     </HashRouter>
