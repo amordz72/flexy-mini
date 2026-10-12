@@ -249,12 +249,14 @@ function MasterCustomerLookup() {
   const loadAccounts=async()=>{if(!client)return;const {data,error}=await client.functions.invoke("flexy-mini-customers",{body:{action:"list"}});if(!error&&Array.isArray(data?.customers))setAccounts(data.customers);};
   useEffect(()=>{void loadAccounts();},[]);
   const createAccount=async()=>{
-    if(!client||!selected||!username.trim()||!/^0[567][0-9]{8}$/.test(phone)||password.length<10){setError("اختر الماستر وأدخل اسم مستخدم وهاتفًا جزائريًا صحيحًا وكلمة مرور من 10 أحرف على الأقل");return;}
+    if(!client||!selected||!username.trim()||!/^0[567][0-9]{8}$/.test(phone)){setError("اختر الماستر وأدخل اسم مستخدم وهاتفًا جزائريًا صحيحًا");return;}
+    const generatedPassword = !password;
+    const effectivePassword = password || Array.from(crypto.getRandomValues(new Uint8Array(8)), n => String((n % 8) + 1)).join("");
     setSaving(true);setError("");setSavedMessage("");
-    const {data,error}=await client.functions.invoke("flexy-mini-customers",{body:{action:"create",party_id:selected,username:username.trim(),phone,password}});
+    const {data,error}=await client.functions.invoke("flexy-mini-customers",{body:{action:"create",party_id:selected,username:username.trim(),phone,password:effectivePassword}});
     setSaving(false);
     if(error||!data?.customer){setError(data?.error||"تعذر إنشاء الحساب. تأكد من عدم تكرار الاسم أو الهاتف أو الماستر.");return;}
-    setSavedMessage("تم إنشاء الحساب: "+data.customer.username+" — "+data.customer.phone);
+    setSavedMessage("تم إنشاء الحساب: "+data.customer.username+" — "+data.customer.phone+(generatedPassword?" — كلمة المرور المولّدة: "+effectivePassword:""));
     setPassword("");setCreating(false);void loadAccounts();
   };
   return <Space direction="vertical" size="middle" style={{width:"100%"}}>
@@ -269,12 +271,12 @@ function MasterCustomerLookup() {
       ]} locale={{emptyText:"لا توجد حسابات Flexy Mini مؤكدة بعد"}}/>
     </Card>
     {creating&&<Card title="زبون جديد — مطابقة الماستر">
-      <Alert type="info" showIcon message="اختر الماستر أولًا، ثم حدد اسم الدخول وكلمة المرور. كل حساب يجب أن يكون مرتبطًا بماستر."/>
+      <Alert type="info" showIcon message="اختر الماستر أولًا ثم اسم الدخول. كلمة المرور اختيارية وتُولّد تلقائيًا عند تركها فارغة."/>
       <Form layout="vertical" style={{marginTop:14}}>
         <Form.Item label="اسم الزبون"><Input value={name} onChange={e=>{setName(e.target.value);setSelected(null);setQuery(e.target.value);}} placeholder="الاسم الكامل"/></Form.Item>
         <Form.Item label="رقم الهاتف"><Input dir="ltr" value={phone} onChange={e=>{const v=e.target.value.replace(/[^0-9+]/g,"");setPhone(v);setSelected(null);if(v.replace(/\D/g,"").length>=5)setQuery(v);}} placeholder="0XXXXXXXXX"/></Form.Item>
         <Form.Item label="اسم المستخدم"><Input dir="ltr" value={username} onChange={e=>setUsername(e.target.value)} placeholder="username"/></Form.Item>
-        <Form.Item label="كلمة المرور (10 أحرف على الأقل)"><Input.Password value={password} onChange={e=>setPassword(e.target.value)} autoComplete="new-password"/></Form.Item>
+        <Form.Item label="كلمة المرور (اختيارية — تُولّد تلقائيًا عند تركها فارغة)"><Input.Password value={password} onChange={e=>setPassword(e.target.value)} autoComplete="new-password"/></Form.Item>
         <Form.Item label="بحث إضافي في الماستر"><Input value={query} onChange={e=>{setQuery(e.target.value);setSelected(null);}} placeholder="اسم أو هاتف أو حساب منصة" allowClear/></Form.Item>
       </Form>
       {error&&<Alert type="warning" message={error}/>}
@@ -292,7 +294,7 @@ function MasterCustomerLookup() {
       </Space>
       {masterRecord&&<Space wrap style={{marginTop:12}}><Button onClick={()=>assignMaster(masterRecord,true)}>إسناد بيانات الماستر</Button><Text type="secondary">تعبئة الاسم والهاتف واسم المستخدم غير التقني من الماستر</Text></Space>}
       <Alert style={{marginTop:12}} type={selected?"success":"info"} message={selected?"تم اختيار ماستر موجود. سيُربط عند الحفظ بعد تجهيز الخدمة.":"إذا لم يوجد تطابق، يلزم إنشاء ماستر جديد عند الحفظ. لا يُسمح بحساب دون ماستر."}/>
-      <Button style={{marginTop:12}} type="primary" loading={saving} disabled={!selected||!username||!phone||password.length<10} onClick={()=>void createAccount()}>حفظ الزبون وإنشاء الحساب</Button>
+      <Button style={{marginTop:12}} type="primary" loading={saving} disabled={!selected||!username||!phone} onClick={()=>void createAccount()}>حفظ الزبون وإنشاء الحساب</Button>
     </Card>}
   </Space>;
 }
