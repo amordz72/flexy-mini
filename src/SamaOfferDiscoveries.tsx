@@ -39,9 +39,10 @@ function statusColor(status: string): string {
   return status === "success" ? "green" : status === "claimed" || status === "queued" ? "blue" : "orange";
 }
 
-export default function SamaOfferDiscoveries({ db, stationUuid }: {
+export default function SamaOfferDiscoveries({ db, stationUuid, samaReady }: {
   db: SupabaseClient;
   stationUuid: string | null;
+  samaReady: boolean;
 }) {
   const [history, setHistory] = useState<Discovery[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -92,6 +93,10 @@ export default function SamaOfferDiscoveries({ db, stationUuid }: {
     }
     if (!stationUuid) {
       message.warning("اختر محطة Sama من زر «عرض مودمات المحطة» أولًا");
+      return;
+    }
+    if (!samaReady) {
+      message.warning("لا توجد شريحة Sama حديثة الظهور وبها PIN محفوظ على محطة متصلة. حدّث المودم أو جهّز الشريحة أولًا.");
       return;
     }
     if (busy || currentStatus === "claimed" || currentStatus === "queued") {
@@ -152,9 +157,10 @@ export default function SamaOfferDiscoveries({ db, stationUuid }: {
           onChange={event => setPhone(event.target.value)}
           onPressEnter={submit}
         />
-        <Button type="primary" disabled={!stationUuid || busy || currentStatus === "claimed" || currentStatus === "queued"} loading={busy} onClick={submit}>استكشاف</Button>
+        <Button type="primary" disabled={!stationUuid || !samaReady || busy || currentStatus === "claimed" || currentStatus === "queued"} loading={busy} onClick={submit}>استكشاف</Button>
       </Space.Compact>
       {!stationUuid && <Typography.Text type="secondary">اختر المحطة من الأعلى لتمكين استعلام الشبكة.</Typography.Text>}
+      {stationUuid && !samaReady && <Alert type="warning" showIcon message="Sama غير جاهزة للاستكشاف" description="المحطة قد تكون متصلة، لكن يلزم ظهور شريحة من نوع mobilis-sama حديثًا مع PIN الخدمة محفوظ. استخدم «عرض مودمات المحطة» ثم «تجهيز Mobilis Sama» للشريحة الصحيحة."/>}
       {currentJob && <Alert
         type="info"
         showIcon
