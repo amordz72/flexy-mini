@@ -278,11 +278,11 @@ function MasterCustomerLookup() {
     {creating&&<Card title="زبون جديد — مطابقة الماستر">
       <Alert type="info" showIcon message="اختر الماستر أولًا ثم اسم الدخول. تظهر كلمة مرور عشوائية عند فتح النموذج ويمكنك تعديلها."/>
       <Form layout="vertical" style={{marginTop:14}}>
-        <Form.Item label="اسم الزبون"><Input value={name} onChange={e=>{setName(e.target.value);setSelected(null);setQuery(e.target.value);}} placeholder="الاسم الكامل"/></Form.Item>
-        <Form.Item label="رقم الهاتف"><Input dir="ltr" value={phone} onChange={e=>{const v=e.target.value.replace(/[^0-9+]/g,"");setPhone(v);if(!selected&&v.replace(/\D/g,"").length>=5)setQuery(v);}} placeholder="0XXXXXXXXX"/></Form.Item>
+        <Form.Item label="اسم الزبون"><Input value={name} onChange={e=>{setName(e.target.value);if(!selected)setQuery(e.target.value);}} placeholder="الاسم الكامل"/></Form.Item>
+        <Form.Item label="رقم الهاتف"><Input dir="ltr" value={phone} onChange={e=>{const v=e.target.value.replace(/[^0-9+]/g,"");setPhone(v);}} placeholder="0XXXXXXXXX"/></Form.Item>
         <Form.Item label="اسم المستخدم"><Input dir="ltr" value={username} onChange={e=>setUsername(e.target.value)} placeholder="username"/></Form.Item>
         <Form.Item label="كلمة المرور (مولّدة تلقائيًا — يمكنك تعديلها)"><Input.Password value={password} onChange={e=>setPassword(e.target.value)} autoComplete="new-password"/></Form.Item>
-        <Form.Item label="بحث إضافي في الماستر"><Input value={query} onChange={e=>{setQuery(e.target.value);setSelected(null);setMasterRecord(null);}} placeholder="اسم أو هاتف أو حساب منصة" allowClear/></Form.Item>
+        <Form.Item label="بحث الماستر (الاسم أو الهاتف أو حساب المنصة)"><Input value={query} onChange={e=>{setQuery(e.target.value);setSelected(null);setMasterRecord(null);}} placeholder="اسم أو هاتف أو حساب منصة" allowClear/></Form.Item>
       </Form>
       {error&&<Alert type="warning" message={error}/>}
       {busy&&<Text type="secondary">جاري البحث...</Text>}
