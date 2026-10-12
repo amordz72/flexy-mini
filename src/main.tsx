@@ -75,18 +75,20 @@ function LoginPage() {
   const { mutate: adminLogin, isPending } = useLogin();
   const [loginError,setLoginError]=useState("");
   const [customerBusy,setCustomerBusy]=useState(false);
-  const submit=async(values:{identifier:string;password:string})=>{
+  const [revokedLogin,setRevokedLogin]=useState<{identifier:string;password:string}|null>(null);
+  const submit=async(values:{identifier:string;password:string},retryRevoked=false)=>{
     setLoginError("");
+    if(!retryRevoked)setRevokedLogin(null);
     const identifier=values.identifier.trim();
     if(identifier.includes("@")){adminLogin(values);return;}
     setCustomerBusy(true);
     try{
       const response=await fetch(url+"/functions/v1/flexy-mini-customers",{
         method:"POST",headers:{"Content-Type":"application/json",apikey:key},
-        body:JSON.stringify({action:"login",identifier,password:values.password,device_secret:(()=>{const k="flexy_mini_device_secret";let v=window.localStorage.getItem(k);if(!v){v=Array.from(crypto.getRandomValues(new Uint8Array(32)),x=>x.toString(16).padStart(2,"0")).join("");window.localStorage.setItem(k,v);}return v;})(),device_label:"متصفح الزبون"})
+        body:JSON.stringify({action:"login",identifier,password:values.password,device_secret:(()=>{const k="flexy_mini_device_secret";let v=retryRevoked?"":window.localStorage.getItem(k);if(!v){v=Array.from(crypto.getRandomValues(new Uint8Array(32)),x=>x.toString(16).padStart(2,"0")).join("");window.localStorage.setItem(k,v);}return v;})(),device_label:"متصفح الزبون"})
       });
       const data=await response.json().catch(()=>({}));
-      if(!response.ok||!data.token){setLoginError(data.error||"تعذر تسجيل الدخول. تحقق من بيانات الحساب.");return;}
+      if(!response.ok||!data.token){setLoginError(data.error||"تعذر تسجيل الدخول. تحقق من بيانات الحساب.");if(data.code==="DEVICE_REVOKED"&&!retryRevoked)setRevokedLogin(values);return;}
       window.localStorage.setItem("flexy_mini_customer_token",data.token);
       window.location.hash="#/customer-login";
     }catch{setLoginError("تعذر الاتصال بخدمة دخول الزبائن. تحقق من الشبكة وحاول مجددًا.");}
@@ -103,6 +105,7 @@ function LoginPage() {
             <Input.Password autoComplete="current-password" size="large" dir="ltr" />
           </Form.Item>
           {loginError&&<Alert type="error" showIcon style={{marginBottom:14}} message={loginError}/>}
+          {revokedLogin&&<Button block size="large" disabled={customerBusy} onClick={()=>void submit(revokedLogin,true)} style={{marginBottom:14}}>طلب إعادة اعتماد هذا الجهاز</Button>}
           <Button htmlType="submit" type="primary" size="large" loading={isPending||customerBusy} block>دخول</Button>
           <Typography.Paragraph type="secondary" style={{ marginTop: 16, marginBottom: 0 }}>
             الزبائن يدخلون باسم المستخدم أو الهاتف، والإدارة ببريد حساب الإدارة. تظهر رسالة واضحة عند تعذر الدخول.
