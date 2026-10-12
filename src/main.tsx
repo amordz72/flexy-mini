@@ -19,6 +19,24 @@ import { supportPhone, supportWhatsApp } from "./settings";
 const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined) || "https://wqyebqzbbpohbnznqdjj.supabase.co";
 const key = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) || "sb_publishable_gO4umNBMJ0AWRk19HtKd7A_9X4DibYj";
 const client = url && key ? createClient(url, key, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } }) : undefined;
+// Use standard CORS headers only; Supabase Functions client adds x-client-info,
+ // which is not currently allowed by this deployed Edge Function.
+async function customerAdminRequest(body: Record<string, unknown>): Promise<{data:any;error:Error|null}> {
+  if (!client) return {data:null,error:new Error("Supabase unavailable")};
+  try {
+    const {data:{session}} = await client.auth.getSession();
+    const response = await fetch(`${url}/functions/v1/flexy-mini-customers`, {
+      method:"POST",
+      headers:{"Content-Type":"application/json","apikey":key,
+        "Authorization":`Bearer ${session?.access_token || key}`},
+      body:JSON.stringify(body)
+    });
+    const data=await response.json().catch(()=>null);
+    return response.ok?{data,error:null}:{data,error:Object.assign(new Error(data?.error||"Request failed"),{context:response})};
+  } catch(error) {
+    return {data:null,error:error instanceof Error?error:new Error("Network error")};
+  }
+}
 // Existing MyTool RLS is the source of truth for admin access.
 async function isShopAdmin(): Promise<boolean> {
   if (!client) return false;
@@ -247,14 +265,14 @@ function MasterCustomerLookup() {
     },350);
     return ()=>{active=false;window.clearTimeout(timer);};
   },[query,selected]);
-  const loadAccounts=async()=>{if(!client)return;const {data,error}=await client.functions.invoke("flexy-mini-customers",{body:{action:"list"}});if(!error&&Array.isArray(data?.customers))setAccounts(data.customers);};
+  const loadAccounts=async()=>{if(!client)return;const {data,error}=await customerAdminRequest({action:"list"});if(!error&&Array.isArray(data?.customers))setAccounts(data.customers);};
   useEffect(()=>{void loadAccounts();},[]);
   const createAccount=async()=>{
     if(!client||!selected||!username.trim()||!/^0[567][0-9]{8}$/.test(phone)){setError("اختر الماستر وأدخل اسم مستخدم وهاتفًا جزائريًا صحيحًا");return;}
     const generatedPassword = !password;
     const effectivePassword = password || Array.from(crypto.getRandomValues(new Uint8Array(8)), n => String((n % 8) + 1)).join("");
     setSaving(true);setError("");setSavedMessage("");
-    const {data,error}=await client.functions.invoke("flexy-mini-customers",{body:{action:"create",party_id:selected,username:username.trim(),phone,email:email.trim(),password:effectivePassword}});
+    const {data,error}=await customerAdminRequest({action:"create",party_id:selected,username:username.trim(),phone,email:email.trim(),password:effectivePassword});
     setSaving(false);
     if(error||!data?.customer){
       let details=typeof data?.error==="string"?data.error:"";
