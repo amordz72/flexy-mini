@@ -580,6 +580,47 @@ function HomeByRole() {
   useEffect(()=>{let active=true;void isShopAdmin().then(v=>{if(active)setAdmin(v);});return ()=>{active=false;};},[]);
   return admin===null?<Card loading style={{margin:24}}/>:admin?<Dashboard/>:<CustomerDashboard/>;
 }
+const movementFields = [
+ {key:"date",label:"التاريخ"},{key:"type",label:"النوع"},{key:"amount",label:"المبلغ"},
+ {key:"balance",label:"الرصيد قبل/بعد"},{key:"debt",label:"الديون قبل/بعد"},
+ {key:"profit",label:"الأرباح قبل/بعد"},{key:"note",label:"ملاحظة"},{key:"agent",label:"المندوب"}
+] as const;
+type MovementField = typeof movementFields[number]["key"];
+type MovementType = "all"|"profit"|"topup"|"debt"|"transfer";
+const movementDefaults:Record<MovementType,MovementField[]> = {
+ all:["date","type","amount","balance"],profit:["date","type","amount","profit","balance"],
+ topup:["date","type","amount","balance"],debt:["date","type","amount","debt"],transfer:["date","type","amount","balance"]
+};
+function MovementLedger({admin}:{admin:boolean}) {
+ const [kind,setKind]=useState<MovementType>("all");
+ const [custom,setCustom]=useState<Partial<Record<MovementType,MovementField[]>>>(()=>{try{return JSON.parse(localStorage.getItem("flexy_mini_movement_columns_v1")||"{}")}catch{return {}}});
+ const [showSettings,setShowSettings]=useState(false);
+ const fields=custom[kind]||movementDefaults[kind];
+ const setFields=(next:MovementField[])=>{const updated={...custom,[kind]:next};setCustom(updated);try{localStorage.setItem("flexy_mini_movement_columns_v1",JSON.stringify(updated))}catch{}};
+ const [range,setRange]=useState<[string,string]>(["",""]);
+ const [search,setSearch]=useState("");
+ return <Card title={admin?"سجل التحويلات":"تحويلاتي"}>
+  <Alert type="info" showIcon message="سجل التحويلات المالية لم يُربط بالخادم بعد. لا توجد حركات تجريبية أو أرصدة مفترضة." style={{marginBottom:16}}/>
+  <Space wrap style={{marginBottom:14}}>
+   <Select value={kind} style={{width:165}} onChange={v=>setKind(v)} options={[
+    {value:"all",label:"كل التحويلات"},{value:"profit",label:"تحويل الأرباح"},
+    {value:"topup",label:"شحن ذاتي"},{value:"debt",label:"دفع / دين"},{value:"transfer",label:"تحويل رصيد"}
+   ]}/>
+   <Button onClick={()=>setShowSettings(v=>!v)} icon={<SettingOutlined/>}>إظهار وإخفاء الأعمدة</Button>
+   {admin&&<Tag color="blue">إعدادات عرض الإدارة</Tag>}
+  </Space>
+  {showSettings&&<Card size="small" title="الأعمدة المعروضة" style={{marginBottom:16}}>
+   <Space wrap>{movementFields.map(f=><Checkbox key={f.key} checked={fields.includes(f.key)} disabled={f.key==="date"||f.key==="type"||f.key==="amount"} onChange={e=>setFields(e.target.checked?[...fields,f.key]:fields.filter(k=>k!==f.key))}>{f.label}</Checkbox>)}</Space>
+   <div style={{marginTop:12}}><Button size="small" onClick={()=>setFields(movementDefaults[kind])}>استرجاع العرض الافتراضي</Button></div>
+  </Card>}
+  <Space wrap style={{marginBottom:14}}>
+   <Input type="date" aria-label="من تاريخ" value={range[0]} onChange={e=>setRange([e.target.value,range[1]])}/>
+   <Input type="date" aria-label="حتى تاريخ" value={range[1]} onChange={e=>setRange([range[0],e.target.value])}/>
+   <Input.Search placeholder="بحث في التحويلات" value={search} onChange={e=>setSearch(e.target.value)} style={{width:220}}/>
+  </Space>
+  <div style={{overflowX:"auto"}}><Table size="small" rowKey="id" dataSource={[]} pagination={{pageSize:10,showSizeChanger:true,pageSizeOptions:["10","20","50"]}} locale={{emptyText:"لا توجد تحويلات مسجلة في هذه الواجهة"}} columns={movementFields.filter(f=>fields.includes(f.key)).map(f=>({title:f.label,dataIndex:f.key,key:f.key}))}/></div>
+ </Card>;
+}
 function Dashboard({customerToken,customerAccount,customerError,onCustomerLogout}:{customerToken?:string;customerAccount?:{username:string;phone?:string;party_id:number}|null;customerError?:string;onCustomerLogout?:()=>void} = {}) {
   const isCustomer=Boolean(customerToken);
   const { mutate: logout } = useLogout();
@@ -635,7 +676,7 @@ function Dashboard({customerToken,customerAccount,customerError,onCustomerLogout
                 { title: "بطاقات رقمية", subtitle: "ألعاب، اتصالات وبرامج", color: "#625ee8", target: "store", symbol: "AppstoreOutlined" }
               ].map(service => <Col xs={24} md={8} key={service.title}><div onClick={() => setPage(service.target)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter") setPage(service.target); }} style={{ background: service.color, borderRadius: 14, color: "white", padding: "22px 20px", minHeight: 112, cursor: "pointer", boxShadow: "0 6px 15px rgba(0,0,0,.08)" }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 20, fontWeight: 700 }}>{service.title}</span><span style={{ fontSize: 27 }}>{service.symbol==="PhoneOutlined"?<PhoneOutlined/>:service.symbol==="WifiOutlined"?<WifiOutlined/>:<AppstoreOutlined/>}</span></div><div style={{ opacity: .9, marginTop: 9 }}>{service.subtitle}</div></div></Col>)}
             </Row>
-          </> : isCustomer ? (page==="store"||page==="cards" ? <SharedCardsStore token={customerToken!}/> : page==="operations" ? <Card title="عملياتي"><Empty description="سجل العمليات غير مفعّل بعد"/></Card> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز"/></Card>) : page === "store" ? <SharedCardsStore/> : page === "ads" && client ? <AdSystem db={client} admin /> : page === "settings" ? <ConnectionDiagnostics /> : page === "devices" ? <TrustedDevices /> : page === "customers" ? <MasterCustomerLookup /> : page === "members" ? <><MiniMembers />{client&&<CreditAdmin db={client}/>}</> : page === "cards" ? <CardsCatalog /> : page === "operations" ? <Card title="عملياتي"><Empty description="سجل عمليات حسابك لم يُفعّل بعد" /></Card> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز" /></Card>}
+          </> : isCustomer ? (page==="store"||page==="cards" ? <SharedCardsStore token={customerToken!}/> : page==="operations" ? <MovementLedger admin={false}/> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز"/></Card>) : page === "store" ? <SharedCardsStore/> : page === "ads" && client ? <AdSystem db={client} admin /> : page === "settings" ? <ConnectionDiagnostics /> : page === "devices" ? <TrustedDevices /> : page === "customers" ? <MasterCustomerLookup /> : page === "members" ? <><MiniMembers />{client&&<CreditAdmin db={client}/>}</> : page === "cards" ? <CardsCatalog /> : page === "operations" ? <MovementLedger admin={!isCustomer}/> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز" /></Card>}
           <div className="app-footer">Flexy Mini · Refine + Ant Design · عرض تجريبي فقط</div>
         </Content>
         <nav className="bottom-service-nav" aria-label="خدمات الموقع" dir="rtl">
