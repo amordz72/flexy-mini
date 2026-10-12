@@ -77,6 +77,29 @@ Deno.serve(async(req)=>{
    if(error)return respond(error.message.includes("MAX_TWO_TRUSTED_DEVICES")?409:503,{error:error.message.includes("MAX_TWO_TRUSTED_DEVICES")?"يوجد جهازان معتمدان. ألغ اعتماد أحدهما أولًا":"تعذر تحديث الجهاز"});
    return data?respond(200,{ok:true}):respond(404,{error:"الجهاز غير موجود"});
  }
+ if(action==="wallets"){
+   const {data:accounts,error:accountsError}=await admin.from("flexy_mini_customer_accounts").select("id,username,phone,active").order("id",{ascending:false}).limit(100);
+   if(accountsError)return respond(503,{error:"تعذر تحميل حسابات الزبائن"});
+   const ids=(accounts||[]).map(a=>a.id);
+   if(!ids.length)return respond(200,{wallets:[]});
+   const {data:wallets,error:walletsError}=await admin.from("flexy_mini_customer_wallets").select("customer_id,balance,debt,profit,updated_at").in("customer_id",ids);
+   if(walletsError)return respond(503,{error:"تعذر تحميل المحافظ"});
+   const byId=new Map((wallets||[]).map(w=>[w.customer_id,w]));
+   return respond(200,{wallets:(accounts||[]).map(a=>({customer_id:a.id,username:a.username,phone:a.phone,active:a.active,wallet:byId.get(a.id)||null}))});
+ }
+ if(action==="wallet_history"){
+   const id=Number(body.customer_id);
+   if(!Number.isSafeInteger(id)||id<1)return respond(400,{error:"حساب غير صالح"});
+   const {data,error}=await admin.from("flexy_mini_customer_wallet_ledger").select("id,kind,balance_change,debt_change,profit_change,balance_after,debt_after,profit_after,note,created_at").eq("customer_id",id).order("id",{ascending:false}).limit(100);
+   return error?respond(503,{error:"تعذر تحميل السجل"}):respond(200,{entries:data});
+ }
+ if(action==="wallet_post"){
+   const id=Number(body.customer_id),amount=Number(body.amount),kind=String(body.kind||""),note=String(body.note||"");
+   if(!Number.isSafeInteger(id)||id<1||!Number.isFinite(amount)||amount<=0||amount>100000000||Math.round(amount*100)!==amount*100||!["deposit","withdrawal","debt_increase","debt_payment","profit_credit"].includes(kind))return respond(400,{error:"بيانات الحركة غير صالحة"});
+   const {data,error}=await admin.rpc("flexy_mini_wallet_post",{p_customer_id:id,p_kind:kind,p_amount:amount,p_note:note,p_actor:user.id});
+   if(error)return respond(409,{error:error.message.includes("INSUFFICIENT")?"الرصيد أو الدين غير كافٍ":"تعذر تنفيذ الحركة"});
+   return respond(200,{wallet:data});
+ }
  if(action==="list"){
    const {data,error}=await admin.from("flexy_mini_customer_accounts").select("id,party_id,username,phone,active,created_at").order("id",{ascending:false}).limit(100);
    return error?respond(503,{error:"List unavailable"}):respond(200,{customers:data});
