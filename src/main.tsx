@@ -268,7 +268,8 @@ function MasterCustomerLookup() {
   const loadAccounts=async()=>{if(!client)return;const {data,error}=await customerAdminRequest({action:"list"});if(!error&&Array.isArray(data?.customers))setAccounts(data.customers);};
   useEffect(()=>{void loadAccounts();},[]);
   const createAccount=async()=>{
-    if(!client||(!selected&&!name.trim())||!username.trim()||!/^0[567][0-9]{8}$/.test(phone)){setError("أدخل الاسم واسم المستخدم ورقم هاتف جزائري صحيحًا");return;}
+    if(!client||(!selected&&!name.trim())||!username.trim()||(phone!==""&&!/^0[567][0-9]{8}$/.test(phone))){setError("أدخل الاسم واسم المستخدم. رقم الهاتف اختياري، وإذا أدخلته يجب أن يكون صحيحًا");return;}
+    if(!/^[a-z0-9_]{3,32}$/.test(username.trim().toLowerCase())){setError("اسم المستخدم يجب أن يكون من 3 إلى 32 حرفًا إنجليزيًا أو رقمًا أو _");return;}
     const generatedPassword = !password;
     const effectivePassword = password || Array.from(crypto.getRandomValues(new Uint8Array(8)), n => String((n % 8) + 1)).join("");
     setSaving(true);setError("");setSavedMessage("");
@@ -298,8 +299,8 @@ function MasterCustomerLookup() {
       <Alert type="info" showIcon message="اختر الماستر أولًا ثم اسم الدخول. تظهر كلمة مرور عشوائية عند فتح النموذج ويمكنك تعديلها."/>
       <Form layout="vertical" style={{marginTop:14}}>
         <Form.Item label="اسم الزبون"><Input value={name} onChange={e=>{setName(e.target.value);if(!selected)setQuery(e.target.value);}} placeholder="الاسم الكامل"/></Form.Item>
-        <Form.Item label="رقم الهاتف"><Input dir="ltr" value={phone} onChange={e=>{const v=e.target.value.replace(/[^0-9+]/g,"");setPhone(v);}} placeholder="0XXXXXXXXX"/></Form.Item>
-        <Form.Item label="اسم المستخدم"><Input dir="ltr" value={username} onChange={e=>setUsername(e.target.value)} placeholder="username"/></Form.Item>
+        <Form.Item label="رقم الهاتف (اختياري)" validateStatus={phone&&!/^0[567][0-9]{8}$/.test(phone)?"error":undefined} help={phone&&!/^0[567][0-9]{8}$/.test(phone)?"أدخل رقمًا جزائريًا صحيحًا أو اترك الخانة فارغة":undefined}><Input dir="ltr" value={phone} onChange={e=>{const v=e.target.value.replace(/[^0-9+]/g,"");setPhone(v);}} placeholder="0XXXXXXXXX"/></Form.Item>
+        <Form.Item label="اسم المستخدم" validateStatus={username&&!/^[a-z0-9_]{3,32}$/.test(username.trim().toLowerCase())?"error":undefined} help={username&&!/^[a-z0-9_]{3,32}$/.test(username.trim().toLowerCase())?"اسم المستخدم من 3 إلى 32 حرفًا إنجليزيًا أو رقمًا أو _":undefined}><Input dir="ltr" value={username} onChange={e=>setUsername(e.target.value)} placeholder="username"/></Form.Item>
         <Form.Item label="البريد الإلكتروني (اختياري)"><Input dir="ltr" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="example@email.com"/></Form.Item>
         <Form.Item label="كلمة المرور (مولّدة تلقائيًا — يمكنك تعديلها)"><Input.Password value={password} onChange={e=>setPassword(e.target.value)} autoComplete="new-password"/></Form.Item>
         <Form.Item label="بحث الماستر (الاسم أو الهاتف أو حساب المنصة)"><Input value={query} onChange={e=>{setQuery(e.target.value);setSelected(null);setMasterRecord(null);}} placeholder="اسم أو هاتف أو حساب منصة" allowClear/></Form.Item>
@@ -319,7 +320,7 @@ function MasterCustomerLookup() {
       </Space>
       {masterRecord&&<Space wrap style={{marginTop:12}}><Button onClick={()=>assignMaster(masterRecord,true)}>إسناد بيانات الماستر</Button><Text type="secondary">تعبئة الاسم والهاتف واسم المستخدم غير التقني من الماستر</Text></Space>}
       <Alert style={{marginTop:12}} type={selected?"success":"info"} message={selected?"الماستر محدد. أدخل بيانات الدخول واضغط حفظ الزبون لإنشاء الحساب.":"لا يوجد ماستر محدد. إذا تأكدت أن الزبون جديد، أنشئ الماستر والحساب معًا. تحقق من عدم وجود سجل سابق."}/>
-      <Button style={{marginTop:12}} type="primary" loading={saving} disabled={!username||!phone||(!selected&&!name.trim())} onClick={()=>void createAccount()}>{selected?"حفظ الزبون وإنشاء الحساب":"إنشاء ماستر جديد وربط الحساب"}</Button>
+      <Button style={{marginTop:12}} type="primary" loading={saving} disabled={saving} onClick={()=>void createAccount()}>{selected?"حفظ الزبون وإنشاء الحساب":"إنشاء ماستر جديد وربط الحساب"}</Button>
     </Card>}
   </Space>;
 }
