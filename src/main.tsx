@@ -586,10 +586,13 @@ const movementFields = [
  {key:"profit",label:"الأرباح قبل/بعد"},{key:"note",label:"ملاحظة"},{key:"agent",label:"المندوب"}
 ] as const;
 type MovementField = typeof movementFields[number]["key"];
-type MovementType = "all"|"profit"|"topup"|"debt"|"transfer";
+type MovementType = "all"|"profit"|"topup"|"debt"|"payment"|"cash"|"refund_debt"|"refund_payment"|"refund_cash"|"transfer";
 const movementDefaults:Record<MovementType,MovementField[]> = {
  all:["date","type","amount","balance"],profit:["date","type","amount","profit","balance"],
- topup:["date","type","amount","balance"],debt:["date","type","amount","debt"],transfer:["date","type","amount","balance"]
+ topup:["date","type","amount","balance"],debt:["date","type","amount","debt"],
+ payment:["date","type","amount","debt","balance"],cash:["date","type","amount","balance"],
+ refund_debt:["date","type","amount","debt"],refund_payment:["date","type","amount","debt","balance"],
+ refund_cash:["date","type","amount","balance"],transfer:["date","type","amount","balance"]
 };
 function MovementLedger({admin}:{admin:boolean}) {
  const [kind,setKind]=useState<MovementType>("all");
@@ -603,8 +606,11 @@ function MovementLedger({admin}:{admin:boolean}) {
   <Alert type="info" showIcon message="سجل التحويلات المالية لم يُربط بالخادم بعد. لا توجد حركات تجريبية أو أرصدة مفترضة." style={{marginBottom:16}}/>
   <Space wrap style={{marginBottom:14}}>
    <Select value={kind} style={{width:165}} onChange={v=>setKind(v)} options={[
-    {value:"all",label:"كل التحويلات"},{value:"profit",label:"تحويل الأرباح"},
-    {value:"topup",label:"شحن ذاتي"},{value:"debt",label:"دفع / دين"},{value:"transfer",label:"تحويل رصيد"}
+    {value:"all",label:"الكل"},{value:"debt",label:"دين"},{value:"payment",label:"دفع"},
+    {value:"cash",label:"نقد"},{value:"refund_debt",label:"استرداد دين"},
+    {value:"refund_payment",label:"استرداد دفع"},{value:"refund_cash",label:"استرداد نقد"},
+    {value:"topup",label:"شحن ذاتي"},{value:"profit",label:"أرباح"},
+    {value:"transfer",label:"تحويل رصيد"}
    ]}/>
    <Button onClick={()=>setShowSettings(v=>!v)} icon={<SettingOutlined/>}>إظهار وإخفاء الأعمدة</Button>
    {admin&&<Tag color="blue">إعدادات عرض الإدارة</Tag>}
