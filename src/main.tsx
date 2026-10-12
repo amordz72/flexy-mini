@@ -88,7 +88,7 @@ function LoginPage() {
         body:JSON.stringify({action:"login",identifier,password:values.password,device_secret:(()=>{const k="flexy_mini_device_secret";let v=retryRevoked?"":window.localStorage.getItem(k);if(!v){v=Array.from(crypto.getRandomValues(new Uint8Array(32)),x=>x.toString(16).padStart(2,"0")).join("");window.localStorage.setItem(k,v);}return v;})(),device_label:"متصفح الزبون"})
       });
       const data=await response.json().catch(()=>({}));
-      if(!response.ok||!data.token){setLoginError(data.error||"تعذر تسجيل الدخول. تحقق من بيانات الحساب.");if(data.code==="DEVICE_REVOKED"&&!retryRevoked)setRevokedLogin(values);return;}
+      if(!response.ok||!data.token){setLoginError(data.error||"تعذر تسجيل الدخول. تحقق من بيانات الحساب.");if(!retryRevoked&&(data.code==="DEVICE_REVOKED"||String(data.error||"").includes("اعتماد هذا الجهاز ملغى")))setRevokedLogin(values);return;}
       window.localStorage.setItem("flexy_mini_customer_token",data.token);
       window.location.hash="#/customer-login";
     }catch{setLoginError("تعذر الاتصال بخدمة دخول الزبائن. تحقق من الشبكة وحاول مجددًا.");}
