@@ -128,13 +128,14 @@ const items = [
   {key:"inventory",icon:<PlusOutlined/>,label:"أكواد البطاقات"},
   {key:"customers",icon:<UserOutlined/>,label:"الزبائن"},
   {key:"devices",icon:<SafetyCertificateOutlined/>,label:"الأجهزة الموثوقة"},
+  {key:"wallets",icon:<DatabaseOutlined/>,label:"محافظ Flexy Mini"},
   {key:"stations",icon:<DesktopOutlined/>,label:"المحطات والشرائح"},
   {key:"members",icon:<TeamOutlined/>,label:"المستخدمون والصلاحيات"},
   {key:"ads",icon:<NotificationOutlined/>,label:"إدارة الإعلانات"},
   {key:"settings",icon:<SettingOutlined/>,label:"الإعدادات"}
  ]}
 ];
-const names:Record<string,string>={devices:"الأجهزة الموثوقة",home:"الرئيسية",flexy:"الفليكسي",idoom:"تعبئة إيدوم",store:"متجر البطاقات",operations:"العمليات",cards:"إدارة البطاقات والأصناف",inventory:"إضافة أكواد البطاقات",customers:"إدارة الزبائن",stations:"المحطات والشرائح",members:"المستخدمون والصلاحيات",ads:"إدارة الإعلانات",settings:"الإعدادات"};
+const names:Record<string,string>={wallets:"محافظ Flexy Mini",devices:"الأجهزة الموثوقة",home:"الرئيسية",flexy:"الفليكسي",idoom:"تعبئة إيدوم",store:"متجر البطاقات",operations:"العمليات",cards:"إدارة البطاقات والأصناف",inventory:"إضافة أكواد البطاقات",customers:"إدارة الزبائن",stations:"المحطات والشرائح",members:"المستخدمون والصلاحيات",ads:"إدارة الإعلانات",settings:"الإعدادات"};
 const sample = [
   { key: "1", name: "موبيليس", kind: "فليكسي", state: "واجهة تجريبية" },
   { key: "2", name: "بطاقات موبيليس", kind: "بطاقات", state: "غير مربوط" },
@@ -473,6 +474,37 @@ function ConnectionDiagnostics() {
   </Card>;
 }
 type TrustedDevice={id:number;customer_id:number;device_label:string;approved_at:string|null;revoked_at:string|null;expires_at:string|null;created_at:string;last_used_at:string|null;flexy_mini_customer_accounts:{username:string;phone:string;money_party_directory:{display_name:string}}};
+type MiniWalletRow={customer_id:number;username:string;phone:string;active:boolean;wallet:{balance:number;debt:number;profit:number}|null};
+function MiniWalletAdmin(){
+ const [rows,setRows]=useState<MiniWalletRow[]>([]),[busy,setBusy]=useState(false),[error,setError]=useState("");
+ const [selected,setSelected]=useState<MiniWalletRow|null>(null),[history,setHistory]=useState<any[]>([]);
+ const [kind,setKind]=useState("deposit"),[amount,setAmount]=useState(""),[note,setNote]=useState("");
+ const load=async()=>{setBusy(true);try{const {data,error}=await customerAdminRequest({action:"wallets"});if(error||!data?.wallets)throw new Error(data?.error||"تعذر تحميل المحافظ");setRows(data.wallets);setError("");}catch(e){setError(String(e));}finally{setBusy(false);}};
+ useEffect(()=>{void load();},[]);
+ const show=async(r:MiniWalletRow)=>{setSelected(r);setHistory([]);const {data,error}=await customerAdminRequest({action:"wallet_history",customer_id:r.customer_id});if(error)setError("تعذر تحميل السجل");else setHistory(data?.entries||[]);};
+ const post=async()=>{if(!selected)return;const value=Number(amount);if(!Number.isFinite(value)||value<=0||Math.round(value*100)!==value*100){message.error("أدخل مبلغًا صحيحًا");return;}setBusy(true);try{const {data,error}=await customerAdminRequest({action:"wallet_post",customer_id:selected.customer_id,kind,amount:value,note});if(error||!data?.wallet)throw new Error(data?.error||"فشلت الحركة");message.success("تم تسجيل الحركة");setAmount("");setNote("");await load();await show(selected);}catch(e){message.error(String(e));}finally{setBusy(false);}};
+ const money=(n:unknown)=>Number(n||0).toLocaleString("ar-DZ")+" دج";
+ return <Card title="محافظ زبائن Flexy Mini" extra={<Button loading={busy} onClick={()=>void load()}>تحديث</Button>}>
+ {error&&<Alert type="error" message={error} style={{marginBottom:12}}/>}
+ <Table rowKey="customer_id" loading={busy} dataSource={rows} pagination={{pageSize:10}} scroll={{x:650}} columns={[
+ {title:"الزبون",dataIndex:"username"},{title:"الهاتف",dataIndex:"phone"},
+ {title:"الرصيد",render:(_,r)=>r.wallet?money(r.wallet.balance):"لم تُفتح"},
+ {title:"الديون",render:(_,r)=>r.wallet?money(r.wallet.debt):"—"},
+ {title:"الأرباح",render:(_,r)=>r.wallet?money(r.wallet.profit):"—"},
+ {title:"الإجراءات",render:(_,r)=><Button onClick={()=>void show(r)}>المحفظة والسجل</Button>}
+ ]}/>
+ <Modal title={selected?"محفظة "+selected.username:"المحفظة"} open={!!selected} onCancel={()=>setSelected(null)} footer={null} width={720}>
+ {selected&&<Space direction="vertical" style={{width:"100%"}}>
+ <Alert type="info" message="كل حركة تُسجّل في قاعدة البيانات. لا تُنفّذ الشحنات من هذه الشاشة."/>
+ <Select value={kind} onChange={setKind} style={{width:"100%"}} options={[{value:"deposit",label:"إيداع رصيد"},{value:"withdrawal",label:"سحب رصيد"},{value:"debt_increase",label:"زيادة دين"},{value:"debt_payment",label:"تسديد دين"},{value:"profit_credit",label:"إضافة أرباح"}]}/>
+ <Input value={amount} onChange={e=>setAmount(e.target.value)} placeholder="المبلغ بالدينار" inputMode="decimal"/>
+ <Input value={note} onChange={e=>setNote(e.target.value)} placeholder="سبب الحركة / مرجع العملية"/>
+ <Button type="primary" loading={busy} disabled={!amount||!note.trim()} onClick={()=>Modal.confirm({title:"تأكيد الحركة المالية",content:"الزبون: "+selected.username+" — المبلغ: "+amount+" دج. هل تؤكد التسجيل؟",okText:"تأكيد",cancelText:"إلغاء",onOk:()=>post()})}>تسجيل الحركة</Button>
+ <Typography.Title level={5}>آخر الحركات</Typography.Title>
+ <Table size="small" rowKey="id" dataSource={history} pagination={{pageSize:5}} scroll={{x:500}} columns={[{title:"التاريخ",render:(_,r)=>new Date(r.created_at).toLocaleString("ar-DZ")},{title:"النوع",dataIndex:"kind"},{title:"الرصيد بعد",render:(_,r)=>money(r.balance_after)},{title:"الدين بعد",render:(_,r)=>money(r.debt_after)},{title:"ملاحظة",dataIndex:"note"}]}/>
+ </Space>}
+ </Modal></Card>;
+}
 function TrustedDevices(){
   const [view,setView]=useState<"pending"|"approved"|"history">("approved");
   const [kinds,setKinds]=useState<Record<number,string>>({});
@@ -637,7 +669,7 @@ function MovementLedger({admin}:{admin:boolean}) {
 function Dashboard({customerToken,customerAccount,customerError,onCustomerLogout}:{customerToken?:string;customerAccount?:{username:string;phone?:string;party_id:number;wallet?:{balance:number;debt:number;profit:number}|null}|null;customerError?:string;onCustomerLogout?:()=>void} = {}) {
   const isCustomer=Boolean(customerToken);
   const { mutate: logout } = useLogout();
-  const validPages = new Set(["home","flexy","idoom","store","operations","cards","inventory","customers","devices","stations","members","ads","settings"]);
+  const validPages = new Set(["home","flexy","idoom","store","operations","cards","inventory","customers","devices","wallets","stations","members","ads","settings"]);
   const readPage = () => { const value = new URLSearchParams(window.location.hash.split("?")[1] || "").get("page"); return value && validPages.has(value) ? value : "home"; };
   const [page, setPageState] = useState(readPage);
   const setPage = (next: string) => {
@@ -688,7 +720,7 @@ function Dashboard({customerToken,customerAccount,customerError,onCustomerLogout
                 { title: "بطاقات رقمية", subtitle: "ألعاب، اتصالات وبرامج", color: "#625ee8", target: "store", symbol: "AppstoreOutlined" }
               ].map(service => <Col xs={24} md={8} key={service.title}><Card hoverable onClick={() => setPage(service.target)} style={{background:service.color,borderColor:service.color}}><Space direction="vertical" size="middle"><Space align="center"><span style={{color:"#fff"}}>{service.symbol==="PhoneOutlined"?<PhoneOutlined/>:service.symbol==="WifiOutlined"?<WifiOutlined/>:<AppstoreOutlined/>}</span><Typography.Text strong style={{color:"#fff"}}>{service.title}</Typography.Text></Space><Typography.Text style={{color:"#fff"}}>{service.subtitle}</Typography.Text></Space></Card></Col>)}
             </Row>
-          </> : isCustomer ? (page==="store"||page==="cards" ? <SharedCardsStore token={customerToken!}/> : page==="operations" ? <MovementLedger admin={false}/> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز"/></Card>) : page === "store" ? <SharedCardsStore/> : page === "ads" && client ? <AdSystem db={client} admin /> : page === "settings" ? <ConnectionDiagnostics /> : page === "devices" ? <TrustedDevices /> : page === "customers" ? <MasterCustomerLookup /> : page === "members" ? <><MiniMembers />{client&&<CreditAdmin db={client}/>}</> : page === "cards" ? <Space direction="vertical" size="large" style={{width:"100%"}}><SharedCardsStore/><CardsCatalog /></Space> : page === "operations" ? <MovementLedger admin={!isCustomer}/> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز" /></Card>}
+          </> : isCustomer ? (page==="store"||page==="cards" ? <SharedCardsStore token={customerToken!}/> : page==="operations" ? <MovementLedger admin={false}/> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز"/></Card>) : page === "store" ? <SharedCardsStore/> : page === "ads" && client ? <AdSystem db={client} admin /> : page === "settings" ? <ConnectionDiagnostics /> : page === "devices" ? <TrustedDevices /> : page === "wallets" ? <MiniWalletAdmin /> : page === "customers" ? <MasterCustomerLookup /> : page === "members" ? <><MiniMembers />{client&&<CreditAdmin db={client}/>}</> : page === "cards" ? <Space direction="vertical" size="large" style={{width:"100%"}}><SharedCardsStore/><CardsCatalog /></Space> : page === "operations" ? <MovementLedger admin={!isCustomer}/> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز" /></Card>}
           <div className="app-footer">Flexy Mini · Refine + Ant Design · عرض تجريبي فقط</div>
         </Content>
         <nav className="bottom-service-nav" aria-label="خدمات الموقع" dir="rtl">
