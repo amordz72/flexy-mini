@@ -35,7 +35,7 @@ const online=(date:string|null)=>Boolean(date&&Date.now()-new Date(date).getTime
 const dateLabel=(value:string|null)=>value?new Date(value).toLocaleString("ar-DZ"):"—";
 const cooldownActive=(value:string|null|undefined)=>Boolean(value&&Number.isFinite(Date.parse(value))&&Date.parse(value)>Date.now());
 const agentSupportsServiceCode=(version:string|null)=>{
- const match=String(version||"").match(/^(\\d+)\\.(\\d+)\\.(\\d+)/);
+ const match=String(version||"").match(/^([0-9]+)[.]([0-9]+)[.]([0-9]+)/);
  if(!match)return false;
  const [major,minor,patch]=match.slice(1).map(Number);
  return major>0||(minor>4&&major===0)||(major===0&&minor===4&&patch>=11);
@@ -170,7 +170,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   setHardware(previous=>({...previous,[uuid]:(data||[]) as Hardware[]}));setCheckedAt(new Date().toISOString());await Promise.all([loadPhoneAttempts(),loadOoredooGuards()]);
  };
  return <Space direction="vertical" size="middle" style={{width:"100%"}}>
-  <Alert type="info" showIcon message="Station Connect" description="عرض المحطات والشرائح للقراءة؛ زر «معرفة الرقم تلقائيًا» فقط يرسل طلب استعلام USSD لشريحة محددة. لا عمليات شحن ولا عرض لأسرار الشرائح."/>
+  <Alert type="info" showIcon message="Station Connect" description="المرحلة الحالية تستعمل Mobilis Sama فقط لاكتشاف العروض. ظهور مودم أو شريحة في السجل لا يثبت أنها موصولة الآن؛ الحالة حسب آخر معلومات Agent. لا شحن ولا عرض لأسرار الشرائح."/>
   {error&&<Alert type="error" showIcon message={error}/>}
   <Alert type="info" showIcon message="معرفة رقم الشريحة من شبكة المتعامل" description="يُحدد المتعامل من IMSI ثم يختار السيرفر الاستعلام المسجل: موبيليس *101#، جيزي 99 بعد تحديث Agent. أوريدو *200*PIN# متوقف حتى تأكيد معنى PIN؛ لا أكواد عشوائية." />
   <Alert type="info" showIcon message="اختبار اتصال للقراءة فقط" description={checkedAt?"آخر قراءة ناجحة من السيرفر: "+dateLabel(checkedAt)+". الاتصال بالمودم نفسه غير مختبر.":"اضغط تحديث لاختبار قراءة بيانات المحطات من السيرفر؛ لا يُرسل أي أمر إلى المودم."}/>
@@ -194,7 +194,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   </Card>
   {selected&&<Card title="المودمات والشرائح" extra={<Button loading={hardwareLoading} onClick={()=>void openHardware(selected)}>تحديث</Button>}>
    <Typography.Text type="secondary">قراءة بيانات المحطة، ويمكن للإدارة إرسال طلب معرفة الرقم فقط للشريحة المتوافقة، دون تعديل PIN أو تنفيذ شحن.</Typography.Text>
-   {mobile?<Space direction="vertical" style={{width:"100%"}} size="middle">{(hardware[selected]||[]).length===0&&!hardwareLoading?<Empty description="لا توجد مودمات مسجلة"/>:(hardware[selected]||[]).map(r=><Card key={r.modem_uuid+":"+(r.sim_uuid||"none")} size="small" title={<Space wrap><span>{r.device_name||"مودم"}</span><Tag color={online(r.modem_last_seen_at)?"green":"orange"}>{online(r.modem_last_seen_at)?"متصل حديثًا":"غير متصل"}</Tag></Space>}><Descriptions size="small" column={1} bordered items={[{key:"ip",label:"IP محلي",children:<span dir="ltr">{r.modem_ip||"—"}</span>},{key:"sim",label:"الشريحة",children:<span dir="ltr">{r.msisdn||"غير معروف"}</span>},{key:"operator",label:"المتعامل",children:operatorNames[operatorOf(r)]},{key:"lookup",label:"معرفة الرقم",children:phoneAction(r)},{key:"type",label:"النوع",children:r.sim_type||"غير محدد"},{key:"pin",label:"PIN",children:r.has_pin?"مسجل بأمان":"غير مسجل"},{key:"last",label:"آخر ظهور",children:dateLabel(r.modem_last_seen_at)}]}/></Card>)}</Space>:<Table rowKey={r=>r.modem_uuid+":"+(r.sim_uuid||"none")} loading={hardwareLoading} dataSource={hardware[selected]||[]} size="small" scroll={{x:720}} pagination={{pageSize:10}} columns={[
+   {mobile?<Space direction="vertical" style={{width:"100%"}} size="middle">{(hardware[selected]||[]).length===0&&!hardwareLoading?<Empty description="لا توجد مودمات مسجلة"/>:(hardware[selected]||[]).map(r=><Card key={r.modem_uuid+":"+(r.sim_uuid||"none")} size="small" title={<Space wrap><span>{r.device_name||"مودم"}</span><Tag color={online(r.modem_last_seen_at)?"green":"orange"}>{online(r.modem_last_seen_at)?"رُصد حديثًا":"لا يوجد رصد حديث"}</Tag></Space>}><Descriptions size="small" column={1} bordered items={[{key:"ip",label:"IP محلي",children:<span dir="ltr">{r.modem_ip||"—"}</span>},{key:"sim",label:"الشريحة",children:<span dir="ltr">{r.msisdn||"غير معروف"}</span>},{key:"operator",label:"المتعامل",children:operatorNames[operatorOf(r)]},{key:"lookup",label:"معرفة الرقم",children:phoneAction(r)},{key:"type",label:"النوع",children:r.sim_type||"غير محدد"},{key:"pin",label:"PIN",children:r.has_pin?"مسجل بأمان":"غير مسجل"},{key:"last",label:"آخر ظهور",children:dateLabel(r.modem_last_seen_at)}]}/></Card>)}</Space>:<Table rowKey={r=>r.modem_uuid+":"+(r.sim_uuid||"none")} loading={hardwareLoading} dataSource={hardware[selected]||[]} size="small" scroll={{x:720}} pagination={{pageSize:10}} columns={[
     {title:"المودم",render:(_:unknown,r:Hardware)=>r.device_name||r.modem_ip||"—"},
     {title:"IP محلي",dataIndex:"modem_ip",render:(v:string|null)=><span dir="ltr">{v||"—"}</span>},
     {title:"الشريحة",dataIndex:"msisdn",render:(v:string|null)=><span dir="ltr">{v||"غير معروف"}</span>},
