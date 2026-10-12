@@ -225,7 +225,7 @@ function MasterCustomerLookup() {
   const [accounts,setAccounts]=useState<Array<{id:number;party_id:number;username:string;phone:string;active:boolean}>>([]);
   const [masterRecord,setMasterRecord]=useState<{id:number;display_name:string;primary_phone?:string|null;mytool_username?:string|null}|null>(null);
   const assignMaster=(r:{id:number;display_name:string;primary_phone?:string|null;mytool_username?:string|null},overwrite=false)=>{
-    setSelected(r.id);setMasterRecord(r);
+    setSelected(r.id);setMasterRecord(r);setMatches([r]);
     if(overwrite||name.trim()!==r.display_name)setName(r.display_name||"");
     const digits=(r.primary_phone||"").replace(/\D/g,"");
     const normalized=digits.startsWith("213")?"0"+digits.slice(3):digits;
@@ -234,7 +234,7 @@ function MasterCustomerLookup() {
     if(candidate&&!/^mt\d*_\d+$/i.test(candidate)&&(overwrite||!username.trim()))setUsername(candidate);
   };
   useEffect(()=>{
-    if(!client || query.trim().length<2){setMatches([]);return;}
+    if(!client || selected || query.trim().length<2){if(!selected)setMatches([]);return;}
     let active=true;
     const timer=window.setTimeout(async()=>{
       setBusy(true);
@@ -245,7 +245,7 @@ function MasterCustomerLookup() {
       else {setError("");setMatches(Array.isArray(result.data)?result.data:[]);}
     },350);
     return ()=>{active=false;window.clearTimeout(timer);};
-  },[query]);
+  },[query,selected]);
   const loadAccounts=async()=>{if(!client)return;const {data,error}=await client.functions.invoke("flexy-mini-customers",{body:{action:"list"}});if(!error&&Array.isArray(data?.customers))setAccounts(data.customers);};
   useEffect(()=>{void loadAccounts();},[]);
   const createAccount=async()=>{
@@ -274,10 +274,10 @@ function MasterCustomerLookup() {
       <Alert type="info" showIcon message="اختر الماستر أولًا ثم اسم الدخول. تظهر كلمة مرور عشوائية عند فتح النموذج ويمكنك تعديلها."/>
       <Form layout="vertical" style={{marginTop:14}}>
         <Form.Item label="اسم الزبون"><Input value={name} onChange={e=>{setName(e.target.value);setSelected(null);setQuery(e.target.value);}} placeholder="الاسم الكامل"/></Form.Item>
-        <Form.Item label="رقم الهاتف"><Input dir="ltr" value={phone} onChange={e=>{const v=e.target.value.replace(/[^0-9+]/g,"");setPhone(v);setSelected(null);if(v.replace(/\D/g,"").length>=5)setQuery(v);}} placeholder="0XXXXXXXXX"/></Form.Item>
+        <Form.Item label="رقم الهاتف"><Input dir="ltr" value={phone} onChange={e=>{const v=e.target.value.replace(/[^0-9+]/g,"");setPhone(v);if(!selected&&v.replace(/\D/g,"").length>=5)setQuery(v);}} placeholder="0XXXXXXXXX"/></Form.Item>
         <Form.Item label="اسم المستخدم"><Input dir="ltr" value={username} onChange={e=>setUsername(e.target.value)} placeholder="username"/></Form.Item>
         <Form.Item label="كلمة المرور (مولّدة تلقائيًا — يمكنك تعديلها)"><Input.Password value={password} onChange={e=>setPassword(e.target.value)} autoComplete="new-password"/></Form.Item>
-        <Form.Item label="بحث إضافي في الماستر"><Input value={query} onChange={e=>{setQuery(e.target.value);setSelected(null);}} placeholder="اسم أو هاتف أو حساب منصة" allowClear/></Form.Item>
+        <Form.Item label="بحث إضافي في الماستر"><Input value={query} onChange={e=>{setQuery(e.target.value);setSelected(null);setMasterRecord(null);}} placeholder="اسم أو هاتف أو حساب منصة" allowClear/></Form.Item>
       </Form>
       {error&&<Alert type="warning" message={error}/>}
       {busy&&<Text type="secondary">جاري البحث...</Text>}
