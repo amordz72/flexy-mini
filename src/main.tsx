@@ -244,7 +244,7 @@ function MasterCustomerLookup() {
   const [accounts,setAccounts]=useState<Array<{id:number;party_id:number;username:string;phone:string;active:boolean}>>([]);
   const [masterRecord,setMasterRecord]=useState<{id:number;display_name:string;primary_phone?:string|null;mytool_username?:string|null}|null>(null);
   const assignMaster=(r:{id:number;display_name:string;primary_phone?:string|null;mytool_username?:string|null},overwrite=false)=>{
-    setSelected(r.id);setMasterRecord(r);setMatches([r]);
+    setSelected(r.id);setMasterRecord(r);setMatches([r]);setError("");
     if(overwrite||name.trim()!==r.display_name)setName(r.display_name||"");
     const digits=(r.primary_phone||"").replace(/\D/g,"");
     const normalized=digits.startsWith("213")?"0"+digits.slice(3):digits;
@@ -260,7 +260,7 @@ function MasterCustomerLookup() {
       const result=await client!.rpc("admin_customer_master_search",{p_query:query.trim(),p_limit:10});
       if(!active)return;
       setBusy(false);
-      if(result.error){setError("تعذر البحث في الماستر بهذه الصلاحيات");setMatches([]);}
+      if(result.error){setError("تعذر البحث في الماستر. أعد المحاولة، أو احتفظ بالماستر المحدد إن كان ظاهرًا.");setMatches([]);}
       else {setError("");setMatches(Array.isArray(result.data)?result.data:[]);}
     },350);
     return ()=>{active=false;window.clearTimeout(timer);};
@@ -318,7 +318,7 @@ function MasterCustomerLookup() {
         </Card>)}
       </Space>
       {masterRecord&&<Space wrap style={{marginTop:12}}><Button onClick={()=>assignMaster(masterRecord,true)}>إسناد بيانات الماستر</Button><Text type="secondary">تعبئة الاسم والهاتف واسم المستخدم غير التقني من الماستر</Text></Space>}
-      <Alert style={{marginTop:12}} type={selected?"success":"info"} message={selected?"تم اختيار ماستر موجود. سيُربط عند الحفظ بعد تجهيز الخدمة.":"إذا لم يوجد تطابق، يلزم إنشاء ماستر جديد عند الحفظ. لا يُسمح بحساب دون ماستر."}/>
+      <Alert style={{marginTop:12}} type={selected?"success":"info"} message={selected?"الماستر محدد. أدخل بيانات الدخول واضغط حفظ الزبون لإنشاء الحساب.":"اختر ماستر موجودًا قبل إنشاء الحساب."}/>
       <Button style={{marginTop:12}} type="primary" loading={saving} disabled={!selected||!username||!phone} onClick={()=>void createAccount()}>حفظ الزبون وإنشاء الحساب</Button>
     </Card>}
   </Space>;
