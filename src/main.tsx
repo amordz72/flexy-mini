@@ -260,7 +260,7 @@ function MasterCustomerLookup() {
     setPassword("");setCreating(false);void loadAccounts();
   };
   return <Space direction="vertical" size="middle" style={{width:"100%"}}>
-    <Card title="زبائن Flexy Mini" extra={<Button type="primary" onClick={()=>setCreating(v=>!v)}>{creating?"إغلاق":"زبون جديد +"}</Button>}>
+    <Card title="زبائن Flexy Mini" extra={<Button type="primary" onClick={()=>{if(!creating)setPassword(Array.from(crypto.getRandomValues(new Uint8Array(8)), n => String((n % 8) + 1)).join(""));setCreating(v=>!v);}}>{creating?"إغلاق":"زبون جديد +"}</Button>}>
       <Alert type="info" showIcon message="الجدول يعرض حسابات Flexy Mini عند تفعيل خدمة الحسابات. لا نعرض كل الماستر كأنهم زبائن مسجلون."/>
       {savedMessage&&<Alert type="success" style={{marginTop:12}} message={savedMessage}/>}
       <Table size="small" rowKey="id" style={{marginTop:12}} dataSource={accounts.map(a=>({...a,name:a.phone,master:a.party_id,status:a.active?"نشط":"معطل"}))} columns={[
@@ -271,12 +271,12 @@ function MasterCustomerLookup() {
       ]} locale={{emptyText:"لا توجد حسابات Flexy Mini مؤكدة بعد"}}/>
     </Card>
     {creating&&<Card title="زبون جديد — مطابقة الماستر">
-      <Alert type="info" showIcon message="اختر الماستر أولًا ثم اسم الدخول. كلمة المرور اختيارية وتُولّد تلقائيًا عند تركها فارغة."/>
+      <Alert type="info" showIcon message="اختر الماستر أولًا ثم اسم الدخول. تظهر كلمة مرور عشوائية عند فتح النموذج ويمكنك تعديلها."/>
       <Form layout="vertical" style={{marginTop:14}}>
         <Form.Item label="اسم الزبون"><Input value={name} onChange={e=>{setName(e.target.value);setSelected(null);setQuery(e.target.value);}} placeholder="الاسم الكامل"/></Form.Item>
         <Form.Item label="رقم الهاتف"><Input dir="ltr" value={phone} onChange={e=>{const v=e.target.value.replace(/[^0-9+]/g,"");setPhone(v);setSelected(null);if(v.replace(/\D/g,"").length>=5)setQuery(v);}} placeholder="0XXXXXXXXX"/></Form.Item>
         <Form.Item label="اسم المستخدم"><Input dir="ltr" value={username} onChange={e=>setUsername(e.target.value)} placeholder="username"/></Form.Item>
-        <Form.Item label="كلمة المرور (اختيارية — تُولّد تلقائيًا عند تركها فارغة)"><Input.Password value={password} onChange={e=>setPassword(e.target.value)} autoComplete="new-password"/></Form.Item>
+        <Form.Item label="كلمة المرور (مولّدة تلقائيًا — يمكنك تعديلها)"><Input.Password value={password} onChange={e=>setPassword(e.target.value)} autoComplete="new-password"/></Form.Item>
         <Form.Item label="بحث إضافي في الماستر"><Input value={query} onChange={e=>{setQuery(e.target.value);setSelected(null);}} placeholder="اسم أو هاتف أو حساب منصة" allowClear/></Form.Item>
       </Form>
       {error&&<Alert type="warning" message={error}/>}
