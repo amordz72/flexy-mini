@@ -251,6 +251,29 @@ function MasterCustomerLookup() {
       message.info("المشاركة غير متاحة؛ تم نسخ البيانات");
     }catch(e){if(e instanceof Error&&e.name==="AbortError")return;message.error("تعذرت المشاركة؛ استعمل زر النسخ");}
   };
+  const [saveFileOpen,setSaveFileOpen]=useState(false);
+  const [filePassword,setFilePassword]=useState("");
+  const [fileSaving,setFileSaving]=useState(false);
+  const saveEncryptedFile=async()=>{
+    if(filePassword.length<12){message.error("كلمة حماية الملف لازم تكون 12 حرفًا على الأقل");return;}
+    if(!copyCredentials||!crypto.subtle){message.error("التشفير غير متاح في هذا المتصفح");return;}
+    setFileSaving(true);
+    try{
+      const salt=crypto.getRandomValues(new Uint8Array(16));
+      const iv=crypto.getRandomValues(new Uint8Array(12));
+      const raw=await crypto.subtle.importKey("raw",new TextEncoder().encode(filePassword),"PBKDF2",false,["deriveKey"]);
+      const key=await crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:250000,hash:"SHA-256"},raw,{name:"AES-GCM",length:256},false,["encrypt"]);
+      const cipher=new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM",iv},key,new TextEncoder().encode(copyCredentials)));
+      const hex=(a:Uint8Array)=>Array.from(a).map(n=>n.toString(16).padStart(2,"0")).join("");
+      const html=`<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>بيانات دخول Flexy Mini - ملف مشفر</title><body style="font:18px system-ui;max-width:540px;margin:40px auto;padding:16px"><h2>بيانات دخول Flexy Mini</h2><p>هذا الملف مشفر. أدخل كلمة حماية الملف لعرض بيانات الدخول.</p><input id="pw" type="password" placeholder="كلمة حماية الملف" style="padding:12px;width:90%"><button id="open" style="padding:12px;margin:12px 0">فتح الملف</button><pre id="out" dir="auto" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre><script>const salt="${hex(salt)}",iv="${hex(iv)}",data="${hex(cipher)}";const bytes=h=>new Uint8Array(h.match(/../g).map(x=>parseInt(x,16)));document.getElementById("open").onclick=async()=>{const out=document.getElementById("out");out.textContent="جاري فك التشفير...";try{const raw=await crypto.subtle.importKey("raw",new TextEncoder().encode(document.getElementById("pw").value),"PBKDF2",false,["deriveKey"]);const key=await crypto.subtle.deriveKey({name:"PBKDF2",salt:bytes(salt),iterations:250000,hash:"SHA-256"},raw,{name:"AES-GCM",length:256},false,["decrypt"]);out.textContent=new TextDecoder().decode(await crypto.subtle.decrypt({name:"AES-GCM",iv:bytes(iv)},key,bytes(data)));}catch(e){out.textContent="كلمة الحماية غير صحيحة أو المتصفح لا يسمح بفك التشفير من ملف محلي. افتح الملف عبر اتصال HTTPS موثوق."}};<\/script></body></html>`;
+      const blob=new Blob([html],{type:"text/html;charset=utf-8"});
+      const href=URL.createObjectURL(blob);
+      const link=document.createElement("a");link.href=href;link.download="flexy-mini-credentials-encrypted.html";document.body.appendChild(link);link.click();link.remove();
+      window.setTimeout(()=>URL.revokeObjectURL(href),60000);
+      setSaveFileOpen(false);setFilePassword("");message.success("تم تجهيز الملف المشفر");
+    }catch{message.error("تعذر تشفير الملف");}
+    finally{setFileSaving(false);}
+  };
   const [editing,setEditing]=useState<{id:number;username:string}|null>(null);
   const [editUsername,setEditUsername]=useState("");
   const [editPassword,setEditPassword]=useState("");
@@ -331,7 +354,13 @@ function MasterCustomerLookup() {
       {copyCredentials&&<Space wrap style={{marginTop:10}}>
         <Button type="primary" onClick={()=>{void navigator.clipboard.writeText(copyCredentials).then(()=>message.success("تم نسخ بيانات الدخول")).catch(()=>message.error("تعذر النسخ"));}}>نسخ بيانات الدخول</Button>
         <Button onClick={()=>void shareCredentials()}>مشاركة بيانات الدخول</Button>
+        <Button onClick={()=>setSaveFileOpen(true)}>حفظ ملف مشفر</Button>
       </Space>}
+      <Modal title="حفظ بيانات الدخول كملف مشفر" open={saveFileOpen} onCancel={()=>{setSaveFileOpen(false);setFilePassword("");}} onOk={()=>void saveEncryptedFile()} okText="تشفير وحفظ الملف" okButtonProps={{disabled:filePassword.length<12}} confirmLoading={fileSaving} cancelText="إلغاء">
+        <p>اختر كلمة حماية مستقلة من 12 حرفًا على الأقل. بدونها لا يمكن فتح بيانات الدخول. لا تُرسل كلمة الحماية مع الملف في نفس الرسالة.</p>
+        <Input.Password autoComplete="new-password" value={filePassword} onChange={e=>setFilePassword(e.target.value)} placeholder="كلمة حماية الملف"/>
+        <Text type="secondary">قد تمنع بعض المتصفحات فك التشفير عند فتح ملف HTML محليًا؛ يمكن فتحه في متصفح يسمح بالتشفير المحلي.</Text>
+      </Modal>
       <Modal title="تعديل حساب الزبون" open={!!editing} onCancel={()=>{setEditing(null);setEditPassword("");setEditError("");}} onOk={()=>void updateAccount()} okText="حفظ التعديل" confirmLoading={editBusy} cancelText="إلغاء">
         <Form layout="vertical">
           <Form.Item label="اسم المستخدم"><Input dir="ltr" value={editUsername} onChange={e=>setEditUsername(e.target.value)}/></Form.Item>
