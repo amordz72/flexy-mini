@@ -478,6 +478,7 @@ type MiniWalletRow={customer_id:number;username:string;phone:string;active:boole
 function MiniWalletAdmin(){
  const [rows,setRows]=useState<MiniWalletRow[]>([]),[busy,setBusy]=useState(false),[error,setError]=useState("");
  const [selected,setSelected]=useState<MiniWalletRow|null>(null),[history,setHistory]=useState<any[]>([]);
+ const [searchWallet,setSearchWallet]=useState("");
  const [kind,setKind]=useState("deposit"),[amount,setAmount]=useState(""),[note,setNote]=useState("");
  const [requestId,setRequestId]=useState(()=>crypto.randomUUID());
  const [postingEnabled,setPostingEnabled]=useState(false);
@@ -488,15 +489,17 @@ function MiniWalletAdmin(){
  const money=(n:unknown)=>Number(n||0).toLocaleString("ar-DZ")+" دج";
  return <Card title="محافظ زبائن Flexy Mini" extra={<Button loading={busy} onClick={()=>void load()}>تحديث</Button>}>
  {error&&<Alert type="error" message={error} style={{marginBottom:12}}/>}
- <Table rowKey="customer_id" loading={busy} dataSource={rows} pagination={{pageSize:10}} scroll={{x:650}} columns={[
- {title:"الزبون",dataIndex:"username"},{title:"الهاتف",dataIndex:"phone"},
+ <Input.Search placeholder="ابحث بالاسم أو الهاتف" value={searchWallet} onChange={e=>setSearchWallet(e.target.value)} style={{marginBottom:12}}/>
+ <Table rowKey="customer_id" loading={busy} dataSource={rows.filter(r=>(r.username+" "+r.phone).toLowerCase().includes(searchWallet.toLowerCase()))} pagination={{pageSize:10}} scroll={{x:950}} columns={[
+ {title:"الزبون",dataIndex:"username"},{title:"الهاتف",dataIndex:"phone"},{title:"حالة الحساب",render:(_,r)=><Tag color={r.active?"green":"default"}>{r.active?"نشط":"معطل"}</Tag>},
  {title:"الرصيد",render:(_,r)=>r.wallet?money(r.wallet.balance):"لم تُفتح"},
  {title:"الديون",render:(_,r)=>r.wallet?money(r.wallet.debt):"—"},
  {title:"الأرباح",render:(_,r)=>r.wallet?money(r.wallet.profit):"—"},
  {title:"الإجراءات",render:(_,r)=><Button onClick={()=>void show(r)}>المحفظة والسجل</Button>}
  ]}/>
- <Modal title={selected?"محفظة "+selected.username:"المحفظة"} open={!!selected} onCancel={()=>setSelected(null)} footer={null} width={720}>
+ <Modal title={selected?"تفاصيل الزبون: "+selected.username:"تفاصيل الزبون"} open={!!selected} onCancel={()=>setSelected(null)} footer={null} width={720}>
  {selected&&<Space direction="vertical" style={{width:"100%"}}>
+ <Descriptions bordered size="small" column={1} items={[{key:"user",label:"اسم المستخدم",children:selected.username},{key:"phone",label:"الهاتف",children:selected.phone},{key:"status",label:"الحالة",children:selected.active?"نشط":"معطل"},{key:"balance",label:"الرصيد",children:selected.wallet?money(selected.wallet.balance):"لم تُفتح"},{key:"debt",label:"الديون",children:selected.wallet?money(selected.wallet.debt):"—"},{key:"profit",label:"الأرباح",children:selected.wallet?money(selected.wallet.profit):"—"}]}/>
  <Alert type="warning" message="التسجيل المالي معطل مؤقتًا إلى حين التحقق من نشر نسخة الخادم المطابقة."/>
  <Select value={kind} onChange={setKind} style={{width:"100%"}} options={[{value:"deposit",label:"إيداع رصيد"},{value:"withdrawal",label:"سحب رصيد"},{value:"debt_increase",label:"زيادة دين"},{value:"debt_payment",label:"تسديد دين"},{value:"profit_credit",label:"إضافة أرباح"}]}/>
  <Input value={amount} onChange={e=>setAmount(e.target.value)} placeholder="المبلغ بالدينار" inputMode="decimal"/>
