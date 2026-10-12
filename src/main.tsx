@@ -498,6 +498,7 @@ function CustomerCardsCatalog({token}:{token:string}){
   type Variant={id:number;product_id:number;name:string;denomination:number|null;stock_quantity:number};
   const [catalog,setCatalog]=useState<{categories:Category[];products:Product[];variants:Variant[]}|null>(null);
   const [error,setError]=useState("");
+  const [selectedProduct,setSelectedProduct]=useState<number|null>(null);
   const [busy,setBusy]=useState(true);
   useEffect(()=>{
     let active=true;setBusy(true);
@@ -507,23 +508,21 @@ function CustomerCardsCatalog({token}:{token:string}){
       .finally(()=>{if(active)setBusy(false);});
     return()=>{active=false;};
   },[token]);
-  return <Card size="small" title="متجر البطاقات">
-    {busy&&<Text>جاري تحميل البطاقات...</Text>}
+  const brand=(name:string)=>{const n=name.toLowerCase();if(n.includes("mobilis"))return {label:"mobilis",color:"#4caf27"};if(n.includes("adsl")||n.includes("idoom"))return {label:"idoom",color:"#76509b"};if(n.includes("4g")||n.includes("lte"))return {label:"4G LTE",color:"#2452a4"};if(n.includes("djezzy"))return {label:"DJEZZY",color:"#d51f32"};if(n.includes("ooredoo"))return {label:"ooredoo",color:"#d92035"};if(n.includes("free fire"))return {label:"FREE FIRE",color:"#b35d18"};if(n.includes("pubg"))return {label:"PUBG",color:"#c38b18"};return {label:name,color:"#3d6da2"};};
+  const products=catalog?.products||[];
+  const chosen=products.find(p=>p.id===selectedProduct);
+  return <div>
+    {busy&&<Card loading/>}
     {error&&<Alert type="error" message={error}/>}
-    {catalog&&catalog.categories.map(category=>{
-      const products=catalog.products.filter(p=>p.category_id===category.id);
-      if(!products.length)return null;
-      return <div key={category.id} style={{marginBottom:14}}><Typography.Title level={5}>{category.name}</Typography.Title>
-        {products.map(product=><div key={product.id} style={{marginBottom:10}}><Text strong>{product.name}</Text>
-          <Space wrap style={{display:"flex",marginTop:6}}>
-            {catalog.variants.filter(v=>v.product_id===product.id).map(v=><Tag key={v.id}>{v.name||String(v.denomination||"بطاقة")} {v.stock_quantity>0?"— متوفر":"— غير متوفر"}</Tag>)}
-          </Space>
-        </div>)}
-      </div>;
-    })}
-    {catalog&&!catalog.products.length&&<Empty description="لا توجد بطاقات معروضة حاليًا"/>}
-    <Alert type="info" showIcon message="عرض فقط حاليًا؛ شراء البطاقات والشحن والدين غير مفعلة."/>
-  </Card>;
+    {catalog&&(chosen?<Card title={<Space><Button onClick={()=>setSelectedProduct(null)}>رجوع</Button><Text strong>{chosen.name}</Text></Space>}>
+      <Row gutter={[12,12]}>{catalog.variants.filter(v=>v.product_id===chosen.id).map(v=><Col xs={12} sm={8} key={v.id}><Card size="small" style={{textAlign:"center"}}><Text strong>{v.name||String(v.denomination||"بطاقة")}</Text><div><Tag color={v.stock_quantity>0?"green":"default"}>{v.stock_quantity>0?"متوفر":"غير متوفر"}</Tag></div></Card></Col>)}</Row>
+      <Alert style={{marginTop:14}} type="info" showIcon message="عرض فقط حاليًا؛ شراء البطاقات غير مفعّل."/>
+    </Card>:<>
+      <Typography.Title level={4}>بطاقات</Typography.Title>
+      <Row gutter={[16,20]} justify="center">{products.map(product=>{const b=brand(product.name);return <Col xs={8} sm={6} md={4} key={product.id}><div role="button" tabIndex={0} onClick={()=>setSelectedProduct(product.id)} onKeyDown={e=>{if(e.key==="Enter")setSelectedProduct(product.id);}} style={{cursor:"pointer",textAlign:"center"}}><div style={{aspectRatio:"1",borderRadius:15,background:b.color,color:"white",display:"grid",placeItems:"center",fontWeight:800,fontSize:b.label.length>9?13:19,boxShadow:"0 4px 12px rgba(0,0,0,.10)",padding:6,overflow:"hidden"}}>{b.label}</div><Text style={{display:"block",marginTop:7,fontSize:12}}>{product.name}</Text></div></Col>})}</Row>
+      {!products.length&&<Empty description="لا توجد بطاقات معروضة حاليًا"/>}
+    </>)}
+  </div>;
 }
 function TableCustomerLogin(){
   const [token,setToken]=useState(()=>window.localStorage.getItem("flexy_mini_customer_token")||"");
@@ -624,7 +623,6 @@ function Dashboard({customerToken,customerAccount,customerError,onCustomerLogout
             {!isCustomer && client && <div style={{marginBottom:18}}><AdSystem db={client}/></div>}
             {!isCustomer && client && <AdminWallet db={client}/>}
 
-            {isCustomer && customerAccount && <CustomerCardsCatalog token={customerToken!}/>}
             <Title level={4} style={{ marginBottom: 16 }}>الخدمات</Title>
             <Row gutter={[12, 12]}>
               {[
