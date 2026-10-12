@@ -242,6 +242,24 @@ function MasterCustomerLookup() {
   const [password,setPassword]=useState("");
   const [saving,setSaving]=useState(false);
   const [savedMessage,setSavedMessage]=useState("");
+  const [copyCredentials,setCopyCredentials]=useState("");
+  const [editing,setEditing]=useState<{id:number;username:string}|null>(null);
+  const [editUsername,setEditUsername]=useState("");
+  const [editPassword,setEditPassword]=useState("");
+  const [editError,setEditError]=useState("");
+  const [editBusy,setEditBusy]=useState(false);
+  const updateAccount=async()=>{
+    if(!editing)return;
+    if(!/^[a-z0-9_]{3,32}$/.test(editUsername.trim().toLowerCase())){setEditError("اسم المستخدم غير صالح");return;}
+    if(editPassword&&editPassword.length<8){setEditError("كلمة المرور الجديدة لا تقل عن 8 أحرف");return;}
+    setEditBusy(true);setEditError("");
+    const {data,error}=await customerAdminRequest({action:"update_customer",customer_id:editing.id,username:editUsername.trim(),new_password:editPassword});
+    setEditBusy(false);
+    if(error||!data?.ok){setEditError(data?.error||error?.message||"تعذر حفظ التعديل");return;}
+    if(editPassword)setCopyCredentials("اسم المستخدم: "+editUsername.trim()+"\nكلمة المرور الجديدة: "+editPassword);
+    setSavedMessage("تم تحديث الحساب "+editUsername.trim()+(editPassword?" وتغيير كلمة المرور وإغلاق جلساته القديمة":""));
+    setEditing(null);setEditPassword("");void loadAccounts();
+  };
   const [accounts,setAccounts]=useState<Array<{id:number;party_id:number;username:string;phone:string;active:boolean}>>([]);
   const [masterRecord,setMasterRecord]=useState<{id:number;display_name:string;primary_phone?:string|null;mytool_username?:string|null}|null>(null);
   const assignMaster=(r:{id:number;display_name:string;primary_phone?:string|null;mytool_username?:string|null},overwrite=false)=>{
@@ -295,17 +313,27 @@ function MasterCustomerLookup() {
       setError((labels[details]||details||error?.message||"تعذر إنشاء الحساب")+(error?.context instanceof Response?" (HTTP "+error.context.status+")":""));return;
     }
     setSavedMessage((selected?"تم إنشاء الحساب: ":"تم إنشاء الماستر والحساب: ")+data.customer.username+(data.customer.phone?" — "+data.customer.phone:"")+(generatedPassword?" — كلمة المرور المولّدة: "+effectivePassword:""));
+    setCopyCredentials("اسم المستخدم: "+data.customer.username+"\nكلمة المرور: "+effectivePassword);
     setPassword("");setCreating(false);void loadAccounts();
   };
   return <Space direction="vertical" size="middle" style={{width:"100%"}}>
     <Card title="زبائن Flexy Mini" extra={<Button type="primary" onClick={()=>{if(!creating)setPassword(Array.from(crypto.getRandomValues(new Uint8Array(8)), n => String((n % 8) + 1)).join(""));setCreating(v=>!v);}}>{creating?"إغلاق":"زبون جديد +"}</Button>}>
       <Alert type="info" showIcon message="الجدول يعرض حسابات Flexy Mini عند تفعيل خدمة الحسابات. لا نعرض كل الماستر كأنهم زبائن مسجلون."/>
       {savedMessage&&<Alert type="success" style={{marginTop:12}} message={savedMessage}/>}
+      {copyCredentials&&<Button type="primary" style={{marginTop:10}} onClick={()=>{void navigator.clipboard.writeText(copyCredentials).then(()=>message.success("تم نسخ بيانات الدخول")).catch(()=>message.error("تعذر النسخ"));}}>نسخ بيانات الدخول</Button>}
+      <Modal title="تعديل حساب الزبون" open={!!editing} onCancel={()=>{setEditing(null);setEditPassword("");setEditError("");}} onOk={()=>void updateAccount()} okText="حفظ التعديل" confirmLoading={editBusy} cancelText="إلغاء">
+        <Form layout="vertical">
+          <Form.Item label="اسم المستخدم"><Input dir="ltr" value={editUsername} onChange={e=>setEditUsername(e.target.value)}/></Form.Item>
+          <Form.Item label="كلمة مرور جديدة (اختياري — لا تحتاج القديمة)"><Input.Password autoComplete="new-password" value={editPassword} onChange={e=>setEditPassword(e.target.value)} placeholder="اتركها فارغة للإبقاء على الحالية"/></Form.Item>
+          {editError&&<Alert type="error" message={editError}/>}
+          <Text type="secondary">عند تغيير كلمة المرور تُغلق جلسات الزبون السابقة.</Text>
+        </Form>
+      </Modal>
       <Table size="small" rowKey="id" style={{marginTop:12}} dataSource={accounts.map(a=>({...a,name:a.phone,master:a.party_id,status:a.active?"نشط":"معطل"}))} columns={[
         {title:"الزبون",dataIndex:"name"},
         {title:"اسم المستخدم",dataIndex:"username"},
         {title:"الماستر",dataIndex:"master"},
-        {title:"الحالة",dataIndex:"status"}
+        {title:"الحالة",dataIndex:"status"},{title:"إدارة",key:"edit",render:(_:unknown,record:{id:number;username:string})=><Button size="small" onClick={()=>{setEditing({id:record.id,username:record.username});setEditUsername(record.username);setEditPassword("");setEditError("");}}>تعديل</Button>}
       ]} locale={{emptyText:"لا توجد حسابات Flexy Mini مؤكدة بعد"}}/>
     </Card>
     {creating&&<Card title="زبون جديد — مطابقة الماستر">
