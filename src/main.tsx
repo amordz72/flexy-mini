@@ -228,8 +228,8 @@ function CardsCatalog() {
   </Space>;
 }
 function MasterCustomerLookup() {
-  const [query,setQuery]=useState("");
-  const [matches,setMatches]=useState<Array<{id:number;display_name:string;primary_phone?:string|null;mytool_username?:string|null}>>([]);
+
+  const [matches,setMatches]=useState<Array<{id:number;display_name:string;primary_phone?:string|null;primary_email?:string|null;mytool_username?:string|null;matchScore?:number}>>([]);
   const [selected,setSelected]=useState<number|null>(null);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
@@ -244,7 +244,7 @@ function MasterCustomerLookup() {
   const [accounts,setAccounts]=useState<Array<{id:number;party_id:number;username:string;phone:string;active:boolean}>>([]);
   const [masterRecord,setMasterRecord]=useState<{id:number;display_name:string;primary_phone?:string|null;mytool_username?:string|null}|null>(null);
   const assignMaster=(r:{id:number;display_name:string;primary_phone?:string|null;mytool_username?:string|null},overwrite=false)=>{
-    setSelected(r.id);setMasterRecord(r);setMatches([r]);setError("");
+    setSelected(r.id);setMasterRecord(r);setError("");
     if(overwrite||name.trim()!==r.display_name)setName(r.display_name||"");
     const digits=(r.primary_phone||"").replace(/\D/g,"");
     const normalized=digits.startsWith("213")?"0"+digits.slice(3):digits;
@@ -253,22 +253,34 @@ function MasterCustomerLookup() {
     if(candidate&&!/^mt\d*_\d+$/i.test(candidate)&&(overwrite||!username.trim()))setUsername(candidate);
   };
   useEffect(()=>{
-    if(!client || selected || query.trim().length<2){if(!selected)setMatches([]);return;}
+    if(!client)return;
+    const terms=[username.trim(),phone.trim(),email.trim(),name.trim()].filter(v=>v.length>=3);
+    if(!terms.length){setMatches([]);setBusy(false);return;}
     let active=true;
     const timer=window.setTimeout(async()=>{
       setBusy(true);
-      const result=await client!.rpc("admin_customer_master_search",{p_query:query.trim(),p_limit:10});
+      const responses=await Promise.all(terms.map(term=>client!.rpc("admin_customer_master_search",{p_query:term,p_limit:10})));
       if(!active)return;
+      const found=new Map<number,typeof matches[number]>();
+      for(const response of responses){
+        if(response.error)continue;
+        for(const record of (Array.isArray(response.data)?response.data:[])){
+          const r=record as typeof matches[number];
+          const normalized=(v:string|null|undefined)=>(v||"").trim().toLowerCase();
+          const score=(normalized(r.mytool_username)===normalized(username)&&username.length>=3?100:0)+(normalized(r.primary_phone)===normalized(phone)&&phone.length>=3?100:0)+(normalized(r.primary_email)===normalized(email)&&email.length>=3?100:0)+(normalized(r.display_name)===normalized(name)&&name.length>=3?80:0);
+          const candidate={...r,matchScore:score};
+          if(!found.has(r.id)||score>(found.get(r.id)?.matchScore||0))found.set(r.id,candidate);
+        }
+      }
+      setMatches([...found.values()].sort((x,y)=>(y.matchScore||0)-(x.matchScore||0)).slice(0,10));
       setBusy(false);
-      if(result.error){setError("تعذر البحث في الماستر. أعد المحاولة، أو احتفظ بالماستر المحدد إن كان ظاهرًا.");setMatches([]);}
-      else {setError("");setMatches(Array.isArray(result.data)?result.data:[]);}
-    },350);
-    return ()=>{active=false;window.clearTimeout(timer);};
-  },[query,selected]);
+    },450);
+    return()=>{active=false;window.clearTimeout(timer);};
+  },[username,phone,email,name]);
   const loadAccounts=async()=>{if(!client)return;const {data,error}=await customerAdminRequest({action:"list"});if(!error&&Array.isArray(data?.customers))setAccounts(data.customers);};
   useEffect(()=>{void loadAccounts();},[]);
   const createAccount=async()=>{
-    if(!client||false||!username.trim()||(phone!==""&&!/^0[567][0-9]{8}$/.test(phone))){setError("أدخل اسم مستخدم صالحًا. الاسم والهاتف اختياريان");return;}
+    if(!client||!username.trim()||(phone!==""&&!/^0[567][0-9]{8}$/.test(phone))){setError("أدخل اسم مستخدم صالحًا. الاسم والهاتف اختياريان");return;}
     if(!/^[a-z0-9_]{3,32}$/.test(username.trim().toLowerCase())){setError("اسم المستخدم يجب أن يكون من 3 إلى 32 حرفًا إنجليزيًا أو رقمًا أو _");return;}
     const generatedPassword = !password;
     const effectivePassword = password || Array.from(crypto.getRandomValues(new Uint8Array(8)), n => String((n % 8) + 1)).join("");
@@ -281,7 +293,7 @@ function MasterCustomerLookup() {
       const labels:Record<string,string>={"Invalid customer details":"الخادم رفض بيانات الحساب. تحقق من اسم المستخدم والهاتف وكلمة المرور.","Master not eligible":"الماستر المختار غير مؤهل للربط حاليًا.","Password service unavailable":"خدمة تشفير كلمة المرور غير متاحة.","Username, phone or Master already assigned":"اسم المستخدم أو الهاتف أو الماستر مرتبط بحساب آخر.","Creation failed":"فشل حفظ الحساب في قاعدة البيانات.","Master identity already exists; select existing Master":"الاسم أو الهاتف مرتبط بهوية ماستر موجودة. ابحث عنها واخترها.","Master creation failed":"تعذر إنشاء الماستر. تحقق من البيانات أو وجود سجل مكرر.","Master identity check unavailable":"تعذر التحقق من تكرار الهوية. حاول لاحقًا.","Unauthorized":"انتهت جلسة الإدارة؛ أعد تسجيل الدخول.","Admin only":"ليس لديك صلاحية إنشاء حساب."};
       setError((labels[details]||details||error?.message||"تعذر إنشاء الحساب")+(error?.context instanceof Response?" (HTTP "+error.context.status+")":""));return;
     }
-    setSavedMessage((selected?"تم إنشاء الحساب: ":"تم إنشاء الماستر والحساب: ")+data.customer.username+" — "+data.customer.phone+(generatedPassword?" — كلمة المرور المولّدة: "+effectivePassword:""));
+    setSavedMessage((selected?"تم إنشاء الحساب: ":"تم إنشاء الماستر والحساب: ")+data.customer.username+(data.customer.phone?" — "+data.customer.phone:"")+(generatedPassword?" — كلمة المرور المولّدة: "+effectivePassword:""));
     setPassword("");setCreating(false);void loadAccounts();
   };
   return <Space direction="vertical" size="middle" style={{width:"100%"}}>
@@ -296,31 +308,32 @@ function MasterCustomerLookup() {
       ]} locale={{emptyText:"لا توجد حسابات Flexy Mini مؤكدة بعد"}}/>
     </Card>
     {creating&&<Card title="زبون جديد — مطابقة الماستر">
-      <Alert type="info" showIcon message="اختر الماستر أولًا ثم اسم الدخول. تظهر كلمة مرور عشوائية عند فتح النموذج ويمكنك تعديلها."/>
+      <Alert type="info" showIcon message="أدخل اسم المستخدم وكلمة المرور، ثم البيانات الاختيارية. نقترح الماستر تلقائيًا عند وجود تطابق؛ لا نربط أي شخص دون اختيارك."/>
       <Form layout="vertical" style={{marginTop:14}}>
-        <Form.Item label="اسم الزبون (اختياري)"><Input value={name} onChange={e=>{setName(e.target.value);if(!selected)setQuery(e.target.value);}} placeholder="الاسم الكامل"/></Form.Item>
-        <Form.Item label="رقم الهاتف (اختياري)" validateStatus={phone&&!/^0[567][0-9]{8}$/.test(phone)?"error":undefined} help={phone&&!/^0[567][0-9]{8}$/.test(phone)?"أدخل رقمًا جزائريًا صحيحًا أو اترك الخانة فارغة":undefined}><Input dir="ltr" value={phone} onChange={e=>{const v=e.target.value.replace(/[^0-9+]/g,"");setPhone(v);}} placeholder="0XXXXXXXXX"/></Form.Item>
-        <Form.Item label="اسم المستخدم" validateStatus={username&&!/^[a-z0-9_]{3,32}$/.test(username.trim().toLowerCase())?"error":undefined} help={username&&!/^[a-z0-9_]{3,32}$/.test(username.trim().toLowerCase())?"اسم المستخدم من 3 إلى 32 حرفًا إنجليزيًا أو رقمًا أو _":undefined}><Input dir="ltr" value={username} onChange={e=>setUsername(e.target.value)} placeholder="username"/></Form.Item>
-        <Form.Item label="البريد الإلكتروني (اختياري)"><Input dir="ltr" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="example@email.com"/></Form.Item>
+        <Form.Item label="اسم المستخدم" validateStatus={username&&!/^[a-z0-9_]{3,32}$/.test(username.trim().toLowerCase())?"error":undefined} help={username&&!/^[a-z0-9_]{3,32}$/.test(username.trim().toLowerCase())?"اسم المستخدم من 3 إلى 32 حرفًا إنجليزيًا أو رقمًا أو _":undefined}><Input dir="ltr" value={username} onChange={e=>{setUsername(e.target.value);setSelected(null);setMasterRecord(null);}} placeholder="username"/></Form.Item>
         <Form.Item label="كلمة المرور (مولّدة تلقائيًا — يمكنك تعديلها)"><Input.Password value={password} onChange={e=>setPassword(e.target.value)} autoComplete="new-password"/></Form.Item>
-        <Form.Item label="بحث الماستر (الاسم أو الهاتف أو حساب المنصة)"><Input value={query} onChange={e=>{setQuery(e.target.value);setSelected(null);setMasterRecord(null);}} placeholder="اسم أو هاتف أو حساب منصة" allowClear/></Form.Item>
+        <Divider orientation="right">بيانات الزبون (اختيارية)</Divider>
+        <Form.Item label="رقم الهاتف" validateStatus={phone&&!/^0[567][0-9]{8}$/.test(phone)?"error":undefined} help={phone&&!/^0[567][0-9]{8}$/.test(phone)?"أدخل رقمًا جزائريًا صحيحًا أو اترك الخانة فارغة":undefined}><Input dir="ltr" value={phone} onChange={e=>{setPhone(e.target.value.replace(/[^0-9+]/g,""));setSelected(null);setMasterRecord(null);}} placeholder="0XXXXXXXXX"/></Form.Item>
+        <Form.Item label="البريد الإلكتروني"><Input dir="ltr" type="email" value={email} onChange={e=>{setEmail(e.target.value);setSelected(null);setMasterRecord(null);}} placeholder="example@email.com"/></Form.Item>
+        <Form.Item label="اسم الزبون"><Input value={name} onChange={e=>{setName(e.target.value);setSelected(null);setMasterRecord(null);}} placeholder="الاسم الكامل"/></Form.Item>
       </Form>
       {error&&<Alert type="warning" message={error}/>}
-      {busy&&<Text type="secondary">جاري البحث...</Text>}
-      {!busy&&query.trim().length>=2&&matches.length===0&&<Empty description="لا توجد نتائج مطابقة — يمكن إنشاء ماستر جديد عند تفعيل الحفظ" />}
+      {busy&&<Text type="secondary">جاري فحص تطابق الماستر...</Text>}
+      {!busy&&matches.length>0&&<Alert type="info" showIcon message="اقتراحات ماستر محتملة — تحقق من هوية الزبون قبل الربط. النسبة مؤشر تقريبي وليست إثباتًا."/>}
+      {!busy&&matches.length===0&&<Alert type="info" message="لم تظهر مطابقة من البيانات المدخلة. يمكنك إنشاء ماستر جديد، بعد التأكد أن الشخص غير موجود سابقًا."/>}
       <Space direction="vertical" size="small" style={{width:"100%",marginTop:12}}>
         {matches.map(r=><Card key={r.id} size="small" style={{borderColor:selected===r.id?"#1677ff":undefined}}>
           <Space direction="vertical" size="small" style={{width:"100%"}}>
             <Text strong>{r.display_name}</Text>
-            <Text type="secondary">الهاتف: <span dir="ltr" style={{display:"inline-block"}}>{r.primary_phone||"غير مسجل"}</span></Text>
-            {r.mytool_username&&<Text type="secondary">معرف الماستر: <span dir="ltr">{r.mytool_username}</span></Text>}
-            {selected===r.id?<Text type="success">✓ تم اختيار هذا الماستر</Text>:<Button block type="default" onClick={()=>assignMaster(r)}>اختيار هذا الماستر</Button>}
+            <Text type="secondary">الهاتف: <span dir="ltr">{r.primary_phone||"غير مسجل"}</span></Text>
+            {r.mytool_username&&<Text type="secondary">المستخدم: <span dir="ltr">{r.mytool_username}</span></Text>}
+            <Text type="secondary">{r.matchScore&&r.matchScore>=80?"تطابق مباشر في بيانات الهوية":"تشابه محتمل — راجع البيانات"}</Text>
+            {selected===r.id?<Button onClick={()=>{setSelected(null);setMasterRecord(null);}}>✓ ماستر محدد — إلغاء الاختيار</Button>:<Button block onClick={()=>assignMaster(r)}>ربط بهذا الماستر</Button>}
           </Space>
         </Card>)}
       </Space>
-      {masterRecord&&<Space wrap style={{marginTop:12}}><Button onClick={()=>assignMaster(masterRecord,true)}>إسناد بيانات الماستر</Button><Text type="secondary">تعبئة الاسم والهاتف واسم المستخدم غير التقني من الماستر</Text></Space>}
-      <Alert style={{marginTop:12}} type={selected?"success":"info"} message={selected?"الماستر محدد. أدخل بيانات الدخول واضغط حفظ الزبون لإنشاء الحساب.":"لا يوجد ماستر محدد. إذا تأكدت أن الزبون جديد، أنشئ الماستر والحساب معًا. تحقق من عدم وجود سجل سابق."}/>
-      <Button style={{marginTop:12}} type="primary" loading={saving} disabled={saving} onClick={()=>void createAccount()}>{selected?"حفظ الزبون وإنشاء الحساب":"إنشاء ماستر جديد وربط الحساب"}</Button>
+      {selected&&<Alert style={{marginTop:12}} type="success" message="تم اختيار الماستر؛ سيتم إنشاء حساب Flexy Mini مرتبط به."/>}
+      <Button style={{marginTop:12}} type="primary" loading={saving} disabled={saving||busy} onClick={()=>void createAccount()}>{selected?"حفظ الزبون وإنشاء الحساب":"إنشاء ماستر جديد وربط الحساب"}</Button>
     </Card>}
   </Space>;
 }
