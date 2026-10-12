@@ -243,6 +243,14 @@ function MasterCustomerLookup() {
   const [saving,setSaving]=useState(false);
   const [savedMessage,setSavedMessage]=useState("");
   const [copyCredentials,setCopyCredentials]=useState("");
+  const shareCredentials=async()=>{
+    if(!copyCredentials)return;
+    try{
+      if(typeof navigator.share==="function"){await navigator.share({title:"بيانات الدخول إلى Flexy Mini",text:copyCredentials});return;}
+      await navigator.clipboard.writeText(copyCredentials);
+      message.info("المشاركة غير متاحة؛ تم نسخ البيانات");
+    }catch(e){if(e instanceof Error&&e.name==="AbortError")return;message.error("تعذرت المشاركة؛ استعمل زر النسخ");}
+  };
   const [editing,setEditing]=useState<{id:number;username:string}|null>(null);
   const [editUsername,setEditUsername]=useState("");
   const [editPassword,setEditPassword]=useState("");
@@ -314,13 +322,16 @@ function MasterCustomerLookup() {
     }
     setSavedMessage((selected?"تم إنشاء الحساب: ":"تم إنشاء الماستر والحساب: ")+data.customer.username+(data.customer.phone?" — "+data.customer.phone:"")+(generatedPassword?" — كلمة المرور المولّدة: "+effectivePassword:""));
     setCopyCredentials("اسم المستخدم: "+data.customer.username+"\nكلمة المرور: "+effectivePassword);
-    setPassword("");setCreating(false);void loadAccounts();
+    setPassword("");void loadAccounts();
   };
   return <Space direction="vertical" size="middle" style={{width:"100%"}}>
-    <Card title="زبائن Flexy Mini" extra={<Button type="primary" onClick={()=>{if(!creating)setPassword(Array.from(crypto.getRandomValues(new Uint8Array(8)), n => String((n % 8) + 1)).join(""));setCreating(v=>!v);}}>{creating?"إغلاق":"زبون جديد +"}</Button>}>
+    <Card title="زبائن Flexy Mini" extra={<Button type="primary" onClick={()=>{if(!creating){setCopyCredentials("");setSavedMessage("");setPassword(Array.from(crypto.getRandomValues(new Uint8Array(8)), n => String((n % 8) + 1)).join(""));}setCreating(v=>!v);}}>{creating?"إغلاق":"زبون جديد +"}</Button>}>
       <Alert type="info" showIcon message="الجدول يعرض حسابات Flexy Mini عند تفعيل خدمة الحسابات. لا نعرض كل الماستر كأنهم زبائن مسجلون."/>
       {savedMessage&&<Alert type="success" style={{marginTop:12}} message={savedMessage}/>}
-      {copyCredentials&&<Button type="primary" style={{marginTop:10}} onClick={()=>{void navigator.clipboard.writeText(copyCredentials).then(()=>message.success("تم نسخ بيانات الدخول")).catch(()=>message.error("تعذر النسخ"));}}>نسخ بيانات الدخول</Button>}
+      {copyCredentials&&<Space wrap style={{marginTop:10}}>
+        <Button type="primary" onClick={()=>{void navigator.clipboard.writeText(copyCredentials).then(()=>message.success("تم نسخ بيانات الدخول")).catch(()=>message.error("تعذر النسخ"));}}>نسخ بيانات الدخول</Button>
+        <Button onClick={()=>void shareCredentials()}>مشاركة بيانات الدخول</Button>
+      </Space>}
       <Modal title="تعديل حساب الزبون" open={!!editing} onCancel={()=>{setEditing(null);setEditPassword("");setEditError("");}} onOk={()=>void updateAccount()} okText="حفظ التعديل" confirmLoading={editBusy} cancelText="إلغاء">
         <Form layout="vertical">
           <Form.Item label="اسم المستخدم"><Input dir="ltr" value={editUsername} onChange={e=>setEditUsername(e.target.value)}/></Form.Item>
