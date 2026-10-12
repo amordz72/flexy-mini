@@ -641,7 +641,7 @@ function Dashboard({customerToken,customerAccount,customerError,onCustomerLogout
             {key:"home",label:"الرئيسية",symbol:"⌂"},
             {key:"store",label:"البطاقات",symbol:"▤"},
             {key:"operations",label:"العمليات",symbol:"◷"}
-          ].map(item=><Button key={item.key} type="text" className={page===item.key?"service-nav-active":""} onClick={()=>setPage(item.key)}><span className="service-nav-icon">{item.symbol}</span><span>{item.label}</span></Button>)}
+          ].map(item=><Button key={item.key} type="text" className={page===item.key?"service-nav-active":""} onClick={()=>setPage(item.key)}><span className="service-nav-icon" aria-hidden="true">{item.symbol}</span><span>{item.label}</span></Button>)}
         </nav>
       </Layout>
     </Layout>
