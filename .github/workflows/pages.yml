@@ -27,7 +27,6 @@ jobs:
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
           VITE_BUILD_SHA: ${{ github.sha }}
           VITE_BUILD_RUN_ID: ${{ github.run_id }}
-          VITE_BUILD_TIME: ${{ env.VITE_BUILD_TIME }}
       - name: Redirect legacy deep links on GitHub Pages
         run: |
           cat > dist/404.html <<'EOF'
