@@ -35,14 +35,23 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   <Alert type="info" showIcon message="اتصال للقراءة فقط مع Station Connect" description="تظهر المحطات والمودمات والشرائح من النظام الموجود. لا يتم إرسال USSD أو تنفيذ شحن، ولا تُعرض أسرار الشرائح."/>
   {error&&<Alert type="error" showIcon message={error}/>}
   <Alert type="info" showIcon message="اختبار اتصال للقراءة فقط" description={checkedAt?"آخر قراءة ناجحة من السيرفر: "+dateLabel(checkedAt)+". الاتصال بالمودم نفسه غير مختبر.":"اضغط تحديث لاختبار قراءة بيانات المحطات من السيرفر؛ لا يُرسل أي أمر إلى المودم."}/>
-  <Card title="المحطات" extra={<Button loading={loading} onClick={()=>void refresh()}>اختبار الاتصال / تحديث</Button>}>
-   <Table rowKey="station_uuid" loading={loading} dataSource={stations} size="small" scroll={{x:620}} pagination={{pageSize:10}} locale={{emptyText:<Empty description="لا توجد محطات مرئية للحساب"/>}} columns={[
+  <Card title={<Space wrap>المحطات <Tag color="blue">واجهة الهاتف v2.1</Tag></Space>} extra={<Button loading={loading} onClick={()=>void refresh()}>اختبار القراءة / تحديث</Button>}>
+   {mobile ? <Space direction="vertical" size="middle" style={{width:"100%"}}>
+    {loading ? <Card loading size="small"/> : stations.length === 0 ? <Empty description="لا توجد محطات مرئية للحساب"/> : stations.map(station => <Card key={station.station_uuid} size="small" title={station.computer_name||"محطة دون اسم"} extra={<Tag color={station.status==="approved"&&online(station.last_seen_at)?"green":"orange"}>{station.status==="approved"&&online(station.last_seen_at)?"متصل":"غير متصل"}</Tag>}>
+      <Descriptions size="small" bordered column={1} items={[
+       {key:"status",label:"الاعتماد",children:station.status},
+       {key:"last",label:"آخر اتصال",children:dateLabel(station.last_seen_at)},
+       {key:"version",label:"نسخة Agent",children:station.agent_version||"—"}
+      ]}/>
+      <Button style={{marginTop:12}} block onClick={()=>void openHardware(station.station_uuid)}>عرض مودمات المحطة</Button>
+    </Card>)}
+   </Space> : <Table rowKey="station_uuid" loading={loading} dataSource={stations} size="small" scroll={{x:620}} pagination={{pageSize:10}} locale={{emptyText:<Empty description="لا توجد محطات مرئية للحساب"/>}} columns={[
     {title:"الكمبيوتر",dataIndex:"computer_name",render:(v:string|null)=>v||"غير مسمى"},
     {title:"الحالة",render:(_:unknown,r:Station)=><Space><Tag color={r.status==="approved"?"green":"default"}>{r.status}</Tag><Tag color={r.status==="approved"&&online(r.last_seen_at)?"green":"orange"}>{r.status==="approved"&&online(r.last_seen_at)?"متصل":"غير متصل"}</Tag></Space>},
     {title:"آخر اتصال",dataIndex:"last_seen_at",render:dateLabel},
     {title:"نسخة Agent",dataIndex:"agent_version",render:(v:string|null)=>v||"—"},
     {title:"المودمات",render:(_:unknown,r:Station)=><Button size="small" onClick={()=>void openHardware(r.station_uuid)}>عرض</Button>}
-   ]}/>
+   ]}/>}
   </Card>
   {selected&&<Card title="المودمات والشرائح" extra={<Button loading={hardwareLoading} onClick={()=>void openHardware(selected)}>تحديث</Button>}>
    <Typography.Text type="secondary">قراءة المحطة المحددة فقط، دون تعديل الشريحة أو رمز PIN.</Typography.Text>
