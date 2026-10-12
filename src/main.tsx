@@ -534,7 +534,7 @@ function SharedCardsStore({token}:{token?:string}){
 }
 function TableCustomerLogin(){
   const [token,setToken]=useState(()=>window.localStorage.getItem("flexy_mini_customer_token")||"");
-  const [account,setAccount]=useState<{username:string;phone?:string;party_id:number}|null>(null);
+  const [account,setAccount]=useState<{username:string;phone?:string;party_id:number;wallet?:{balance:number;debt:number;profit:number}|null}|null>(null);
   const [error,setError]=useState("");
   const [verified,setVerified]=useState(false);
   const call=async(body:Record<string,unknown>)=>{
@@ -634,7 +634,7 @@ function MovementLedger({admin}:{admin:boolean}) {
   <div style={{overflowX:"auto"}}><Table size="small" rowKey="id" dataSource={[]} pagination={{pageSize:10,showSizeChanger:true,pageSizeOptions:["10","20","50"]}} locale={{emptyText:"لا توجد تحويلات مسجلة في هذه الواجهة"}} columns={movementFields.filter(f=>fields.includes(f.key)).map(f=>({title:f.label,dataIndex:f.key,key:f.key}))}/></div>
  </Card>;
 }
-function Dashboard({customerToken,customerAccount,customerError,onCustomerLogout}:{customerToken?:string;customerAccount?:{username:string;phone?:string;party_id:number}|null;customerError?:string;onCustomerLogout?:()=>void} = {}) {
+function Dashboard({customerToken,customerAccount,customerError,onCustomerLogout}:{customerToken?:string;customerAccount?:{username:string;phone?:string;party_id:number;wallet?:{balance:number;debt:number;profit:number}|null}|null;customerError?:string;onCustomerLogout?:()=>void} = {}) {
   const isCustomer=Boolean(customerToken);
   const { mutate: logout } = useLogout();
   const validPages = new Set(["home","flexy","idoom","store","operations","cards","inventory","customers","devices","stations","members","ads","settings"]);
@@ -678,7 +678,7 @@ function Dashboard({customerToken,customerAccount,customerError,onCustomerLogout
           {page === "home" ? <>
             {client && <div style={{marginBottom:18}}><AdSystem db={client} customer={isCustomer}/></div>}
             {!isCustomer && client && <AdminWallet db={client}/>}
-            <Card style={{marginBottom:18}} title="ملخص حسابي"><Row gutter={[12,12]}>{["الرصيد","الديون","الأرباح"].map(label=><Col xs={8} key={label}><div style={{textAlign:"center"}}><Text type="secondary">{label}</Text><div><Text strong>غير متاح حاليًا</Text></div></div></Col>)}</Row></Card>
+            <Card style={{marginBottom:18}} title="ملخص حسابي"><Row gutter={[12,12]}>{(["الرصيد","الديون","الأرباح"] as const).map((label,i)=><Col xs={8} key={label}><div style={{textAlign:"center"}}><Text type="secondary">{label}</Text><div><Text strong>{isCustomer&&customerAccount?.wallet ? Number(customerAccount.wallet[([ "balance","debt","profit" ] as const)[i]]).toLocaleString("ar-DZ")+" دج" : "غير متاح حاليًا"}</Text></div></div></Col>)}</Row></Card>
 
             <Title level={4} style={{ marginBottom: 16 }}>الخدمات</Title>
             <Row gutter={[12, 12]}>
