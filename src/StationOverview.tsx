@@ -55,6 +55,9 @@ export default function StationOverview({db}:{db:SupabaseClient}){
  const [manualNumbers,setManualNumbers]=useState<Record<string,string>>({});
  const [manualBusy,setManualBusy]=useState<string|null>(null);
  const [rearmBusy,setRearmBusy]=useState<string|null>(null);
+ const [samaConfigSim,setSamaConfigSim]=useState<string|null>(null);
+ const [servicePin,setServicePin]=useState("");
+ const [samaConfigBusy,setSamaConfigBusy]=useState(false);
  const loadOoredooGuards=useCallback(async()=>{
   const {data,error}=await db.rpc("station_connect_admin_ooredoo_lookup_guard");
   if(error){setError("تعذر قراءة حالة حماية أوريدو: "+error.message);return;}
@@ -141,6 +144,34 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   }catch{message.error("تعذر الاتصال بخدمة اكتشاف رقم الشريحة");}
   finally{setPhoneBusy(null);}
  };
+ const configureSama=async()=>{
+  if(!samaConfigSim||!selected)return;
+  if(!/^[0-9]{4,8}$/.test(servicePin)){message.warning("أدخل PIN الخدمة من 4 إلى 8 أرقام");return;}
+  const sim=(hardware[selected]||[]).find(item=>item.sim_uuid===samaConfigSim);
+  if(!sim||sim.sim_type!=="unknown"||!sim.imsi?.startsWith("60301")||!online(sim.sim_last_seen_at)||!online(sim.modem_last_seen_at)){
+   message.warning("الشريحة لم تعد ظاهرة حديثًا كموبيليس؛ حدّث بيانات المودم قبل تجهيزها");return;
+  }
+  const station=stations.find(item=>item.station_uuid===selected);
+  if(!station||station.status!=="approved"||!online(station.last_seen_at)){
+   message.warning("اتصال المحطة غير حديث؛ حدّث حالة المحطة أولًا");return;
+  }
+  setSamaConfigBusy(true);
+  try{
+   const {error}=await db.rpc("station_connect_admin_update_sim",{
+    p_sim_uuid:sim.sim_uuid,p_sim_type:"mobilis-sama",p_service_pin:servicePin
+   });
+   if(error)throw error;
+   setHardware(old=>Object.fromEntries(Object.entries(old).map(([uuid,items])=>[uuid,items.map(item=>item.sim_uuid===samaConfigSim?{...item,sim_type:"mobilis-sama",has_pin:true}:item)])));
+   setSamaConfigSim(null);setServicePin("");
+   message.success("تم حفظ نوع Sama وPIN الخدمة. لم يُرسل أي استعلام USSD.");
+  }catch(cause){message.error("تعذر تجهيز Sama: "+(cause instanceof Error?cause.message:String(cause)));}
+  finally{setSamaConfigBusy(false);}
+ };
+ const typeAction=(sim:Hardware)=><Space direction="vertical" size={4}>
+  <span>{sim.sim_type||"غير محدد"}</span>
+  {sim.sim_uuid&&sim.sim_type==="unknown"&&sim.imsi?.startsWith("60301")&&online(sim.sim_last_seen_at)&&online(sim.modem_last_seen_at)&&
+   <Button size="small" onClick={()=>{setServicePin("");setSamaConfigSim(sim.sim_uuid);}}>تجهيز Mobilis Sama</Button>}
+ </Space>;
  const phoneAction=(sim:Hardware)=>{
   if(!sim.sim_uuid)return <Typography.Text type="secondary">الشريحة غير محددة</Typography.Text>;
   const attempt=phoneAttempts[sim.sim_uuid];
@@ -162,6 +193,9 @@ export default function StationOverview({db}:{db:SupabaseClient}){
    </Space.Compact>
   </Space>;
  };
+ const chosenStation=stations.find(station=>station.station_uuid===selected);
+ const samaReady=Boolean(chosenStation?.status==="approved"&&online(chosenStation.last_seen_at)&&
+  selected&&(hardware[selected]||[]).some(sim=>sim.sim_type==="mobilis-sama"&&sim.has_pin&&online(sim.sim_last_seen_at)&&online(sim.modem_last_seen_at)));
  const openHardware=async(uuid:string)=>{
   setSelected(uuid);setHardwareLoading(true);setError("");
   const {data,error}=await db.rpc("station_connect_admin_hardware",{p_station_uuid:uuid});
@@ -194,18 +228,38 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   </Card>
   {selected&&<Card title="المودمات والشرائح" extra={<Button loading={hardwareLoading} onClick={()=>void openHardware(selected)}>تحديث</Button>}>
    <Typography.Text type="secondary">قراءة بيانات المحطة، ويمكن للإدارة إرسال طلب معرفة الرقم فقط للشريحة المتوافقة، دون تعديل PIN أو تنفيذ شحن.</Typography.Text>
-   {mobile?<Space direction="vertical" style={{width:"100%"}} size="middle">{(hardware[selected]||[]).length===0&&!hardwareLoading?<Empty description="لا توجد مودمات مسجلة"/>:(hardware[selected]||[]).map(r=><Card key={r.modem_uuid+":"+(r.sim_uuid||"none")} size="small" title={<Space wrap><span>{r.device_name||"مودم"}</span><Tag color={online(r.modem_last_seen_at)?"green":"orange"}>{online(r.modem_last_seen_at)?"رُصد حديثًا":"لا يوجد رصد حديث"}</Tag></Space>}><Descriptions size="small" column={1} bordered items={[{key:"ip",label:"IP محلي",children:<span dir="ltr">{r.modem_ip||"—"}</span>},{key:"sim",label:"الشريحة",children:<span dir="ltr">{r.msisdn||"غير معروف"}</span>},{key:"operator",label:"المتعامل",children:operatorNames[operatorOf(r)]},{key:"lookup",label:"معرفة الرقم",children:phoneAction(r)},{key:"type",label:"النوع",children:r.sim_type||"غير محدد"},{key:"pin",label:"PIN",children:r.has_pin?"مسجل بأمان":"غير مسجل"},{key:"last",label:"آخر ظهور",children:dateLabel(r.modem_last_seen_at)}]}/></Card>)}</Space>:<Table rowKey={r=>r.modem_uuid+":"+(r.sim_uuid||"none")} loading={hardwareLoading} dataSource={hardware[selected]||[]} size="small" scroll={{x:720}} pagination={{pageSize:10}} columns={[
+   {mobile?<Space direction="vertical" style={{width:"100%"}} size="middle">{(hardware[selected]||[]).length===0&&!hardwareLoading?<Empty description="لا توجد مودمات مسجلة"/>:(hardware[selected]||[]).map(r=><Card key={r.modem_uuid+":"+(r.sim_uuid||"none")} size="small" title={<Space wrap><span>{r.device_name||"مودم"}</span><Tag color={online(r.modem_last_seen_at)?"green":"orange"}>{online(r.modem_last_seen_at)?"رُصد حديثًا":"لا يوجد رصد حديث"}</Tag></Space>}><Descriptions size="small" column={1} bordered items={[{key:"ip",label:"IP محلي",children:<span dir="ltr">{r.modem_ip||"—"}</span>},{key:"sim",label:"الشريحة",children:<span dir="ltr">{r.msisdn||"غير معروف"}</span>},{key:"operator",label:"المتعامل",children:operatorNames[operatorOf(r)]},{key:"lookup",label:"معرفة الرقم",children:phoneAction(r)},{key:"type",label:"النوع",children:typeAction(r)},{key:"pin",label:"PIN",children:r.has_pin?"مسجل بأمان":"غير مسجل"},{key:"last",label:"آخر ظهور",children:dateLabel(r.modem_last_seen_at)}]}/></Card>)}</Space>:<Table rowKey={r=>r.modem_uuid+":"+(r.sim_uuid||"none")} loading={hardwareLoading} dataSource={hardware[selected]||[]} size="small" scroll={{x:720}} pagination={{pageSize:10}} columns={[
     {title:"المودم",render:(_:unknown,r:Hardware)=>r.device_name||r.modem_ip||"—"},
     {title:"IP محلي",dataIndex:"modem_ip",render:(v:string|null)=><span dir="ltr">{v||"—"}</span>},
     {title:"الشريحة",dataIndex:"msisdn",render:(v:string|null)=><span dir="ltr">{v||"غير معروف"}</span>},
     {title:"المتعامل",render:(_:unknown,r:Hardware)=>operatorNames[operatorOf(r)]},
     {title:"معرفة الرقم",render:(_:unknown,r:Hardware)=>phoneAction(r)},
-    {title:"النوع",dataIndex:"sim_type",render:(v:string|null)=>v||"غير محدد"},
+    {title:"النوع",render:(_:unknown,r:Hardware)=>typeAction(r)},
     {title:"PIN",dataIndex:"has_pin",render:(v:boolean)=><Tag>{v?"مسجل بأمان":"غير مسجل"}</Tag>},
     {title:"آخر ظهور",dataIndex:"modem_last_seen_at",render:dateLabel},
     {title:"الاتصال",render:(_:unknown,r:Hardware)=><Tag color={online(r.modem_last_seen_at)?"green":"orange"}>{online(r.modem_last_seen_at)?"متصل حديثًا":"غير متصل"}</Tag>}
    ]}/>}
   </Card>}
-  <SamaOfferDiscoveries db={db} stationUuid={selected}/>
+  <Modal
+   title="تجهيز شريحة Mobilis Sama"
+   open={Boolean(samaConfigSim)}
+   onCancel={()=>{if(!samaConfigBusy){setSamaConfigSim(null);setServicePin("");}}}
+   onOk={()=>void configureSama()}
+   okText="تأكيد النوع وحفظ PIN"
+   okButtonProps={{disabled:!(/^[0-9]{4,8}$/.test(servicePin))}}
+   confirmLoading={samaConfigBusy}
+   cancelText="إلغاء"
+   maskClosable={!samaConfigBusy}
+   closable={!samaConfigBusy}
+  >
+   <Alert type="warning" showIcon message="تأكيد هوية الشريحة" description="تحقق أن الشريحة المتصلة حاليًا هي Mobilis Sama فعلًا. هذا الحفظ يحدّث أيضًا سجل الشرائح المشترك مع MyTool. لا يتم إرسال USSD ولا تنفيذ شحن." style={{marginBottom:12}}/>
+   <Typography.Text>PIN خدمة Sama (4 إلى 8 أرقام)</Typography.Text>
+   <Input.Password
+    style={{marginTop:8}} inputMode="numeric" autoComplete="new-password" maxLength={8}
+    value={servicePin} onChange={event=>setServicePin(event.target.value.replace(/\D/g,""))}
+    placeholder="PIN الخدمة — لا يظهر في الشاشة"
+   />
+  </Modal>
+  <SamaOfferDiscoveries db={db} stationUuid={selected} samaReady={samaReady}/>
  </Space>;
 }
