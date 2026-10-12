@@ -219,6 +219,7 @@ function MasterCustomerLookup() {
   const [name,setName]=useState("");
   const [phone,setPhone]=useState("");
   const [username,setUsername]=useState("");
+  const [email,setEmail]=useState("");
   const [password,setPassword]=useState("");
   const [saving,setSaving]=useState(false);
   const [savedMessage,setSavedMessage]=useState("");
@@ -253,7 +254,7 @@ function MasterCustomerLookup() {
     const generatedPassword = !password;
     const effectivePassword = password || Array.from(crypto.getRandomValues(new Uint8Array(8)), n => String((n % 8) + 1)).join("");
     setSaving(true);setError("");setSavedMessage("");
-    const {data,error}=await client.functions.invoke("flexy-mini-customers",{body:{action:"create",party_id:selected,username:username.trim(),phone,password:effectivePassword}});
+    const {data,error}=await client.functions.invoke("flexy-mini-customers",{body:{action:"create",party_id:selected,username:username.trim(),phone,email:email.trim(),password:effectivePassword}});
     setSaving(false);
     if(error||!data?.customer){
       let details=typeof data?.error==="string"?data.error:"";
@@ -281,6 +282,7 @@ function MasterCustomerLookup() {
         <Form.Item label="اسم الزبون"><Input value={name} onChange={e=>{setName(e.target.value);if(!selected)setQuery(e.target.value);}} placeholder="الاسم الكامل"/></Form.Item>
         <Form.Item label="رقم الهاتف"><Input dir="ltr" value={phone} onChange={e=>{const v=e.target.value.replace(/[^0-9+]/g,"");setPhone(v);}} placeholder="0XXXXXXXXX"/></Form.Item>
         <Form.Item label="اسم المستخدم"><Input dir="ltr" value={username} onChange={e=>setUsername(e.target.value)} placeholder="username"/></Form.Item>
+        <Form.Item label="البريد الإلكتروني (اختياري)"><Input dir="ltr" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="example@email.com"/></Form.Item>
         <Form.Item label="كلمة المرور (مولّدة تلقائيًا — يمكنك تعديلها)"><Input.Password value={password} onChange={e=>setPassword(e.target.value)} autoComplete="new-password"/></Form.Item>
         <Form.Item label="بحث الماستر (الاسم أو الهاتف أو حساب المنصة)"><Input value={query} onChange={e=>{setQuery(e.target.value);setSelected(null);setMasterRecord(null);}} placeholder="اسم أو هاتف أو حساب منصة" allowClear/></Form.Item>
       </Form>
