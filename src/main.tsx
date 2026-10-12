@@ -479,10 +479,11 @@ function MiniWalletAdmin(){
  const [rows,setRows]=useState<MiniWalletRow[]>([]),[busy,setBusy]=useState(false),[error,setError]=useState("");
  const [selected,setSelected]=useState<MiniWalletRow|null>(null),[history,setHistory]=useState<any[]>([]);
  const [kind,setKind]=useState("deposit"),[amount,setAmount]=useState(""),[note,setNote]=useState("");
+ const [requestId,setRequestId]=useState(()=>crypto.randomUUID());
  const load=async()=>{setBusy(true);try{const {data,error}=await customerAdminRequest({action:"wallets"});if(error||!data?.wallets)throw new Error(data?.error||"تعذر تحميل المحافظ");setRows(data.wallets);setError("");}catch(e){setError(String(e));}finally{setBusy(false);}};
  useEffect(()=>{void load();},[]);
  const show=async(r:MiniWalletRow)=>{setSelected(r);setHistory([]);const {data,error}=await customerAdminRequest({action:"wallet_history",customer_id:r.customer_id});if(error)setError("تعذر تحميل السجل");else setHistory(data?.entries||[]);};
- const post=async()=>{if(!selected)return;const value=Number(amount);if(!Number.isFinite(value)||value<=0||Math.round(value*100)!==value*100){message.error("أدخل مبلغًا صحيحًا");return;}setBusy(true);try{const {data,error}=await customerAdminRequest({action:"wallet_post",customer_id:selected.customer_id,kind,amount:value,note});if(error||!data?.wallet)throw new Error(data?.error||"فشلت الحركة");message.success("تم تسجيل الحركة");setAmount("");setNote("");await load();await show(selected);}catch(e){message.error(String(e));}finally{setBusy(false);}};
+ const post=async()=>{if(!selected)return;const value=Number(amount);if(!Number.isFinite(value)||value<=0||Math.round(value*100)!==value*100){message.error("أدخل مبلغًا صحيحًا");return;}setBusy(true);try{const {data,error}=await customerAdminRequest({action:"wallet_post",customer_id:selected.customer_id,kind,amount:value,note,request_id:requestId});if(error||!data?.wallet)throw new Error(data?.error||"فشلت الحركة");message.success("تم تسجيل الحركة");setAmount("");setNote("");setRequestId(crypto.randomUUID());await load();await show(selected);}catch(e){message.error(String(e));}finally{setBusy(false);}};
  const money=(n:unknown)=>Number(n||0).toLocaleString("ar-DZ")+" دج";
  return <Card title="محافظ زبائن Flexy Mini" extra={<Button loading={busy} onClick={()=>void load()}>تحديث</Button>}>
  {error&&<Alert type="error" message={error} style={{marginBottom:12}}/>}
