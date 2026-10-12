@@ -526,9 +526,6 @@ function CustomerCardsCatalog({token}:{token:string}){
   </Card>;
 }
 function TableCustomerLogin(){
-  const [identifier,setIdentifier]=useState("");
-  const [blocked,setBlocked]=useState(false);
-  const [password,setPassword]=useState("");
   const [token,setToken]=useState(()=>window.localStorage.getItem("flexy_mini_customer_token")||"");
   const [account,setAccount]=useState<{username:string;phone?:string;party_id:number}|null>(null);
   const [error,setError]=useState("");
@@ -542,18 +539,20 @@ function TableCustomerLogin(){
     check();const timer=window.setInterval(check,15000);window.addEventListener("focus",check);
     return()=>{active=false;clearInterval(timer);window.removeEventListener("focus",check);};
   },[token]);
-  const login=async()=>{setBusy(true);setError("");try{const r=await call({action:"login",identifier,password});if(!r.ok){setBlocked(r.data.code==="DEVICE_PENDING"||r.data.code==="DEVICE_REVOKED");setError(r.data.error||"بيانات الدخول غير صحيحة");return;}window.localStorage.setItem("flexy_mini_customer_token",r.data.token);setToken(r.data.token);setPassword("");}catch{setError("تعذر الاتصال بالخادم");}finally{setBusy(false);}};
-  const logout=async()=>{try{await call({action:"logout",token});}catch{}window.localStorage.removeItem("flexy_mini_customer_token");setToken("");setAccount(null);};
-  return <ConfigProvider direction="rtl"><div style={{maxWidth:460,margin:"60px auto",padding:16}}>
-    <Card title="Flexy Mini — دخول الزبون">
-      {account?<Space direction="vertical" style={{width:"100%"}}><Alert type="success" message={"مرحبًا "+account.username}/><Text>الهاتف: <span dir="ltr">{account.phone}</span></Text><CustomerCardsCatalog token={token}/><Button onClick={()=>void logout()}>تسجيل الخروج</Button></Space>:<Space direction="vertical" style={{width:"100%"}}>
-        <Input value={identifier} onChange={e=>setIdentifier(e.target.value)} placeholder="اسم المستخدم أو رقم الهاتف" dir="ltr"/>
-        <Input.Password value={password} onChange={e=>setPassword(e.target.value)} placeholder="كلمة المرور"/>
+  const logout=async()=>{try{await call({action:"logout",token});}catch{}window.localStorage.removeItem("flexy_mini_customer_token");setToken("");setAccount(null);window.location.hash="#/login";};
+  if(!token){window.location.hash="#/login";return null;}
+  return <ConfigProvider direction="rtl"><div style={{maxWidth:680,margin:"36px auto",padding:16}}>
+    <Card title="⚡ فليكسي ميني — حساب الزبون">
+      {account?<Space direction="vertical" style={{width:"100%"}}>
+        <Alert type="success" message={"مرحبًا "+account.username}/>
+        {account.phone&&<Text>الهاتف: <span dir="ltr">{account.phone}</span></Text>}
+        <CustomerCardsCatalog token={token}/>
+        <Button onClick={()=>void logout()}>تسجيل الخروج</Button>
+      </Space>:<Space direction="vertical" style={{width:"100%"}}>
+        {!error&&<Text type="secondary">جاري التحقق من الجلسة...</Text>}
         {error&&<Alert type="error" message={error}/>}
-        {blocked&&<><Button block href={supportWhatsApp} target="_blank" rel="noopener noreferrer">طلب الدعم عبر واتساب</Button><Text type="secondary">دعم: <span dir="ltr">{supportPhone}</span></Text></>}
-        <Button type="primary" block loading={busy} onClick={()=>void login()}>دخول</Button>
+        <Button onClick={()=>{window.localStorage.removeItem("flexy_mini_customer_token");setToken("");window.location.hash="#/login";}}>العودة إلى تسجيل الدخول</Button>
       </Space>}
-      <a href="#/login">دخول الإدارة</a>
     </Card>
   </div></ConfigProvider>;
 }
