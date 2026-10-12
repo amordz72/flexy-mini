@@ -531,7 +531,7 @@ function TableCustomerLogin(){
   const [account,setAccount]=useState<{username:string;phone?:string;party_id:number}|null>(null);
   const [error,setError]=useState("");
   const call=async(body:Record<string,unknown>)=>{
-    const response=await fetch(url+"/functions/v1/flexy-mini-customers",{method:"POST",headers:{"Content-Type":"application/json",apikey:key},body:JSON.stringify(body)});
+    const response=await fetch(url+"/functions/v1/flexy-mini-customers",{method:"POST",headers:{"Content-Type":"application/json",apikey:key},body:JSON.stringify({...body,device_secret:window.localStorage.getItem("flexy_mini_device_secret")||""})});
     return {ok:response.ok,data:await response.json()};
   };
   useEffect(()=>{if(!token)return;let active=true;
