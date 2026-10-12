@@ -75,10 +75,8 @@ function LoginPage() {
   const { mutate: adminLogin, isPending } = useLogin();
   const [loginError,setLoginError]=useState("");
   const [customerBusy,setCustomerBusy]=useState(false);
-  const [revokedLogin,setRevokedLogin]=useState<{identifier:string;password:string}|null>(null);
   const submit=async(values:{identifier:string;password:string},retryRevoked=false)=>{
     setLoginError("");
-    if(!retryRevoked)setRevokedLogin(null);
     const identifier=values.identifier.trim();
     if(identifier.includes("@")){adminLogin(values);return;}
     setCustomerBusy(true);
@@ -88,7 +86,11 @@ function LoginPage() {
         body:JSON.stringify({action:"login",identifier,password:values.password,device_secret:(()=>{const k="flexy_mini_device_secret";let v=retryRevoked?"":window.localStorage.getItem(k);if(!v){v=Array.from(crypto.getRandomValues(new Uint8Array(32)),x=>x.toString(16).padStart(2,"0")).join("");window.localStorage.setItem(k,v);}return v;})(),device_label:"متصفح الزبون"})
       });
       const data=await response.json().catch(()=>({}));
-      if(!response.ok||!data.token){setLoginError(data.error||"تعذر تسجيل الدخول. تحقق من بيانات الحساب.");if(!retryRevoked&&(data.code==="DEVICE_REVOKED"||(/إلغاء اعتماد هذا الجهاز|اعتماد هذا الجهاز ملغى|الجهاز ملغى/.test(String(data.error||"")))))setRevokedLogin(values);return;}
+      if(!response.ok||!data.token){
+        if(!retryRevoked&&(data.code==="DEVICE_REVOKED"||(/إلغاء اعتماد هذا الجهاز|اعتماد هذا الجهاز ملغى|الجهاز ملغى/.test(String(data.error||""))))){await submit(values,true);return;}
+        if(data.code==="DEVICE_PENDING"||(/تم تسجيل طلب اعتماد الجهاز|ينتظر الاعتماد/.test(String(data.error||"")))){setLoginError("تم إرسال طلب اعتماد جهازك إلى الإدارة. انتظر الموافقة ثم اضغط دخول مجددًا. لا تحذف التطبيق ولا تعِد التسجيل.");return;}
+        setLoginError(data.error||"تعذر تسجيل الدخول. تحقق من بيانات الحساب.");return;
+      }
       window.localStorage.setItem("flexy_mini_customer_token",data.token);
       window.location.hash="#/customer-login";
     }catch{setLoginError("تعذر الاتصال بخدمة دخول الزبائن. تحقق من الشبكة وحاول مجددًا.");}
@@ -105,7 +107,6 @@ function LoginPage() {
             <Input.Password autoComplete="current-password" size="large" dir="ltr" />
           </Form.Item>
           {loginError&&<Alert type="error" showIcon style={{marginBottom:14}} message={loginError}/>}
-          {revokedLogin&&<Button block size="large" disabled={customerBusy} onClick={()=>void submit(revokedLogin,true)} style={{marginBottom:14}}>طلب إعادة اعتماد هذا الجهاز</Button>}
           <Button htmlType="submit" type="primary" size="large" loading={isPending||customerBusy} block>دخول</Button>
         </Form>
       </Card>
