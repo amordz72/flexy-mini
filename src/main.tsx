@@ -126,14 +126,16 @@ const items = [
   {key:"cards",icon:<DatabaseOutlined/>,label:"إدارة البطاقات والأصناف"},
   {key:"inventory",icon:<PlusOutlined/>,label:"أكواد البطاقات"},
   {key:"customers",icon:<UserOutlined/>,label:"الزبائن"},
-  {key:"devices",icon:<SafetyCertificateOutlined/>,label:"الأجهزة الموثوقة"},
+  {key:"device-requests",icon:<SafetyCertificateOutlined/>,label:"طلبات اعتماد الأجهزة"},
+  {key:"devices",icon:<DesktopOutlined/>,label:"الأجهزة المعتمدة"},
+  {key:"device-history",icon:<HistoryOutlined/>,label:"سجل الأجهزة"},
   {key:"stations",icon:<DesktopOutlined/>,label:"المحطات والشرائح"},
   {key:"members",icon:<TeamOutlined/>,label:"المستخدمون والصلاحيات"},
   {key:"ads",icon:<NotificationOutlined/>,label:"إدارة الإعلانات"},
   {key:"settings",icon:<SettingOutlined/>,label:"الإعدادات"}
  ]}
 ];
-const names:Record<string,string>={devices:"الأجهزة الموثوقة وطلبات الاعتماد",home:"الرئيسية",flexy:"الفليكسي",idoom:"تعبئة إيدوم",store:"متجر البطاقات",operations:"العمليات",cards:"إدارة البطاقات والأصناف",inventory:"إضافة أكواد البطاقات",customers:"إدارة الزبائن",stations:"المحطات والشرائح",members:"المستخدمون والصلاحيات",ads:"إدارة الإعلانات",settings:"الإعدادات"};
+const names:Record<string,string>={"device-requests":"طلبات اعتماد الأجهزة",devices:"الأجهزة المعتمدة","device-history":"سجل الأجهزة",home:"الرئيسية",flexy:"الفليكسي",idoom:"تعبئة إيدوم",store:"متجر البطاقات",operations:"العمليات",cards:"إدارة البطاقات والأصناف",inventory:"إضافة أكواد البطاقات",customers:"إدارة الزبائن",stations:"المحطات والشرائح",members:"المستخدمون والصلاحيات",ads:"إدارة الإعلانات",settings:"الإعدادات"};
 const sample = [
   { key: "1", name: "موبيليس", kind: "فليكسي", state: "واجهة تجريبية" },
   { key: "2", name: "بطاقات موبيليس", kind: "بطاقات", state: "غير مربوط" },
@@ -472,19 +474,17 @@ function ConnectionDiagnostics() {
   </Card>;
 }
 type TrustedDevice={id:number;customer_id:number;device_label:string;approved_at:string|null;revoked_at:string|null;expires_at:string|null;created_at:string;last_used_at:string|null;flexy_mini_customer_accounts:{username:string;phone:string;money_party_directory:{display_name:string}}};
-function TrustedDevices(){
+function TrustedDevices({view}:{view:"pending"|"approved"|"history"}){
   const [kinds,setKinds]=useState<Record<number,string>>({});
-  const [view,setView]=useState<"pending"|"approved"|"history"|"all">("pending");
   const [devices,setDevices]=useState<TrustedDevice[]>([]),[error,setError]=useState(""),[busy,setBusy]=useState(false);
   const load=async()=>{setBusy(true);try{const {data,error}=await customerAdminRequest({action:"devices"});if(error||!data?.devices)throw new Error(data?.error||"تعذر تحميل الأجهزة");setDevices(data.devices);}catch(e){setError(e instanceof Error?e.message:"تعذر الاتصال");}finally{setBusy(false);}};
   useEffect(()=>{void load();},[]);
   const change=async(id:number,action:string)=>{setBusy(true);setError("");try{const {data,error}=await customerAdminRequest({action,device_id:id,device_kind:kinds[id]||"desktop"});if(error){let message=data?.error;try{if(error.context)message=(await error.context.clone().json()).error;}catch{}throw new Error(message||error.message||"تعذر تحديث الجهاز");}await load();}catch(e){setError(e instanceof Error?e.message:"تعذر الاتصال");}finally{setBusy(false);}};
   const state=(d:TrustedDevice)=>d.revoked_at?"ملغى":!d.approved_at?"بانتظار الاعتماد":new Date(d.expires_at||0).getTime()<=Date.now()?"منتهي":"معتمد";
-  const visibleDevices=devices.filter(d=>view==="all"||(view==="pending"?state(d)==="بانتظار الاعتماد":view==="approved"?state(d)==="معتمد":state(d)==="ملغى"||state(d)==="منتهي"));
+  const visibleDevices=devices.filter(d=>(view==="pending"?state(d)==="بانتظار الاعتماد":view==="approved"?state(d)==="معتمد":state(d)==="ملغى"||state(d)==="منتهي"));
   return <Card title="الأجهزة الموثوقة" extra={<Button loading={busy} onClick={()=>void load()}>تحديث</Button>}>
     <Alert type="info" message="جهازان كحد أقصى لكل زبون. اعتماد الكمبيوتر 7 أيام والهاتف 30 يومًا، وإلغاء الاعتماد يبطل كل جلسات الجهاز." style={{marginBottom:12}}/>
     {error&&<Alert type="error" message={error} style={{marginBottom:12}}/>}
-    <Space wrap style={{marginBottom:16}}><Button type={view==="pending"?"primary":"default"} onClick={()=>setView("pending")}>طلبات الاعتماد ({devices.filter(d=>state(d)==="بانتظار الاعتماد").length})</Button><Button type={view==="approved"?"primary":"default"} onClick={()=>setView("approved")}>المعتمدة ({devices.filter(d=>state(d)==="معتمد").length})</Button><Button type={view==="history"?"primary":"default"} onClick={()=>setView("history")}>السجل ({devices.filter(d=>["ملغى","منتهي"].includes(state(d))).length})</Button><Button type={view==="all"?"primary":"default"} onClick={()=>setView("all")}>الكل</Button></Space>
     <Table rowKey="id" loading={busy} dataSource={visibleDevices} pagination={{pageSize:10}} scroll={{x:850}} columns={[
       {title:"الزبون",render:(_,d)=>d.flexy_mini_customer_accounts?.money_party_directory?.display_name||d.flexy_mini_customer_accounts?.username},
       {title:"المستخدم",render:(_,d)=>d.flexy_mini_customer_accounts?.username},
@@ -633,7 +633,7 @@ function MovementLedger({admin}:{admin:boolean}) {
 function Dashboard({customerToken,customerAccount,customerError,onCustomerLogout}:{customerToken?:string;customerAccount?:{username:string;phone?:string;party_id:number}|null;customerError?:string;onCustomerLogout?:()=>void} = {}) {
   const isCustomer=Boolean(customerToken);
   const { mutate: logout } = useLogout();
-  const validPages = new Set(["home","flexy","idoom","store","operations","cards","inventory","customers","devices","stations","members","ads","settings"]);
+  const validPages = new Set(["home","flexy","idoom","store","operations","cards","inventory","customers","device-requests","devices","device-history","stations","members","ads","settings"]);
   const readPage = () => { const value = new URLSearchParams(window.location.hash.split("?")[1] || "").get("page"); return value && validPages.has(value) ? value : "home"; };
   const [page, setPageState] = useState(readPage);
   const setPage = (next: string) => {
@@ -684,7 +684,7 @@ function Dashboard({customerToken,customerAccount,customerError,onCustomerLogout
                 { title: "بطاقات رقمية", subtitle: "ألعاب، اتصالات وبرامج", color: "#625ee8", target: "store", symbol: "AppstoreOutlined" }
               ].map(service => <Col xs={24} md={8} key={service.title}><Card hoverable onClick={() => setPage(service.target)} style={{background:service.color,borderColor:service.color}}><Space direction="vertical" size="middle"><Space align="center"><span style={{color:"#fff"}}>{service.symbol==="PhoneOutlined"?<PhoneOutlined/>:service.symbol==="WifiOutlined"?<WifiOutlined/>:<AppstoreOutlined/>}</span><Typography.Text strong style={{color:"#fff"}}>{service.title}</Typography.Text></Space><Typography.Text style={{color:"#fff"}}>{service.subtitle}</Typography.Text></Space></Card></Col>)}
             </Row>
-          </> : isCustomer ? (page==="store"||page==="cards" ? <SharedCardsStore token={customerToken!}/> : page==="operations" ? <MovementLedger admin={false}/> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز"/></Card>) : page === "store" ? <SharedCardsStore/> : page === "ads" && client ? <AdSystem db={client} admin /> : page === "settings" ? <ConnectionDiagnostics /> : page === "devices" ? <TrustedDevices /> : page === "customers" ? <MasterCustomerLookup /> : page === "members" ? <><MiniMembers />{client&&<CreditAdmin db={client}/>}</> : page === "cards" ? <Space direction="vertical" size="large" style={{width:"100%"}}><SharedCardsStore/><CardsCatalog /></Space> : page === "operations" ? <MovementLedger admin={!isCustomer}/> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز" /></Card>}
+          </> : isCustomer ? (page==="store"||page==="cards" ? <SharedCardsStore token={customerToken!}/> : page==="operations" ? <MovementLedger admin={false}/> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز"/></Card>) : page === "store" ? <SharedCardsStore/> : page === "ads" && client ? <AdSystem db={client} admin /> : page === "settings" ? <ConnectionDiagnostics /> : page === "device-requests" ? <TrustedDevices view="pending"/> : page === "devices" ? <TrustedDevices view="approved"/> : page === "device-history" ? <TrustedDevices view="history"/> : page === "customers" ? <MasterCustomerLookup /> : page === "members" ? <><MiniMembers />{client&&<CreditAdmin db={client}/>}</> : page === "cards" ? <Space direction="vertical" size="large" style={{width:"100%"}}><SharedCardsStore/><CardsCatalog /></Space> : page === "operations" ? <MovementLedger admin={!isCustomer}/> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز" /></Card>}
           <div className="app-footer">Flexy Mini · Refine + Ant Design · عرض تجريبي فقط</div>
         </Content>
         <nav className="bottom-service-nav" aria-label="خدمات الموقع" dir="rtl">
