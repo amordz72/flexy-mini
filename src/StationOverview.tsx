@@ -27,6 +27,12 @@ const phoneStateLabel=(attempt:PhoneAttempt|undefined)=>{
 };
 const online=(date:string|null)=>Boolean(date&&Date.now()-new Date(date).getTime()<90000);
 const dateLabel=(value:string|null)=>value?new Date(value).toLocaleString("ar-DZ"):"—";
+const agentSupportsServiceCode=(version:string|null)=>{
+ const match=String(version||"").match(/^(\\d+)\\.(\\d+)\\.(\\d+)/);
+ if(!match)return false;
+ const [major,minor,patch]=match.slice(1).map(Number);
+ return major>0||(minor>4&&major===0)||(major===0&&minor===4&&patch>=11);
+};
 export default function StationOverview({db}:{db:SupabaseClient}){
  const mobile=!Grid.useBreakpoint().sm;
  const [stations,setStations]=useState<Station[]>([]);
@@ -60,7 +66,11 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   if(!sim.sim_uuid||sim.msisdn)return;
   const operator=operatorOf(sim);
   if(operator==="unknown"){message.warning("المتعامل غير معروف؛ يجب اكتشاف IMSI أولًا. لن نرسل كودًا عشوائيًا.");return;}
-  if(operator==="ooredoo"){message.warning("أوريدو: كود PIN الخاص بالاستعلام لم يُتحقق منه ولا يوجد PIN مسجل. تم منع أي إرسال قد ينفذ شحنًا.");return;}
+  if(operator==="ooredoo"){message.warning("أوريدو: صيغة *200*PIN# مسجلة للمراجعة، لكنها قد تنفذ شحنًا إذا كان PIN كود بطاقة. لن نرسلها قبل تأكيد نوع PIN.");return;}
+  const agent=stations.find(station=>station.station_uuid===selected);
+  if(operator==="djezzy"&&!agentSupportsServiceCode(agent?.agent_version||null)){
+   message.warning("جيزي 99 تحتاج Station Agent 0.4.11 أو أحدث. النسخة الحالية: "+(agent?.agent_version||"غير معروفة"));return;
+  }
   setPhoneBusy(sim.sim_uuid);
   try{
    const {data,error}=await db.rpc("station_connect_admin_retry_sim_phone_discovery",{p_sim_uuid:sim.sim_uuid});
@@ -81,8 +91,9 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   return <Space direction="vertical" size={4}>
    <Tag color={attempt?.status==="success"?"green":attempt?.status==="running"?"blue":"orange"}>{state}</Tag>
    {attempt?.result_code&&<Typography.Text type="secondary" style={{fontSize:11}}>{attempt.result_code}</Typography.Text>}
-   <Button size="small" loading={phoneBusy===sim.sim_uuid} disabled={hardwareLoading||operator==="unknown"||operator==="ooredoo"} onClick={()=>void discoverPhone(sim)}>معرفة الرقم تلقائيًا</Button>
-   {operator==="ooredoo"&&<Typography.Text type="secondary" style={{fontSize:11}}>بانتظار توثيق طريقة PIN الآمنة</Typography.Text>}
+   <Button size="small" loading={phoneBusy===sim.sim_uuid} disabled={hardwareLoading||operator==="unknown"||operator==="ooredoo"||(operator==="djezzy"&&!agentSupportsServiceCode(stations.find(station=>station.station_uuid===selected)?.agent_version||null))} onClick={()=>void discoverPhone(sim)}>معرفة الرقم تلقائيًا</Button>
+   {operator==="ooredoo"&&<Typography.Text type="secondary" style={{fontSize:11}}>كود *200*PIN# غير مفعّل حتى نحدد معنى PIN</Typography.Text>}
+   {operator==="djezzy"&&!agentSupportsServiceCode(stations.find(station=>station.station_uuid===selected)?.agent_version||null)&&<Typography.Text type="secondary" style={{fontSize:11}}>جيزي 99 تحتاج Agent 0.4.11+</Typography.Text>}
   </Space>;
  };
  const openHardware=async(uuid:string)=>{
@@ -93,9 +104,9 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   setHardware(previous=>({...previous,[uuid]:(data||[]) as Hardware[]}));setCheckedAt(new Date().toISOString());await loadPhoneAttempts();
  };
  return <Space direction="vertical" size="middle" style={{width:"100%"}}>
-  <Alert type="info" showIcon message="اتصال للقراءة فقط مع Station Connect" description="تظهر المحطات والمودمات والشرائح من النظام الموجود. لا يتم إرسال USSD أو تنفيذ شحن، ولا تُعرض أسرار الشرائح."/>
+  <Alert type="info" showIcon message="Station Connect" description="عرض المحطات والشرائح للقراءة؛ زر «معرفة الرقم تلقائيًا» فقط يرسل طلب استعلام USSD لشريحة محددة. لا عمليات شحن ولا عرض لأسرار الشرائح."/>
   {error&&<Alert type="error" showIcon message={error}/>}
-  <Alert type="info" showIcon message="معرفة رقم الشريحة من شبكة المتعامل" description="النظام يختار كود الاستعلام حسب IMSI: موبيليس *101#، جيزي 99. أوريدو ينتظر تأكيد كود PIN ولا ينفذ أي كود شحن." />
+  <Alert type="info" showIcon message="معرفة رقم الشريحة من شبكة المتعامل" description="يُحدد المتعامل من IMSI ثم يختار السيرفر الاستعلام المسجل: موبيليس *101#، جيزي 99 بعد تحديث Agent. أوريدو *200*PIN# متوقف حتى تأكيد معنى PIN؛ لا أكواد عشوائية." />
   <Alert type="info" showIcon message="اختبار اتصال للقراءة فقط" description={checkedAt?"آخر قراءة ناجحة من السيرفر: "+dateLabel(checkedAt)+". الاتصال بالمودم نفسه غير مختبر.":"اضغط تحديث لاختبار قراءة بيانات المحطات من السيرفر؛ لا يُرسل أي أمر إلى المودم."}/>
   <Card title={<Space wrap>المحطات <Tag color="blue">واجهة الهاتف v2.1</Tag></Space>} extra={<Button loading={loading} onClick={()=>void refresh()}>اختبار القراءة / تحديث</Button>}>
    {mobile ? <Space direction="vertical" size="middle" style={{width:"100%"}}>
@@ -116,7 +127,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
    ]}/>}
   </Card>
   {selected&&<Card title="المودمات والشرائح" extra={<Button loading={hardwareLoading} onClick={()=>void openHardware(selected)}>تحديث</Button>}>
-   <Typography.Text type="secondary">قراءة المحطة المحددة فقط، دون تعديل الشريحة أو رمز PIN.</Typography.Text>
+   <Typography.Text type="secondary">قراءة بيانات المحطة، ويمكن للإدارة إرسال طلب معرفة الرقم فقط للشريحة المتوافقة، دون تعديل PIN أو تنفيذ شحن.</Typography.Text>
    {mobile?<Space direction="vertical" style={{width:"100%"}} size="middle">{(hardware[selected]||[]).length===0&&!hardwareLoading?<Empty description="لا توجد مودمات مسجلة"/>:(hardware[selected]||[]).map(r=><Card key={r.modem_uuid+":"+(r.sim_uuid||"none")} size="small" title={<Space wrap><span>{r.device_name||"مودم"}</span><Tag color={online(r.modem_last_seen_at)?"green":"orange"}>{online(r.modem_last_seen_at)?"متصل حديثًا":"غير متصل"}</Tag></Space>}><Descriptions size="small" column={1} bordered items={[{key:"ip",label:"IP محلي",children:<span dir="ltr">{r.modem_ip||"—"}</span>},{key:"sim",label:"الشريحة",children:<span dir="ltr">{r.msisdn||"غير معروف"}</span>},{key:"operator",label:"المتعامل",children:operatorNames[operatorOf(r)]},{key:"lookup",label:"معرفة الرقم",children:phoneAction(r)},{key:"type",label:"النوع",children:r.sim_type||"غير محدد"},{key:"pin",label:"PIN",children:r.has_pin?"مسجل بأمان":"غير مسجل"},{key:"last",label:"آخر ظهور",children:dateLabel(r.modem_last_seen_at)}]}/></Card>)}</Space>:<Table rowKey={r=>r.modem_uuid+":"+(r.sim_uuid||"none")} loading={hardwareLoading} dataSource={hardware[selected]||[]} size="small" scroll={{x:720}} pagination={{pageSize:10}} columns={[
     {title:"المودم",render:(_:unknown,r:Hardware)=>r.device_name||r.modem_ip||"—"},
     {title:"IP محلي",dataIndex:"modem_ip",render:(v:string|null)=><span dir="ltr">{v||"—"}</span>},
