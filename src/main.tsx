@@ -389,30 +389,25 @@ function TrustedDevices(){
     ]}/>
   </Card>;
 }
-function deviceSecret(){
-  let value=localStorage.getItem("flexy_mini_device_secret");
-  if(!value||! /^[0-9a-f]{64}$/.test(value)){value=Array.from(crypto.getRandomValues(new Uint8Array(32)),x=>x.toString(16).padStart(2,"0")).join("");localStorage.setItem("flexy_mini_device_secret",value);}
-  return value;
-}
 function TableCustomerLogin(){
   const [identifier,setIdentifier]=useState("");
   const [blocked,setBlocked]=useState(false);
   const [password,setPassword]=useState("");
-  const [token,setToken]=useState(()=>window.sessionStorage.getItem("flexy_mini_customer_token")||"");
+  const [token,setToken]=useState(()=>window.localStorage.getItem("flexy_mini_customer_token")||"");
   const [account,setAccount]=useState<{username:string;phone?:string;party_id:number}|null>(null);
   const [error,setError]=useState("");
   const [busy,setBusy]=useState(false);
   const call=async(body:Record<string,unknown>)=>{
-    const response=await fetch(url+"/functions/v1/flexy-mini-customers",{method:"POST",headers:{"Content-Type":"application/json",apikey:key},body:JSON.stringify({...body,device_secret:deviceSecret(),device_label:/Android|iPhone|iPad/i.test(navigator.userAgent)?"هاتف / متصفح":"كمبيوتر / متصفح"})});
+    const response=await fetch(url+"/functions/v1/flexy-mini-customers",{method:"POST",headers:{"Content-Type":"application/json",apikey:key},body:JSON.stringify(body)});
     return {ok:response.ok,data:await response.json()};
   };
   useEffect(()=>{if(!token)return;let active=true;
-    const check=()=>void call({action:"me",token}).then(r=>{if(!active)return;if(r.ok)setAccount(r.data);else{window.sessionStorage.removeItem("flexy_mini_customer_token");setToken("");setAccount(null);setError(r.data.error||"انتهت الجلسة");}}).catch(()=>{if(active){setAccount(null);setError("تعذر التحقق من الجلسة");}});
+    const check=()=>void call({action:"me",token}).then(r=>{if(!active)return;if(r.ok)setAccount(r.data);else{window.localStorage.removeItem("flexy_mini_customer_token");setToken("");setAccount(null);setError(r.data.error||"انتهت الجلسة");}}).catch(()=>{if(active){setAccount(null);setError("تعذر التحقق من الجلسة");}});
     check();const timer=window.setInterval(check,15000);window.addEventListener("focus",check);
     return()=>{active=false;clearInterval(timer);window.removeEventListener("focus",check);};
   },[token]);
-  const login=async()=>{setBusy(true);setError("");try{const r=await call({action:"login",identifier,password});if(!r.ok){setBlocked(r.data.code==="DEVICE_PENDING"||r.data.code==="DEVICE_REVOKED");setError(r.data.error||"بيانات الدخول غير صحيحة");return;}window.sessionStorage.setItem("flexy_mini_customer_token",r.data.token);setToken(r.data.token);setPassword("");}catch{setError("تعذر الاتصال بالخادم");}finally{setBusy(false);}};
-  const logout=async()=>{try{await call({action:"logout",token});}catch{}window.sessionStorage.removeItem("flexy_mini_customer_token");setToken("");setAccount(null);};
+  const login=async()=>{setBusy(true);setError("");try{const r=await call({action:"login",identifier,password});if(!r.ok){setBlocked(r.data.code==="DEVICE_PENDING"||r.data.code==="DEVICE_REVOKED");setError(r.data.error||"بيانات الدخول غير صحيحة");return;}window.localStorage.setItem("flexy_mini_customer_token",r.data.token);setToken(r.data.token);setPassword("");}catch{setError("تعذر الاتصال بالخادم");}finally{setBusy(false);}};
+  const logout=async()=>{try{await call({action:"logout",token});}catch{}window.localStorage.removeItem("flexy_mini_customer_token");setToken("");setAccount(null);};
   return <ConfigProvider direction="rtl"><div style={{maxWidth:460,margin:"60px auto",padding:16}}>
     <Card title="Flexy Mini — دخول الزبون">
       {account?<Space direction="vertical" style={{width:"100%"}}><Alert type="success" message={"مرحبًا "+account.username}/><Text>الهاتف: <span dir="ltr">{account.phone}</span></Text><Alert type="warning" message="عمليات الشحن والدين غير مفعلة لهذا الحساب حاليًا"/><Button onClick={()=>void logout()}>تسجيل الخروج</Button></Space>:<Space direction="vertical" style={{width:"100%"}}>
