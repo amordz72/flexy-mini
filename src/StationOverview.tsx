@@ -1,11 +1,16 @@
 import {useCallback,useEffect,useState} from "react";
-import {Alert,Button,Card,Descriptions,Empty,Grid,Space,Table,Tag,Typography,message} from "antd";
+import {Alert,Button,Card,Descriptions,Empty,Grid,Input,Modal,Space,Table,Tag,Typography,message} from "antd";
 import type {SupabaseClient} from "@supabase/supabase-js";
 
 type Station={station_uuid:string;status:string;computer_name:string|null;last_seen_at:string|null;agent_version:string|null};
 type Hardware={modem_uuid:string;modem_ip:string|null;device_name:string|null;modem_last_seen_at:string|null;sim_uuid:string|null;msisdn:string|null;imsi:string|null;sim_type:string|null;has_pin:boolean;sim_last_seen_at:string|null};
 type PhoneAttempt={sim_uuid:string;status:string;result_code:string|null;discovered_msisdn:string|null;started_at:string|null};
 type PhoneQueue={queued:boolean;state:string;job_uuid:string|null};
+type OoredooGuard={sim_uuid:string;is_locked:boolean;cooldown_until:string|null;last_failed_at:string|null;last_attempt_at:string|null;last_failure_code:string|null;admin_armed:boolean};
+const normalizePhone=(raw:string)=>{
+ const digits=raw.replace(/\D/g,"");
+ return digits.startsWith("213")&&digits.length===12?"0"+digits.slice(3):digits;
+};
 const operatorOf=(sim:Hardware):"mobilis"|"djezzy"|"ooredoo"|"unknown"=>{
  const imsi=sim.imsi||"";
  if(imsi.startsWith("60301"))return "mobilis";
@@ -44,6 +49,19 @@ export default function StationOverview({db}:{db:SupabaseClient}){
  const [checkedAt,setCheckedAt]=useState<string|null>(null);
  const [phoneAttempts,setPhoneAttempts]=useState<Record<string,PhoneAttempt>>({});
  const [phoneBusy,setPhoneBusy]=useState<string|null>(null);
+ const [guardMap,setGuardMap]=useState<Record<string,OoredooGuard>>({});
+ const [manualNumbers,setManualNumbers]=useState<Record<string,string>>({});
+ const [manualBusy,setManualBusy]=useState<string|null>(null);
+ const [rearmBusy,setRearmBusy]=useState<string|null>(null);
+ const loadOoredooGuards=useCallback(async()=>{
+  const {data,error}=await db.rpc("station_connect_admin_ooredoo_lookup_guard");
+  if(error){setError("تعذر قراءة حالة حماية أوريدو: "+error.message);return;}
+  const next:Record<string,OoredooGuard>={};
+  for(const row of (Array.isArray(data)?data:[]) as OoredooGuard[]){
+   if(row.sim_uuid)next[row.sim_uuid]=row;
+  }
+  setGuardMap(next);
+ },[db]);
  const loadPhoneAttempts=useCallback(async()=>{
   const {data,error}=await db.rpc("station_connect_admin_sim_phone_discovery_state");
   if(error)return;
@@ -61,7 +79,46 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   if(!Array.isArray(data)){setError("استجابة المحطات غير صالحة");return;}
   setStations(data as Station[]);setCheckedAt(new Date().toISOString());
  },[db]);
- useEffect(()=>{void refresh();void loadPhoneAttempts();},[refresh,loadPhoneAttempts]);
+ useEffect(()=>{void refresh();void loadPhoneAttempts();void loadOoredooGuards();},[refresh,loadPhoneAttempts,loadOoredooGuards]);
+ const saveManualNumber=async(sim:Hardware)=>{
+  if(!sim.sim_uuid)return;
+  const phone=normalizePhone(manualNumbers[sim.sim_uuid]||"");
+  if(!/^0[5-7]\d{8}$/.test(phone)){message.warning("أدخل رقم هاتف جزائري صحيحًا من 10 أرقام");return;}
+  Modal.confirm({
+   title:"تسجيل رقم الشريحة يدويًا",
+   content:"سيُسجّل الرقم "+phone+" لهذه الشريحة في قاعدة البيانات، دون أي استعلام أو محاولة اتصال بالشبكة. هل تؤكد؟",
+   okText:"تسجيل الرقم",cancelText:"إلغاء",
+   onOk:async()=>{
+    setManualBusy(sim.sim_uuid!);
+    try{
+     const {error}=await db.rpc("station_connect_admin_update_sim",{p_sim_uuid:sim.sim_uuid,p_msisdn:phone});
+     if(error)throw error;
+     setHardware(old=>Object.fromEntries(Object.entries(old).map(([station,items])=>[station,items.map(item=>item.sim_uuid===sim.sim_uuid?{...item,msisdn:phone}:item)])));
+     setManualNumbers(old=>({...old,[sim.sim_uuid!]:""}));
+     message.success("تم تسجيل الرقم يدويًا دون إرسال USSD");
+    }catch(error){message.error("فشل حفظ الرقم: "+(error instanceof Error?error.message:String(error)));}
+    finally{setManualBusy(null);}
+   }
+  });
+ };
+ const rearmOoredoo=async(sim:Hardware)=>{
+  if(!sim.sim_uuid)return;
+  Modal.confirm({
+   title:"السماح بمحاولة أوريدو واحدة",
+   content:"لن يتم إرسال أي USSD الآن. ستُفتح موافقة واحدة فقط إن انتهت مهلة الانتظار وكان كود أوريدو مثبتًا وآمنًا. أي فشل سيقفل المحاولة مجددًا 24 ساعة.",
+   okText:"طلب السماح",cancelText:"إلغاء",
+   onOk:async()=>{
+    setRearmBusy(sim.sim_uuid!);
+    const {data,error}=await db.rpc("station_connect_admin_rearm_ooredoo_phone_lookup",{p_sim_uuid:sim.sim_uuid});
+    setRearmBusy(null);
+    if(error){message.error("رفض السيرفر إعادة السماح: "+error.message);return;}
+    const row=(Array.isArray(data)?data[0]:data) as {armed:boolean;state:string;cooldown_until:string|null}|undefined;
+    if(row?.armed)message.success("تم السماح بمحاولة واحدة. لم يُرسل أي كود بعد.");
+    else message.warning(row?.state==="provider_code_unverified"?"كود أوريدو لم يُعتمد بعد؛ ما زالت المحاولات ممنوعة":row?.state==="cooldown_active"?"الانتظار 24 ساعة لم ينتهِ بعد":"لم يُسمح بالمحاولة: "+(row?.state||"غير معروف"));
+    await loadOoredooGuards();
+   }
+  });
+ };
  const discoverPhone=async(sim:Hardware)=>{
   if(!sim.sim_uuid||sim.msisdn)return;
   const operator=operatorOf(sim);
@@ -92,8 +149,15 @@ export default function StationOverview({db}:{db:SupabaseClient}){
    <Tag color={attempt?.status==="success"?"green":attempt?.status==="running"?"blue":"orange"}>{state}</Tag>
    {attempt?.result_code&&<Typography.Text type="secondary" style={{fontSize:11}}>{attempt.result_code}</Typography.Text>}
    <Button size="small" loading={phoneBusy===sim.sim_uuid} disabled={hardwareLoading||operator==="unknown"||operator==="ooredoo"||(operator==="djezzy"&&!agentSupportsServiceCode(stations.find(station=>station.station_uuid===selected)?.agent_version||null))} onClick={()=>void discoverPhone(sim)}>معرفة الرقم تلقائيًا</Button>
-   {operator==="ooredoo"&&<Typography.Text type="secondary" style={{fontSize:11}}>كود *200*PIN# غير مفعّل حتى نحدد معنى PIN</Typography.Text>}
+   {operator==="ooredoo"&&<Typography.Text type="secondary" style={{fontSize:11}}>{guardMap[sim.sim_uuid]?.last_failed_at?"آخر فشل: "+dateLabel(guardMap[sim.sim_uuid].last_failed_at):"لا توجد محاولة موثقة"} — {guardMap[sim.sim_uuid]?.cooldown_until&&new Date(guardMap[sim.sim_uuid].cooldown_until).getTime()>Date.now()?"محظور حتى "+dateLabel(guardMap[sim.sim_uuid].cooldown_until):"المحاولات محمية ومقفلة افتراضيًا"}</Typography.Text>}
+   {operator==="ooredoo"&&guardMap[sim.sim_uuid]?.last_failure_code&&<Typography.Text type="secondary" style={{fontSize:11}}>سبب الفشل: {guardMap[sim.sim_uuid].last_failure_code}</Typography.Text>}
+   {operator==="ooredoo"&&<Button size="small" loading={rearmBusy===sim.sim_uuid} disabled={!!(guardMap[sim.sim_uuid]?.cooldown_until&&new Date(guardMap[sim.sim_uuid].cooldown_until).getTime()>Date.now())} onClick={()=>void rearmOoredoo(sim)}>إعادة السماح من الإدارة</Button>}
+   {operator==="ooredoo"&&<Typography.Text type="secondary" style={{fontSize:11}}>كود *200*PIN# غير مفعّل حتى تثبت وظيفته ويُتحقق من PIN</Typography.Text>}
    {operator==="djezzy"&&!agentSupportsServiceCode(stations.find(station=>station.station_uuid===selected)?.agent_version||null)&&<Typography.Text type="secondary" style={{fontSize:11}}>جيزي 99 تحتاج Agent 0.4.11+</Typography.Text>}
+   <Space.Compact style={{width:"100%"}}>
+    <Input aria-label="رقم الشريحة يدويًا" dir="ltr" inputMode="tel" placeholder="0XXXXXXXXX" value={manualNumbers[sim.sim_uuid]||""} maxLength={20} onChange={event=>setManualNumbers(old=>({...old,[sim.sim_uuid!]:event.target.value}))}/>
+    <Button loading={manualBusy===sim.sim_uuid} onClick={()=>void saveManualNumber(sim)}>حفظ يدوي</Button>
+   </Space.Compact>
   </Space>;
  };
  const openHardware=async(uuid:string)=>{
@@ -101,7 +165,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   const {data,error}=await db.rpc("station_connect_admin_hardware",{p_station_uuid:uuid});
   setHardwareLoading(false);
   if(error){setError("تعذر قراءة المودمات والشرائح: "+error.message);return;}
-  setHardware(previous=>({...previous,[uuid]:(data||[]) as Hardware[]}));setCheckedAt(new Date().toISOString());await loadPhoneAttempts();
+  setHardware(previous=>({...previous,[uuid]:(data||[]) as Hardware[]}));setCheckedAt(new Date().toISOString());await Promise.all([loadPhoneAttempts(),loadOoredooGuards()]);
  };
  return <Space direction="vertical" size="middle" style={{width:"100%"}}>
   <Alert type="info" showIcon message="Station Connect" description="عرض المحطات والشرائح للقراءة؛ زر «معرفة الرقم تلقائيًا» فقط يرسل طلب استعلام USSD لشريحة محددة. لا عمليات شحن ولا عرض لأسرار الشرائح."/>
