@@ -17,7 +17,8 @@
     "react-dom": "^19.0.0",
     "react-router": "^7.0.0",
     "antd": "^5.27.0",
-    "@refinedev/antd": "^6.0.0"
+    "@refinedev/antd": "^6.0.0",
+    "@ant-design/icons": "^5.6.1"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
