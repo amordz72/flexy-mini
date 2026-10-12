@@ -98,8 +98,8 @@ function LoginPage() {
     <div dir="rtl" style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#f4f6fa", padding: 16 }}>
       <Card title="⚡ فليكسي ميني — تسجيل الدخول" style={{ width: "100%", maxWidth: 420 }}>
         <Form layout="vertical" onFinish={values=>void submit(values)}>
-          <Form.Item label="اسم المستخدم أو رقم الهاتف (الزبون) أو البريد الإلكتروني (الإدارة)" name="identifier" rules={[{ required: true, message: "أدخل معرّف الحساب" }]}>
-            <Input autoComplete="username" placeholder="المستخدم أو الهاتف أو بريد الإدارة" size="large" dir="ltr" />
+          <Form.Item label="اسم المستخدم أو رقم الهاتف" name="identifier" rules={[{ required: true, message: "أدخل معرّف الحساب" }]}>
+            <Input autoComplete="username" placeholder="اسم المستخدم أو رقم الهاتف" size="large" dir="ltr" />
           </Form.Item>
           <Form.Item label="كلمة المرور" name="password" rules={[{ required: true, message: "أدخل كلمة المرور" }]}>
             <Input.Password autoComplete="current-password" size="large" dir="ltr" />
@@ -107,9 +107,6 @@ function LoginPage() {
           {loginError&&<Alert type="error" showIcon style={{marginBottom:14}} message={loginError}/>}
           {revokedLogin&&<Button block size="large" disabled={customerBusy} onClick={()=>void submit(revokedLogin,true)} style={{marginBottom:14}}>طلب إعادة اعتماد هذا الجهاز</Button>}
           <Button htmlType="submit" type="primary" size="large" loading={isPending||customerBusy} block>دخول</Button>
-          <Typography.Paragraph type="secondary" style={{ marginTop: 16, marginBottom: 0 }}>
-            الزبائن يدخلون باسم المستخدم أو الهاتف، والإدارة ببريد حساب الإدارة. تظهر رسالة واضحة عند تعذر الدخول.
-          </Typography.Paragraph>
         </Form>
       </Card>
     </div>
