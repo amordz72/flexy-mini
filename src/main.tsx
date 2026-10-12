@@ -19,7 +19,7 @@ import { supportPhone, supportWhatsApp } from "./settings";
 
 const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined) || "https://wqyebqzbbpohbnznqdjj.supabase.co";
 const key = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) || "sb_publishable_gO4umNBMJ0AWRk19HtKd7A_9X4DibYj";
-const client = url && key ? createClient(url, key, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } }) : undefined;
+const client = url && key ? createClient(url, key, { auth: { storage: window.localStorage, persistSession: true, autoRefreshToken: true } }) : undefined;
 // Use standard CORS headers only; Supabase Functions client adds x-client-info,
  // which is not currently allowed by this deployed Edge Function.
 type CustomerRequestError = Error & {context?: Response};
@@ -709,7 +709,7 @@ createRoot(document.getElementById("root")!).render(
         resources={[]} options={{ syncWithLocation: true, warnWhenUnsavedChanges: true }}>
         <Routes>
           <Route path="/customer-login" element={<TableCustomerLogin />} />
-          <Route path="/login" element={client ? <LoginPage /> : <Alert type="error" showIcon message="التطبيق غير مهيأ للاتصال. لا يمكن الدخول قبل إعداد Supabase." />} />
+          <Route path="/login" element={client ? <Authenticated key="login-redirect" fallback={<LoginPage />}><Navigate to="/" replace /></Authenticated> : <Alert type="error" showIcon message="التطبيق غير مهيأ للاتصال. لا يمكن الدخول قبل إعداد Supabase." />} />
           <Route path="/" element={client ? (window.localStorage.getItem("flexy_mini_customer_token") ? <Navigate to="/customer-login" replace /> : <Authenticated key="protected" fallback={<LoginPage />}><HomeByRole /></Authenticated>) : <Alert type="error" showIcon message="الاتصال غير مهيأ. تم تعطيل وضع المعاينة المفتوح." />} />
         </Routes>
       </Refine>
