@@ -288,7 +288,7 @@ function MasterCustomerLookup() {
             <Text strong>{r.display_name}</Text>
             <Text type="secondary">الهاتف: <span dir="ltr" style={{display:"inline-block"}}>{r.primary_phone||"غير مسجل"}</span></Text>
             {r.mytool_username&&<Text type="secondary">معرف الماستر: <span dir="ltr">{r.mytool_username}</span></Text>}
-            <Button block type={selected===r.id?"primary":"default"} onClick={()=>assignMaster(r)}>{selected===r.id?"تم اختيار هذا الماستر":"اختيار هذا الماستر"}</Button>
+            {selected===r.id?<Text type="success">✓ تم اختيار هذا الماستر</Text>:<Button block type="default" onClick={()=>assignMaster(r)}>اختيار هذا الماستر</Button>}
           </Space>
         </Card>)}
       </Space>
