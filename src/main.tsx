@@ -669,7 +669,7 @@ function Dashboard({customerToken,customerAccount,customerError,onCustomerLogout
           {isCustomer && !customerAccount && <Alert type={customerError?"error":"info"} showIcon message={customerError||"جاري التحقق من حساب الزبون"} style={{marginBottom:16}}/>}
           {isCustomer && customerAccount && page==="home" && <Alert type="success" showIcon message={"مرحبًا "+customerAccount.username} style={{marginBottom:16}}/>}
           {page === "home" ? <>
-            {!isCustomer && client && <div style={{marginBottom:18}}><AdSystem db={client}/></div>}
+            {client && <div style={{marginBottom:18}}><AdSystem db={client}/></div>}
             {!isCustomer && client && <AdminWallet db={client}/>}
             <Card style={{marginBottom:18}} title="ملخص حسابي"><Row gutter={[12,12]}>{["الرصيد","الديون","الأرباح"].map(label=><Col xs={8} key={label}><div style={{textAlign:"center"}}><Text type="secondary">{label}</Text><div><Text strong>غير متاح حاليًا</Text></div></div></Col>)}</Row></Card>
 
