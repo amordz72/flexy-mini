@@ -56,7 +56,9 @@ Deno.serve(async(req)=>{
    const {data:account}=await admin.from("flexy_mini_customer_accounts").select("username,phone,party_id,active,credit_enabled").eq("id",session.customer_id).maybeSingle();
    if(!account?.active)return respond(401,{error:"Unauthorized"});
    await admin.from("flexy_mini_trusted_devices").update({last_used_at:new Date().toISOString()}).eq("id",device.id);
-   return respond(200,{username:account.username,phone:account.phone,party_id:account.party_id,credit_enabled:false});
+   const {data:wallet,error:walletError}=await admin.from("flexy_mini_customer_wallets").select("balance,debt,profit,updated_at").eq("customer_id",session.customer_id).maybeSingle();
+   if(walletError){console.error("flexy_customer_wallet_lookup_failed",{code:walletError.code});return respond(503,{code:"WALLET_UNAVAILABLE",error:"تعذر تحميل المحفظة حاليًا"});}
+   return respond(200,{username:account.username,phone:account.phone,party_id:account.party_id,credit_enabled:false,wallet:wallet?{balance:wallet.balance,debt:wallet.debt,profit:wallet.profit,updated_at:wallet.updated_at}:null});
  }
  const authorization=req.headers.get("authorization")||"";
  const caller=createClient(url,anon,{global:{headers:{Authorization:authorization}},auth:{persistSession:false}});
