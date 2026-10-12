@@ -8,7 +8,7 @@ import routerProvider from "@refinedev/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { dataProvider, liveProvider } from "@refinedev/supabase";
 
-import { ConfigProvider, Form, Input, Layout, Menu, Typography, Card, Row, Col, Table, Tag, Button, Space, Alert, Grid, Drawer, Empty, Descriptions, Select, Divider, Modal, message } from "antd";
+import { ConfigProvider, Form, Input, Layout, Menu, Typography, Card, Row, Col, Table, Tag, Button, Space, Alert, Grid, Drawer, Empty, Descriptions, Select, Checkbox, Divider, Modal, message } from "antd";
 import { HomeOutlined, PhoneOutlined, WifiOutlined, AppstoreOutlined, HistoryOutlined, DatabaseOutlined, PlusOutlined, UserOutlined, SafetyCertificateOutlined, DesktopOutlined, TeamOutlined, NotificationOutlined, SettingOutlined, ArrowUpOutlined } from "@ant-design/icons";
 import "antd/dist/reset.css";
 import "./style.css";
