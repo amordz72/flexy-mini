@@ -71,20 +71,40 @@ const authProvider: AuthProvider | undefined = client ? {
   },
 } : undefined;
 function LoginPage() {
-  const { mutate: login, isPending } = useLogin();
+  const { mutate: adminLogin, isPending } = useLogin();
+  const [loginError,setLoginError]=useState("");
+  const [customerBusy,setCustomerBusy]=useState(false);
+  const submit=async(values:{identifier:string;password:string})=>{
+    setLoginError("");
+    const identifier=values.identifier.trim();
+    if(identifier.includes("@")){adminLogin(values);return;}
+    setCustomerBusy(true);
+    try{
+      const response=await fetch(url+"/functions/v1/flexy-mini-customers",{
+        method:"POST",headers:{"Content-Type":"application/json",apikey:key},
+        body:JSON.stringify({action:"login",identifier,password:values.password})
+      });
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok||!data.token){setLoginError(data.error||"تعذر تسجيل الدخول. تحقق من بيانات الحساب.");return;}
+      window.localStorage.setItem("flexy_mini_customer_token",data.token);
+      window.location.hash="#/customer-login";
+    }catch{setLoginError("تعذر الاتصال بخدمة دخول الزبائن. تحقق من الشبكة وحاول مجددًا.");}
+    finally{setCustomerBusy(false);}
+  };
   return <ConfigProvider direction="rtl" theme={{ token: { colorPrimary: "#2563eb" } }}>
     <div dir="rtl" style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#f4f6fa", padding: 16 }}>
       <Card title="⚡ فليكسي ميني — تسجيل الدخول" style={{ width: "100%", maxWidth: 420 }}>
-        <Form layout="vertical" onFinish={(values) => login(values)}>
-          <Form.Item label="البريد الإلكتروني أو اسم المستخدم أو رقم الهاتف" name="identifier" rules={[{ required: true, message: "أدخل معرّف الحساب" }]}>
-            <Input autoComplete="username" placeholder="البريد أو المستخدم أو الهاتف" size="large" dir="ltr" />
+        <Form layout="vertical" onFinish={values=>void submit(values)}>
+          <Form.Item label="اسم المستخدم أو رقم الهاتف (الزبون) أو البريد الإلكتروني (الإدارة)" name="identifier" rules={[{ required: true, message: "أدخل معرّف الحساب" }]}>
+            <Input autoComplete="username" placeholder="المستخدم أو الهاتف أو بريد الإدارة" size="large" dir="ltr" />
           </Form.Item>
           <Form.Item label="كلمة المرور" name="password" rules={[{ required: true, message: "أدخل كلمة المرور" }]}>
             <Input.Password autoComplete="current-password" size="large" dir="ltr" />
           </Form.Item>
-          <Button htmlType="submit" type="primary" size="large" loading={isPending} block>دخول</Button>
+          {loginError&&<Alert type="error" showIcon style={{marginBottom:14}} message={loginError}/>}
+          <Button htmlType="submit" type="primary" size="large" loading={isPending||customerBusy} block>دخول</Button>
           <Typography.Paragraph type="secondary" style={{ marginTop: 16, marginBottom: 0 }}>
-            البريد الإلكتروني يعمل حاليًا. رقم الهاتف يعمل إذا كان مسجلًا في حساب المصادقة، واسم المستخدم يحتاج ربطًا آمنًا قبل تفعيله.
+            الزبائن يدخلون باسم المستخدم أو الهاتف، والإدارة ببريد حساب الإدارة. تظهر رسالة واضحة عند تعذر الدخول.
           </Typography.Paragraph>
         </Form>
       </Card>
