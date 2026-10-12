@@ -4,7 +4,7 @@ import {SupabaseClient} from "@supabase/supabase-js";
 type Ad={is_fallback:boolean;id:number;title:string;body:string|null;image_url:string|null;link_url:string|null;content_display_mode:string;enabled:boolean;display_mode:string;start_at:string|null;end_at:string|null;week_start:number;week_end:number;sort_index:number};
 const days=["الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
 function shown(a:Ad,d:Date){if(!a.enabled)return false;if(a.display_mode==="period")return (!a.start_at||d>=new Date(a.start_at))&&(!a.end_at||d<=new Date(a.end_at));if(a.display_mode==="weekly"){const n=d.getDay();return a.week_start<=a.week_end?n>=a.week_start&&n<=a.week_end:n>=a.week_start||n<=a.week_end;}return true;}
-export default function AdSystem({db,admin=false}:{db:SupabaseClient;admin?:boolean}){
+export default function AdSystem({db,admin=false,customer=false}:{db:SupabaseClient;admin?:boolean;customer?:boolean}){
  const [ads,setAds]=useState<Ad[]>([]),[now,setNow]=useState(new Date()),[idx,setIdx]=useState(0),[edit,setEdit]=useState<number|null>(null),[error,setError]=useState("");
  const [form]=Form.useForm();
  const editorRef=useRef<HTMLDivElement|null>(null);
@@ -14,7 +14,7 @@ export default function AdSystem({db,admin=false}:{db:SupabaseClient;admin?:bool
  const [loaded,setLoaded]=useState(false);
  const [savingId,setSavingId]=useState<number|null>(null);
  const uploadImage=async(file:File)=>{if(!["image/jpeg","image/png","image/webp","image/gif"].includes(file.type)||file.size>5*1024*1024){message.error("اختر صورة بحجم أقل من 5 ميغابايت");return;}setUploading(true);try{const ext=({"image/jpeg":"jpg","image/png":"png","image/webp":"webp","image/gif":"gif"} as Record<string,string>)[file.type];const path=crypto.randomUUID()+"."+ext;const r=await db.storage.from("flexy-mini-ads").upload(path,file,{contentType:file.type,upsert:false});if(r.error)throw r.error;const publicUrl=db.storage.from("flexy-mini-ads").getPublicUrl(path).data.publicUrl;form.setFieldValue("image_url",publicUrl);setPreview(publicUrl);message.success("تم رفع الصورة");}catch{message.error("تعذر رفع الصورة. يجب تجهيز مساحة تخزين إعلانات Flexy Mini أولًا.");}finally{setUploading(false);}};
- const reload=async()=>{const r=await db.from("flexy_mini_ads").select("*").order("sort_index");if(r.error)setError("تعذر تحميل الإعلانات");else{setAds((r.data||[]) as Ad[]);setError("");}setLoaded(true);};
+ const reload=async()=>{const r=customer?await db.rpc("flexy_mini_public_ads"):await db.from("flexy_mini_ads").select("*").order("sort_index");if(r.error)setError("تعذر تحميل الإعلانات");else{setAds((r.data||[]) as Ad[]);setError("");}setLoaded(true);};
  useEffect(()=>{void reload();const t=setInterval(()=>setNow(new Date()),30000);return()=>clearInterval(t);},[]);
  const ordinary=ads.filter(a=>!a.is_fallback&&shown(a,now));
  const savedFallback=ads.find(a=>a.is_fallback);
