@@ -536,18 +536,19 @@ function TableCustomerLogin(){
   const [token,setToken]=useState(()=>window.localStorage.getItem("flexy_mini_customer_token")||"");
   const [account,setAccount]=useState<{username:string;phone?:string;party_id:number}|null>(null);
   const [error,setError]=useState("");
+  const [verified,setVerified]=useState(false);
   const call=async(body:Record<string,unknown>)=>{
     const response=await fetch(url+"/functions/v1/flexy-mini-customers",{method:"POST",headers:{"Content-Type":"application/json",apikey:key},body:JSON.stringify({...body,device_secret:window.localStorage.getItem("flexy_mini_device_secret")||""})});
     return {ok:response.ok,status:response.status,data:await response.json()};
   };
   useEffect(()=>{if(!token)return;let active=true;
-    const check=()=>void call({action:"me",token}).then(r=>{if(!active)return;if(r.ok){setAccount(r.data);setError("");}else if([401,403,423].includes(r.status)){window.localStorage.removeItem("flexy_mini_customer_token");setToken("");setAccount(null);setError(r.data.error||"انتهت الجلسة");}else{setError("تعذر التحقق مؤقتًا. سنعيد المحاولة دون تسجيل خروجك.");}}).catch(()=>{if(active){setAccount(null);setError("تعذر التحقق من الجلسة");}});
+    const check=()=>void call({action:"me",token}).then(r=>{if(!active)return;if(r.ok){setAccount(r.data);setVerified(true);setError("");}else if([401,403,423].includes(r.status)){window.localStorage.removeItem("flexy_mini_customer_token");setToken("");setAccount(null);setVerified(false);setError(r.data.error||"انتهت الجلسة");}else{setAccount(null);setVerified(false);setError("تعذر التحقق مؤقتًا. سنعيد المحاولة دون تسجيل خروجك.");}}).catch(()=>{if(active){setAccount(null);setVerified(false);setError("تعذر الاتصال للتحقق من الجلسة. سنعيد المحاولة تلقائيًا.");}});
     check();const timer=window.setInterval(check,15000);window.addEventListener("focus",check);
     return()=>{active=false;clearInterval(timer);window.removeEventListener("focus",check);};
   },[token]);
   const logout=async()=>{try{await call({action:"logout",token});}catch{}window.localStorage.removeItem("flexy_mini_customer_token");setToken("");setAccount(null);window.location.hash="#/login";};
   if(!token)return <Navigate to="/login" replace/>;
-  return <Dashboard customerToken={token} customerAccount={account} customerError={error} onCustomerLogout={()=>void logout()}/>;
+  return <Dashboard customerToken={token} customerAccount={verified?account:null} customerError={error} onCustomerLogout={()=>void logout()}/>;
 }
 function CustomerDashboard() {
   const { mutate: logout } = useLogout();
@@ -672,7 +673,7 @@ function Dashboard({customerToken,customerAccount,customerError,onCustomerLogout
         </Header>
         <Content className="app-content">
           {page !== "home" && <div className="page-heading"><Title level={mobile ? 3 : 2}>{names[page]}</Title></div>}
-          {isCustomer && !customerAccount && <Alert type={customerError?"error":"info"} showIcon message={customerError||"جاري التحقق من حساب الزبون"} style={{marginBottom:16}}/>}
+          {isCustomer && !customerAccount && <Alert type={customerError?"warning":"info"} showIcon message={customerError||"جاري التحقق من حساب الزبون"} style={{marginBottom:16}}/>}
           {isCustomer && customerAccount && page==="home" && <Alert type="success" showIcon message={"مرحبًا "+customerAccount.username} style={{marginBottom:16}}/>}
           {page === "home" ? <>
             {client && <div style={{marginBottom:18}}><AdSystem db={client} customer={isCustomer}/></div>}
