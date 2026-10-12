@@ -480,7 +480,8 @@ function MiniWalletAdmin(){
  const [selected,setSelected]=useState<MiniWalletRow|null>(null),[history,setHistory]=useState<any[]>([]);
  const [kind,setKind]=useState("deposit"),[amount,setAmount]=useState(""),[note,setNote]=useState("");
  const [requestId,setRequestId]=useState(()=>crypto.randomUUID());
- const load=async()=>{setBusy(true);try{const {data,error}=await customerAdminRequest({action:"wallets"});if(error||!data?.wallets)throw new Error(data?.error||"تعذر تحميل المحافظ");setRows(data.wallets);setError("");}catch(e){setError(String(e));}finally{setBusy(false);}};
+ const [postingEnabled,setPostingEnabled]=useState(false);
+ const load=async()=>{setBusy(true);try{const {data,error}=await customerAdminRequest({action:"wallets"});if(error||!data?.wallets)throw new Error(data?.error||"تعذر تحميل المحافظ");setRows(data.wallets);setPostingEnabled(false);setError("");}catch(e){setError(String(e));}finally{setBusy(false);}};
  useEffect(()=>{void load();},[]);
  const show=async(r:MiniWalletRow)=>{setSelected(r);setHistory([]);const {data,error}=await customerAdminRequest({action:"wallet_history",customer_id:r.customer_id});if(error)setError("تعذر تحميل السجل");else setHistory(data?.entries||[]);};
  const post=async()=>{if(!selected)return;const value=Number(amount);if(!Number.isFinite(value)||value<=0||Math.round(value*100)!==value*100){message.error("أدخل مبلغًا صحيحًا");return;}setBusy(true);try{const {data,error}=await customerAdminRequest({action:"wallet_post",customer_id:selected.customer_id,kind,amount:value,note,request_id:requestId});if(error||!data?.wallet)throw new Error(data?.error||"فشلت الحركة");message.success("تم تسجيل الحركة");setAmount("");setNote("");setRequestId(crypto.randomUUID());await load();await show(selected);}catch(e){message.error(String(e));}finally{setBusy(false);}};
@@ -496,11 +497,11 @@ function MiniWalletAdmin(){
  ]}/>
  <Modal title={selected?"محفظة "+selected.username:"المحفظة"} open={!!selected} onCancel={()=>setSelected(null)} footer={null} width={720}>
  {selected&&<Space direction="vertical" style={{width:"100%"}}>
- <Alert type="info" message="كل حركة تُسجّل في قاعدة البيانات. لا تُنفّذ الشحنات من هذه الشاشة."/>
+ <Alert type="warning" message="التسجيل المالي معطل مؤقتًا إلى حين التحقق من نشر نسخة الخادم المطابقة."/>
  <Select value={kind} onChange={setKind} style={{width:"100%"}} options={[{value:"deposit",label:"إيداع رصيد"},{value:"withdrawal",label:"سحب رصيد"},{value:"debt_increase",label:"زيادة دين"},{value:"debt_payment",label:"تسديد دين"},{value:"profit_credit",label:"إضافة أرباح"}]}/>
  <Input value={amount} onChange={e=>setAmount(e.target.value)} placeholder="المبلغ بالدينار" inputMode="decimal"/>
  <Input value={note} onChange={e=>setNote(e.target.value)} placeholder="سبب الحركة / مرجع العملية"/>
- <Button type="primary" loading={busy} disabled={!amount||!note.trim()} onClick={()=>Modal.confirm({title:"تأكيد الحركة المالية",content:"الزبون: "+selected.username+" — المبلغ: "+amount+" دج. هل تؤكد التسجيل؟",okText:"تأكيد",cancelText:"إلغاء",onOk:()=>post()})}>تسجيل الحركة</Button>
+ <Button type="primary" loading={busy} disabled={!postingEnabled||!amount||!note.trim()} onClick={()=>Modal.confirm({title:"تأكيد الحركة المالية",content:"الزبون: "+selected.username+" — المبلغ: "+amount+" دج. هل تؤكد التسجيل؟",okText:"تأكيد",cancelText:"إلغاء",onOk:()=>post()})}>تسجيل الحركة</Button>
  <Typography.Title level={5}>آخر الحركات</Typography.Title>
  <Table size="small" rowKey="id" dataSource={history} pagination={{pageSize:5}} scroll={{x:500}} columns={[{title:"التاريخ",render:(_,r)=>new Date(r.created_at).toLocaleString("ar-DZ")},{title:"النوع",dataIndex:"kind"},{title:"الرصيد بعد",render:(_,r)=>money(r.balance_after)},{title:"الدين بعد",render:(_,r)=>money(r.debt_after)},{title:"ملاحظة",dataIndex:"note"}]}/>
  </Space>}
