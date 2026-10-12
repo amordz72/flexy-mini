@@ -21,7 +21,8 @@ const key = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined
 const client = url && key ? createClient(url, key, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } }) : undefined;
 // Use standard CORS headers only; Supabase Functions client adds x-client-info,
  // which is not currently allowed by this deployed Edge Function.
-async function customerAdminRequest(body: Record<string, unknown>): Promise<{data:any;error:Error|null}> {
+type CustomerRequestError = Error & {context?: Response};
+async function customerAdminRequest(body: Record<string, unknown>): Promise<{data:any;error:CustomerRequestError|null}> {
   if (!client) return {data:null,error:new Error("Supabase unavailable")};
   try {
     const {data:{session}} = await client.auth.getSession();
