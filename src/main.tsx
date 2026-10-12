@@ -128,14 +128,14 @@ const items = [
   {key:"inventory",icon:<PlusOutlined/>,label:"أكواد البطاقات"},
   {key:"customers",icon:<UserOutlined/>,label:"الزبائن"},
   {key:"devices",icon:<SafetyCertificateOutlined/>,label:"الأجهزة الموثوقة"},
-  {key:"wallets",icon:<DatabaseOutlined/>,label:"محافظ Flexy Mini"},
+  {key:"wallets",icon:<DatabaseOutlined/>,label:"المحافظ"},
   {key:"stations",icon:<DesktopOutlined/>,label:"المحطات والشرائح"},
   {key:"members",icon:<TeamOutlined/>,label:"المستخدمون والصلاحيات"},
   {key:"ads",icon:<NotificationOutlined/>,label:"إدارة الإعلانات"},
   {key:"settings",icon:<SettingOutlined/>,label:"الإعدادات"}
  ]}
 ];
-const names:Record<string,string>={wallets:"محافظ Flexy Mini",devices:"الأجهزة الموثوقة",home:"الرئيسية",flexy:"الفليكسي",idoom:"تعبئة إيدوم",store:"متجر البطاقات",operations:"العمليات",cards:"إدارة البطاقات والأصناف",inventory:"إضافة أكواد البطاقات",customers:"إدارة الزبائن",stations:"المحطات والشرائح",members:"المستخدمون والصلاحيات",ads:"إدارة الإعلانات",settings:"الإعدادات"};
+const names:Record<string,string>={wallets:"المحافظ",devices:"الأجهزة الموثوقة",home:"الرئيسية",flexy:"الفليكسي",idoom:"تعبئة إيدوم",store:"متجر البطاقات",operations:"العمليات",cards:"إدارة البطاقات والأصناف",inventory:"إضافة أكواد البطاقات",customers:"إدارة الزبائن",stations:"المحطات والشرائح",members:"المستخدمون والصلاحيات",ads:"إدارة الإعلانات",settings:"الإعدادات"};
 const sample = [
   { key: "1", name: "موبيليس", kind: "فليكسي", state: "واجهة تجريبية" },
   { key: "2", name: "بطاقات موبيليس", kind: "بطاقات", state: "غير مربوط" },
@@ -487,7 +487,7 @@ function MiniWalletAdmin(){
  const show=async(r:MiniWalletRow)=>{setSelected(r);setHistory([]);const {data,error}=await customerAdminRequest({action:"wallet_history",customer_id:r.customer_id});if(error)setError("تعذر تحميل السجل");else setHistory(data?.entries||[]);};
  const post=async()=>{if(!selected)return;const value=Number(amount);if(!Number.isFinite(value)||value<=0||Math.round(value*100)!==value*100){message.error("أدخل مبلغًا صحيحًا");return;}setBusy(true);try{const {data,error}=await customerAdminRequest({action:"wallet_post",customer_id:selected.customer_id,kind,amount:value,note,request_id:requestId});if(error||!data?.wallet)throw new Error(data?.error||"فشلت الحركة");message.success("تم تسجيل الحركة");setAmount("");setNote("");setRequestId(crypto.randomUUID());await load();await show(selected);}catch(e){message.error(String(e));}finally{setBusy(false);}};
  const money=(n:unknown)=>Number(n||0).toLocaleString("ar-DZ")+" دج";
- return <Card title="محافظ زبائن Flexy Mini" extra={<Button loading={busy} onClick={()=>void load()}>تحديث</Button>}>
+ return <Card title="محافظ الزبائن" extra={<Button loading={busy} onClick={()=>void load()}>تحديث</Button>}>
  {error&&<Alert type="error" message={error} style={{marginBottom:12}}/>}
  <Input.Search placeholder="ابحث بالاسم أو الهاتف" value={searchWallet} onChange={e=>setSearchWallet(e.target.value)} style={{marginBottom:12}}/>
  <Table rowKey="customer_id" loading={busy} dataSource={rows.filter(r=>(r.username+" "+r.phone).toLowerCase().includes(searchWallet.toLowerCase()))} pagination={{pageSize:10}} scroll={{x:950}} columns={[
