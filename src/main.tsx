@@ -474,22 +474,25 @@ function ConnectionDiagnostics() {
 type TrustedDevice={id:number;customer_id:number;device_label:string;approved_at:string|null;revoked_at:string|null;expires_at:string|null;created_at:string;last_used_at:string|null;flexy_mini_customer_accounts:{username:string;phone:string;money_party_directory:{display_name:string}}};
 function TrustedDevices(){
   const [kinds,setKinds]=useState<Record<number,string>>({});
+  const [view,setView]=useState<"pending"|"approved"|"history"|"all">("pending");
   const [devices,setDevices]=useState<TrustedDevice[]>([]),[error,setError]=useState(""),[busy,setBusy]=useState(false);
   const load=async()=>{setBusy(true);try{const {data,error}=await customerAdminRequest({action:"devices"});if(error||!data?.devices)throw new Error(data?.error||"تعذر تحميل الأجهزة");setDevices(data.devices);}catch(e){setError(e instanceof Error?e.message:"تعذر الاتصال");}finally{setBusy(false);}};
   useEffect(()=>{void load();},[]);
   const change=async(id:number,action:string)=>{setBusy(true);setError("");try{const {data,error}=await customerAdminRequest({action,device_id:id,device_kind:kinds[id]||"desktop"});if(error){let message=data?.error;try{if(error.context)message=(await error.context.clone().json()).error;}catch{}throw new Error(message||error.message||"تعذر تحديث الجهاز");}await load();}catch(e){setError(e instanceof Error?e.message:"تعذر الاتصال");}finally{setBusy(false);}};
   const state=(d:TrustedDevice)=>d.revoked_at?"ملغى":!d.approved_at?"بانتظار الاعتماد":new Date(d.expires_at||0).getTime()<=Date.now()?"منتهي":"معتمد";
+  const visibleDevices=devices.filter(d=>view==="all"||(view==="pending"?state(d)==="بانتظار الاعتماد":view==="approved"?state(d)==="معتمد":state(d)==="ملغى"||state(d)==="منتهي"));
   return <Card title="الأجهزة الموثوقة" extra={<Button loading={busy} onClick={()=>void load()}>تحديث</Button>}>
     <Alert type="info" message="جهازان كحد أقصى لكل زبون. اعتماد الكمبيوتر 7 أيام والهاتف 30 يومًا، وإلغاء الاعتماد يبطل كل جلسات الجهاز." style={{marginBottom:12}}/>
     {error&&<Alert type="error" message={error} style={{marginBottom:12}}/>}
-    <Table rowKey="id" loading={busy} dataSource={devices} pagination={{pageSize:10}} scroll={{x:850}} columns={[
+    <Space wrap style={{marginBottom:16}}><Button type={view==="pending"?"primary":"default"} onClick={()=>setView("pending")}>طلبات الاعتماد ({devices.filter(d=>state(d)==="بانتظار الاعتماد").length})</Button><Button type={view==="approved"?"primary":"default"} onClick={()=>setView("approved")}>المعتمدة ({devices.filter(d=>state(d)==="معتمد").length})</Button><Button type={view==="history"?"primary":"default"} onClick={()=>setView("history")}>السجل ({devices.filter(d=>["ملغى","منتهي"].includes(state(d))).length})</Button><Button type={view==="all"?"primary":"default"} onClick={()=>setView("all")}>الكل</Button></Space>
+    <Table rowKey="id" loading={busy} dataSource={visibleDevices} pagination={{pageSize:10}} scroll={{x:850}} columns={[
       {title:"الزبون",render:(_,d)=>d.flexy_mini_customer_accounts?.money_party_directory?.display_name||d.flexy_mini_customer_accounts?.username},
       {title:"المستخدم",render:(_,d)=>d.flexy_mini_customer_accounts?.username},
       {title:"الجهاز",render:(_,d)=>d.device_label+" #"+d.id},
-      {title:"الحالة",render:(_,d)=><Tag color={state(d)==="معتمد"?"green":"orange"}>{state(d)}</Tag>},
+      {title:"الحالة",render:(_,d)=><Tag color={state(d)==="معتمد"?"green":state(d)==="بانتظار الاعتماد"?"orange":"default"}>{state(d)}</Tag>},
       {title:"تاريخ الطلب",render:(_,d)=>new Date(d.created_at).toLocaleString("ar-DZ")},
       {title:"آخر استعمال",render:(_,d)=>d.last_used_at?new Date(d.last_used_at).toLocaleString("ar-DZ"):"لم يدخل بعد"},
-      {title:"الإجراءات",render:(_,d)=><Space>{state(d)!=="معتمد"&&<Select value={kinds[d.id]||"desktop"} onChange={v=>setKinds({...kinds,[d.id]:v})} options={[{value:"desktop",label:"كمبيوتر · 7 أيام"},{value:"mobile",label:"هاتف · 30 يومًا"}]} />}{state(d)!=="معتمد"&&<Button disabled={busy} onClick={()=>void change(d.id,"approve_device")}>اعتماد الجهاز</Button>}{!d.revoked_at&&<Button danger disabled={busy} onClick={()=>void change(d.id,"revoke_device")}>إلغاء الاعتماد</Button>}</Space>}
+      {title:"الإجراءات",render:(_,d)=><Space>{state(d)==="بانتظار الاعتماد"&&<Select value={kinds[d.id]||"desktop"} onChange={v=>setKinds({...kinds,[d.id]:v})} options={[{value:"desktop",label:"كمبيوتر · 7 أيام"},{value:"mobile",label:"هاتف · 30 يومًا"}]} />}{state(d)==="بانتظار الاعتماد"&&<Button disabled={busy} onClick={()=>void change(d.id,"approve_device")}>اعتماد الجهاز</Button>}{!d.revoked_at&&<Button danger disabled={busy} onClick={()=>void change(d.id,"revoke_device")}>إلغاء الاعتماد</Button>}</Space>}
     ]}/>
   </Card>;
 }
