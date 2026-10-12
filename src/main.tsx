@@ -540,20 +540,7 @@ function TableCustomerLogin(){
   },[token]);
   const logout=async()=>{try{await call({action:"logout",token});}catch{}window.localStorage.removeItem("flexy_mini_customer_token");setToken("");setAccount(null);window.location.hash="#/login";};
   if(!token)return <Navigate to="/login" replace/>;
-  return <ConfigProvider direction="rtl"><div style={{maxWidth:680,margin:"36px auto",padding:16}}>
-    <Card title="⚡ فليكسي ميني — حساب الزبون">
-      {account?<Space direction="vertical" style={{width:"100%"}}>
-        <Alert type="success" message={"مرحبًا "+account.username}/>
-        {account.phone&&<Text>الهاتف: <span dir="ltr">{account.phone}</span></Text>}
-        <CustomerCardsCatalog token={token}/>
-        <Button onClick={()=>void logout()}>تسجيل الخروج</Button>
-      </Space>:<Space direction="vertical" style={{width:"100%"}}>
-        {!error&&<Text type="secondary">جاري التحقق من الجلسة...</Text>}
-        {error&&<Alert type="error" message={error}/>}
-        <Button onClick={()=>{window.localStorage.removeItem("flexy_mini_customer_token");setToken("");window.location.hash="#/login";}}>العودة إلى تسجيل الدخول</Button>
-      </Space>}
-    </Card>
-  </div></ConfigProvider>;
+  return <Dashboard customerToken={token} customerAccount={account} customerError={error} onCustomerLogout={()=>void logout()}/>;
 }
 function CustomerDashboard() {
   const { mutate: logout } = useLogout();
@@ -592,7 +579,8 @@ function HomeByRole() {
   useEffect(()=>{let active=true;void isShopAdmin().then(v=>{if(active)setAdmin(v);});return ()=>{active=false;};},[]);
   return admin===null?<Card loading style={{margin:24}}/>:admin?<Dashboard/>:<CustomerDashboard/>;
 }
-function Dashboard() {
+function Dashboard({customerToken,customerAccount,customerError,onCustomerLogout}:{customerToken?:string;customerAccount?:{username:string;phone?:string;party_id:number}|null;customerError?:string;onCustomerLogout?:()=>void} = {}) {
+  const isCustomer=Boolean(customerToken);
   const { mutate: logout } = useLogout();
   const validPages = new Set(["home","flexy","idoom","store","operations","cards","inventory","customers","devices","stations","members","ads","settings"]);
   const readPage = () => { const value = new URLSearchParams(window.location.hash.split("?")[1] || "").get("page"); return value && validPages.has(value) ? value : "home"; };
@@ -612,7 +600,8 @@ function Dashboard() {
   const [collapsed, setCollapsed] = useState(false);
   const screens = Grid.useBreakpoint();
   const mobile = !screens.md;
-  const menu = <Menu aria-label="أقسام لوحة الإدارة" mode="inline" selectedKeys={[page]} items={items} onClick={({ key }) => { setPage(key); setDrawer(false); }} />;
+  const customerItems = items.filter(group=>group.label==="الخدمات");
+  const menu = <Menu aria-label="أقسام التطبيق" mode="inline" selectedKeys={[page]} items={isCustomer?customerItems:items} onClick={({ key }) => { setPage(key); setDrawer(false); }} />;
   return <ConfigProvider direction="rtl" theme={{ token: { colorPrimary: "#2563eb", borderRadius: 10 } }}>
     <Layout className="app-layout" dir="rtl">
       {!mobile && <Sider width={242} collapsedWidth={76} collapsed={collapsed} theme="light" className="app-sider">
@@ -625,14 +614,17 @@ function Dashboard() {
             {mobile && <Button onClick={() => setDrawer(true)} aria-label="فتح القائمة">☰</Button>}
             <Text strong>Flexy Mini</Text>
           </Space>
-          <Space><Tag color={client ? "green" : "blue"}>v0.9.2 · {client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{client && <Button size="small" onClick={() => logout()}>خروج</Button>}</Space>
+          <Space><Tag color={client ? "green" : "blue"}>v0.9.2 · {isCustomer ? "حساب الزبون" : client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{<Button size="small" onClick={isCustomer?onCustomerLogout:()=>logout()}>خروج</Button>}</Space>
         </Header>
         <Content className="app-content">
           {page !== "home" && <div className="page-heading"><Title level={mobile ? 3 : 2}>{names[page]}</Title></div>}
+          {isCustomer && !customerAccount && <Alert type={customerError?"error":"info"} showIcon message={customerError||"جاري التحقق من حساب الزبون"} style={{marginBottom:16}}/>}
+          {isCustomer && customerAccount && page==="home" && <Alert type="success" showIcon message={"مرحبًا "+customerAccount.username} style={{marginBottom:16}}/>}
           {page === "home" ? <>
-            {client && <div style={{marginBottom:18}}><AdSystem db={client}/></div>}
-            {client && <AdminWallet db={client}/>}
+            {!isCustomer && client && <div style={{marginBottom:18}}><AdSystem db={client}/></div>}
+            {!isCustomer && client && <AdminWallet db={client}/>}
 
+            {isCustomer && customerAccount && <CustomerCardsCatalog token={customerToken!}/>}
             <Title level={4} style={{ marginBottom: 16 }}>الخدمات</Title>
             <Row gutter={[12, 12]}>
               {[
@@ -641,7 +633,7 @@ function Dashboard() {
                 { title: "بطاقات رقمية", subtitle: "ألعاب، اتصالات وبرامج", color: "#625ee8", target: "store", symbol: "▣" }
               ].map(service => <Col xs={24} md={8} key={service.title}><div onClick={() => setPage(service.target)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter") setPage(service.target); }} style={{ background: service.color, borderRadius: 14, color: "white", padding: "22px 20px", minHeight: 112, cursor: "pointer", boxShadow: "0 6px 15px rgba(0,0,0,.08)" }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 20, fontWeight: 700 }}>{service.title}</span><span style={{ fontSize: 27 }}>{service.symbol}</span></div><div style={{ opacity: .9, marginTop: 9 }}>{service.subtitle}</div></div></Col>)}
             </Row>
-          </> : page === "ads" && client ? <AdSystem db={client} admin /> : page === "settings" ? <ConnectionDiagnostics /> : page === "devices" ? <TrustedDevices /> : page === "customers" ? <MasterCustomerLookup /> : page === "members" ? <><MiniMembers />{client&&<CreditAdmin db={client}/>}</> : page === "cards" ? <CardsCatalog /> : page === "operations" ? <Card title="عملياتي"><Empty description="سجل عمليات حسابك لم يُفعّل بعد" /></Card> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز" /></Card>}
+          </> : isCustomer ? (page==="store"||page==="cards" ? <CustomerCardsCatalog token={customerToken!}/> : page==="operations" ? <Card title="عملياتي"><Empty description="سجل العمليات غير مفعّل بعد"/></Card> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز"/></Card>) : page === "ads" && client ? <AdSystem db={client} admin /> : page === "settings" ? <ConnectionDiagnostics /> : page === "devices" ? <TrustedDevices /> : page === "customers" ? <MasterCustomerLookup /> : page === "members" ? <><MiniMembers />{client&&<CreditAdmin db={client}/>}</> : page === "cards" ? <CardsCatalog /> : page === "operations" ? <Card title="عملياتي"><Empty description="سجل عمليات حسابك لم يُفعّل بعد" /></Card> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز" /></Card>}
           <div className="app-footer">Flexy Mini · Refine + Ant Design · عرض تجريبي فقط</div>
         </Content>
         <nav className="bottom-service-nav" aria-label="خدمات الموقع" dir="rtl">
