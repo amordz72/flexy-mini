@@ -255,7 +255,12 @@ function MasterCustomerLookup() {
     setSaving(true);setError("");setSavedMessage("");
     const {data,error}=await client.functions.invoke("flexy-mini-customers",{body:{action:"create",party_id:selected,username:username.trim(),phone,password:effectivePassword}});
     setSaving(false);
-    if(error||!data?.customer){setError(data?.error||"تعذر إنشاء الحساب. تأكد من عدم تكرار الاسم أو الهاتف أو الماستر.");return;}
+    if(error||!data?.customer){
+      let details=typeof data?.error==="string"?data.error:"";
+      if(error&&"context" in error&&error.context instanceof Response){try{const payload=await error.context.clone().json();if(typeof payload?.error==="string")details=payload.error;}catch{/* Keep safe fallback. */}}
+      const labels:Record<string,string>={"Invalid customer details":"الخادم رفض بيانات الحساب. تحقق من اسم المستخدم والهاتف وكلمة المرور.","Master not eligible":"الماستر المختار غير مؤهل للربط حاليًا.","Password service unavailable":"خدمة تشفير كلمة المرور غير متاحة.","Username, phone or Master already assigned":"اسم المستخدم أو الهاتف أو الماستر مرتبط بحساب آخر.","Creation failed":"فشل حفظ الحساب في قاعدة البيانات.","Unauthorized":"انتهت جلسة الإدارة؛ أعد تسجيل الدخول.","Admin only":"ليس لديك صلاحية إنشاء حساب."};
+      setError((labels[details]||details||error?.message||"تعذر إنشاء الحساب")+(error?.context instanceof Response?" (HTTP "+error.context.status+")":""));return;
+    }
     setSavedMessage("تم إنشاء الحساب: "+data.customer.username+" — "+data.customer.phone+(generatedPassword?" — كلمة المرور المولّدة: "+effectivePassword:""));
     setPassword("");setCreating(false);void loadAccounts();
   };
