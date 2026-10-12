@@ -35,6 +35,11 @@ Deno.serve(async(req)=>{
    const {data:result,error}=await admin.rpc("flexy_mini_device_session",{p_customer_id:account.id,p_credential_hash:credentialHash,p_token_hash:await sha256(token)});
    if(error)return respond(503,{error:"تعذر إنشاء الجلسة"});
    if(!result?.allowed)return respond(423,{code:existing.revoked_at?"DEVICE_REVOKED":"DEVICE_PENDING",error:existing.revoked_at?"تم إلغاء اعتماد هذا الجهاز. تواصل مع الإدارة":"الجهاز ينتظر الاعتماد أو انتهت مدة ثقته. تواصل مع الإدارة"});
+   // Record a successful customer login on the exact approved device, not on the account as a whole.
+   if(existing.id){
+     const {error:lastUsedError}=await admin.from("flexy_mini_trusted_devices").update({last_used_at:new Date().toISOString()}).eq("id",existing.id).eq("customer_id",account.id);
+     if(lastUsedError)console.error("Failed to update trusted device last_used_at after login",lastUsedError);
+   }
    return respond(200,{token,username:account.username,party_id:account.party_id});
  }
  if(action==="me"||action==="logout"){
