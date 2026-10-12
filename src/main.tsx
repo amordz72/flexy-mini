@@ -9,6 +9,7 @@ import { createClient } from "@supabase/supabase-js";
 import { dataProvider, liveProvider } from "@refinedev/supabase";
 
 import { ConfigProvider, Form, Input, Layout, Menu, Typography, Card, Row, Col, Table, Tag, Button, Space, Alert, Grid, Drawer, Empty, Descriptions, Select, Divider, Modal, message } from "antd";
+import { HomeOutlined, PhoneOutlined, WifiOutlined, AppstoreOutlined, HistoryOutlined, DatabaseOutlined, PlusOutlined, UserOutlined, SafetyCertificateOutlined, DesktopOutlined, TeamOutlined, NotificationOutlined, SettingOutlined, ArrowUpOutlined } from "@ant-design/icons";
 import "antd/dist/reset.css";
 import "./style.css";
 import AdSystem from "./AdSystem";
@@ -115,21 +116,21 @@ const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
 const items = [
  {type:"group" as const,label:"الخدمات",children:[
-  {key:"home",icon:<span>⌂</span>,label:"الرئيسية"},
-  {key:"flexy",icon:<span>☎</span>,label:"فليكسي"},
-  {key:"idoom",icon:<span>◉</span>,label:"تعبئة إيدوم"},
-  {key:"store",icon:<span>▤</span>,label:"البطاقات"},
-  {key:"operations",icon:<span>◷</span>,label:"عملياتي"}
+  {key:"home",icon:<HomeOutlined/>,label:"الرئيسية"},
+  {key:"flexy",icon:<PhoneOutlined/>,label:"فليكسي"},
+  {key:"idoom",icon:<WifiOutlined/>,label:"تعبئة إيدوم"},
+  {key:"store",icon:<AppstoreOutlined/>,label:"البطاقات"},
+  {key:"operations",icon:<HistoryOutlined/>,label:"عملياتي"}
  ]},
  {type:"group" as const,label:"الإدارة",children:[
-  {key:"cards",icon:<span>▦</span>,label:"إدارة البطاقات والأصناف"},
-  {key:"inventory",icon:<span>＋</span>,label:"أكواد البطاقات"},
-  {key:"customers",icon:<span>♙</span>,label:"الزبائن"},
-  {key:"devices",icon:<span>▣</span>,label:"الأجهزة الموثوقة"},
-  {key:"stations",icon:<span>▣</span>,label:"المحطات والشرائح"},
-  {key:"members",icon:<span>♧</span>,label:"المستخدمون والصلاحيات"},
-  {key:"ads",icon:<span>◈</span>,label:"إدارة الإعلانات"},
-  {key:"settings",icon:<span>⚙</span>,label:"الإعدادات"}
+  {key:"cards",icon:<DatabaseOutlined/>,label:"إدارة البطاقات والأصناف"},
+  {key:"inventory",icon:<PlusOutlined/>,label:"أكواد البطاقات"},
+  {key:"customers",icon:<UserOutlined/>,label:"الزبائن"},
+  {key:"devices",icon:<SafetyCertificateOutlined/>,label:"الأجهزة الموثوقة"},
+  {key:"stations",icon:<DesktopOutlined/>,label:"المحطات والشرائح"},
+  {key:"members",icon:<TeamOutlined/>,label:"المستخدمون والصلاحيات"},
+  {key:"ads",icon:<NotificationOutlined/>,label:"إدارة الإعلانات"},
+  {key:"settings",icon:<SettingOutlined/>,label:"الإعدادات"}
  ]}
 ];
 const names:Record<string,string>={devices:"الأجهزة الموثوقة وطلبات الاعتماد",home:"الرئيسية",flexy:"الفليكسي",idoom:"تعبئة إيدوم",store:"متجر البطاقات",operations:"العمليات",cards:"إدارة البطاقات والأصناف",inventory:"إضافة أكواد البطاقات",customers:"إدارة الزبائن",stations:"المحطات والشرائح",members:"المستخدمون والصلاحيات",ads:"إدارة الإعلانات",settings:"الإعدادات"};
@@ -626,22 +627,22 @@ function Dashboard({customerToken,customerAccount,customerError,onCustomerLogout
             <Title level={4} style={{ marginBottom: 16 }}>الخدمات</Title>
             <Row gutter={[12, 12]}>
               {[
-                { title: "الفليكسي", subtitle: "عمليات الشحن", color: "#f0523b", target: "flexy", symbol: "↗" },
-                { title: "تعبئة إيدوم", subtitle: "خدمات الإنترنت", color: "#41b95a", target: "idoom", symbol: "◎" },
-                { title: "بطاقات رقمية", subtitle: "ألعاب، اتصالات وبرامج", color: "#625ee8", target: "store", symbol: "▣" }
-              ].map(service => <Col xs={24} md={8} key={service.title}><div onClick={() => setPage(service.target)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter") setPage(service.target); }} style={{ background: service.color, borderRadius: 14, color: "white", padding: "22px 20px", minHeight: 112, cursor: "pointer", boxShadow: "0 6px 15px rgba(0,0,0,.08)" }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 20, fontWeight: 700 }}>{service.title}</span><span style={{ fontSize: 27 }}>{service.symbol}</span></div><div style={{ opacity: .9, marginTop: 9 }}>{service.subtitle}</div></div></Col>)}
+                { title: "الفليكسي", subtitle: "عمليات الشحن", color: "#f0523b", target: "flexy", symbol: "PhoneOutlined" },
+                { title: "تعبئة إيدوم", subtitle: "خدمات الإنترنت", color: "#41b95a", target: "idoom", symbol: "WifiOutlined" },
+                { title: "بطاقات رقمية", subtitle: "ألعاب، اتصالات وبرامج", color: "#625ee8", target: "store", symbol: "AppstoreOutlined" }
+              ].map(service => <Col xs={24} md={8} key={service.title}><div onClick={() => setPage(service.target)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter") setPage(service.target); }} style={{ background: service.color, borderRadius: 14, color: "white", padding: "22px 20px", minHeight: 112, cursor: "pointer", boxShadow: "0 6px 15px rgba(0,0,0,.08)" }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 20, fontWeight: 700 }}>{service.title}</span><span style={{ fontSize: 27 }}>{service.symbol==="PhoneOutlined"?<PhoneOutlined/>:service.symbol==="WifiOutlined"?<WifiOutlined/>:<AppstoreOutlined/>}</span></div><div style={{ opacity: .9, marginTop: 9 }}>{service.subtitle}</div></div></Col>)}
             </Row>
           </> : isCustomer ? (page==="store"||page==="cards" ? <CustomerCardsCatalog token={customerToken!}/> : page==="operations" ? <Card title="عملياتي"><Empty description="سجل العمليات غير مفعّل بعد"/></Card> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز"/></Card>) : page === "ads" && client ? <AdSystem db={client} admin /> : page === "settings" ? <ConnectionDiagnostics /> : page === "devices" ? <TrustedDevices /> : page === "customers" ? <MasterCustomerLookup /> : page === "members" ? <><MiniMembers />{client&&<CreditAdmin db={client}/>}</> : page === "cards" ? <CardsCatalog /> : page === "operations" ? <Card title="عملياتي"><Empty description="سجل عمليات حسابك لم يُفعّل بعد" /></Card> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز" /></Card>}
           <div className="app-footer">Flexy Mini · Refine + Ant Design · عرض تجريبي فقط</div>
         </Content>
         <nav className="bottom-service-nav" aria-label="خدمات الموقع" dir="rtl">
           {[
-            {key:"flexy",label:"فليكسي",symbol:"▣"},
-            {key:"idoom",label:"تعبئة إيدوم",symbol:"◎"},
-            {key:"home",label:"الرئيسية",symbol:"⌂"},
-            {key:"store",label:"البطاقات",symbol:"▤"},
-            {key:"operations",label:"العمليات",symbol:"◷"}
-          ].map(item=><Button key={item.key} type="text" className={page===item.key?"service-nav-active":""} onClick={()=>setPage(item.key)}><span className="service-nav-icon" aria-hidden="true">{item.symbol}</span><span>{item.label}</span></Button>)}
+            {key:"flexy",label:"فليكسي",symbol:"PhoneOutlined"},
+            {key:"idoom",label:"تعبئة إيدوم",symbol:"WifiOutlined"},
+            {key:"home",label:"الرئيسية",symbol:"HomeOutlined"},
+            {key:"store",label:"البطاقات",symbol:"AppstoreOutlined"},
+            {key:"operations",label:"العمليات",symbol:"HistoryOutlined"}
+          ].map(item=><Button key={item.key} type="text" className={page===item.key?"service-nav-active":""} onClick={()=>setPage(item.key)}><span className="service-nav-icon" aria-hidden="true">{item.symbol==="PhoneOutlined"?<PhoneOutlined/>:item.symbol==="WifiOutlined"?<WifiOutlined/>:item.symbol==="HomeOutlined"?<HomeOutlined/>:item.symbol==="AppstoreOutlined"?<AppstoreOutlined/>:<HistoryOutlined/>}</span><span>{item.label}</span></Button>)}
         </nav>
       </Layout>
     </Layout>
