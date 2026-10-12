@@ -96,7 +96,9 @@ Deno.serve(async(req)=>{
  if(action==="wallet_post"){
    const id=Number(body.customer_id),amount=Number(body.amount),kind=String(body.kind||""),note=String(body.note||"");
    if(!Number.isSafeInteger(id)||id<1||!Number.isFinite(amount)||amount<=0||amount>100000000||Math.round(amount*100)!==amount*100||!["deposit","withdrawal","debt_increase","debt_payment","profit_credit"].includes(kind))return respond(400,{error:"بيانات الحركة غير صالحة"});
-   const {data,error}=await admin.rpc("flexy_mini_wallet_post",{p_customer_id:id,p_kind:kind,p_amount:amount,p_note:note,p_actor:user.id});
+   const requestId=String(body.request_id||"");
+   if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId))return respond(400,{error:"معرف العملية مطلوب"});
+   const {data,error}=await admin.rpc("flexy_mini_wallet_post_once",{p_request_id:requestId,p_customer_id:id,p_kind:kind,p_amount:amount,p_note:note,p_actor:user.id});
    if(error)return respond(409,{error:error.message.includes("INSUFFICIENT")?"الرصيد أو الدين غير كافٍ":"تعذر تنفيذ الحركة"});
    return respond(200,{wallet:data});
  }
