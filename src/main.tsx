@@ -492,6 +492,39 @@ function TrustedDevices(){
     ]}/>
   </Card>;
 }
+function CustomerCardsCatalog({token}:{token:string}){
+  type Category={id:number;name:string};
+  type Product={id:number;category_id:number;name:string};
+  type Variant={id:number;product_id:number;name:string;denomination:number|null;stock_quantity:number};
+  const [catalog,setCatalog]=useState<{categories:Category[];products:Product[];variants:Variant[]}|null>(null);
+  const [error,setError]=useState("");
+  const [busy,setBusy]=useState(true);
+  useEffect(()=>{
+    let active=true;setBusy(true);
+    void fetch(url+"/functions/v1/flexy-mini-customers",{method:"POST",headers:{"Content-Type":"application/json",apikey:key},body:JSON.stringify({action:"catalog",token})})
+      .then(async r=>{const data=await r.json();if(!r.ok)throw new Error(data.error||"تعذر تحميل البطاقات");if(active)setCatalog(data);})
+      .catch(e=>{if(active)setError(e instanceof Error?e.message:"تعذر الاتصال");})
+      .finally(()=>{if(active)setBusy(false);});
+    return()=>{active=false;};
+  },[token]);
+  return <Card size="small" title="متجر البطاقات">
+    {busy&&<Text>جاري تحميل البطاقات...</Text>}
+    {error&&<Alert type="error" message={error}/>}
+    {catalog&&catalog.categories.map(category=>{
+      const products=catalog.products.filter(p=>p.category_id===category.id);
+      if(!products.length)return null;
+      return <div key={category.id} style={{marginBottom:14}}><Typography.Title level={5}>{category.name}</Typography.Title>
+        {products.map(product=><div key={product.id} style={{marginBottom:10}}><Text strong>{product.name}</Text>
+          <Space wrap style={{display:"flex",marginTop:6}}>
+            {catalog.variants.filter(v=>v.product_id===product.id).map(v=><Tag key={v.id}>{v.name||String(v.denomination||"بطاقة")} {v.stock_quantity>0?"— متوفر":"— غير متوفر"}</Tag>)}
+          </Space>
+        </div>)}
+      </div>;
+    })}
+    {catalog&&!catalog.products.length&&<Empty description="لا توجد بطاقات معروضة حاليًا"/>}
+    <Alert type="info" showIcon message="عرض فقط حاليًا؛ شراء البطاقات والشحن والدين غير مفعلة."/>
+  </Card>;
+}
 function TableCustomerLogin(){
   const [identifier,setIdentifier]=useState("");
   const [blocked,setBlocked]=useState(false);
@@ -513,7 +546,7 @@ function TableCustomerLogin(){
   const logout=async()=>{try{await call({action:"logout",token});}catch{}window.localStorage.removeItem("flexy_mini_customer_token");setToken("");setAccount(null);};
   return <ConfigProvider direction="rtl"><div style={{maxWidth:460,margin:"60px auto",padding:16}}>
     <Card title="Flexy Mini — دخول الزبون">
-      {account?<Space direction="vertical" style={{width:"100%"}}><Alert type="success" message={"مرحبًا "+account.username}/><Text>الهاتف: <span dir="ltr">{account.phone}</span></Text><Alert type="warning" message="عمليات الشحن والدين غير مفعلة لهذا الحساب حاليًا"/><Button onClick={()=>void logout()}>تسجيل الخروج</Button></Space>:<Space direction="vertical" style={{width:"100%"}}>
+      {account?<Space direction="vertical" style={{width:"100%"}}><Alert type="success" message={"مرحبًا "+account.username}/><Text>الهاتف: <span dir="ltr">{account.phone}</span></Text><CustomerCardsCatalog token={token}/><Button onClick={()=>void logout()}>تسجيل الخروج</Button></Space>:<Space direction="vertical" style={{width:"100%"}}>
         <Input value={identifier} onChange={e=>setIdentifier(e.target.value)} placeholder="اسم المستخدم أو رقم الهاتف" dir="ltr"/>
         <Input.Password value={password} onChange={e=>setPassword(e.target.value)} placeholder="كلمة المرور"/>
         {error&&<Alert type="error" message={error}/>}
