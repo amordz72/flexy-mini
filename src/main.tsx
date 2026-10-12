@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { Authenticated, Refine, useLogin, useLogout } from "@refinedev/core";
 import type { AuthProvider } from "@refinedev/core";
 import { AuthPage } from "@refinedev/antd";
-import { HashRouter, Route, Routes } from "react-router";
+import { HashRouter, Route, Routes, Navigate } from "react-router";
 import routerProvider from "@refinedev/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { dataProvider, liveProvider } from "@refinedev/supabase";
@@ -529,7 +529,6 @@ function TableCustomerLogin(){
   const [token,setToken]=useState(()=>window.localStorage.getItem("flexy_mini_customer_token")||"");
   const [account,setAccount]=useState<{username:string;phone?:string;party_id:number}|null>(null);
   const [error,setError]=useState("");
-  const [busy,setBusy]=useState(false);
   const call=async(body:Record<string,unknown>)=>{
     const response=await fetch(url+"/functions/v1/flexy-mini-customers",{method:"POST",headers:{"Content-Type":"application/json",apikey:key},body:JSON.stringify(body)});
     return {ok:response.ok,data:await response.json()};
@@ -540,7 +539,7 @@ function TableCustomerLogin(){
     return()=>{active=false;clearInterval(timer);window.removeEventListener("focus",check);};
   },[token]);
   const logout=async()=>{try{await call({action:"logout",token});}catch{}window.localStorage.removeItem("flexy_mini_customer_token");setToken("");setAccount(null);window.location.hash="#/login";};
-  if(!token){window.location.hash="#/login";return null;}
+  if(!token)return <Navigate to="/login" replace/>;
   return <ConfigProvider direction="rtl"><div style={{maxWidth:680,margin:"36px auto",padding:16}}>
     <Card title="⚡ فليكسي ميني — حساب الزبون">
       {account?<Space direction="vertical" style={{width:"100%"}}>
