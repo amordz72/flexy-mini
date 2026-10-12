@@ -268,19 +268,19 @@ function MasterCustomerLookup() {
   const loadAccounts=async()=>{if(!client)return;const {data,error}=await customerAdminRequest({action:"list"});if(!error&&Array.isArray(data?.customers))setAccounts(data.customers);};
   useEffect(()=>{void loadAccounts();},[]);
   const createAccount=async()=>{
-    if(!client||!selected||!username.trim()||!/^0[567][0-9]{8}$/.test(phone)){setError("اختر الماستر وأدخل اسم مستخدم وهاتفًا جزائريًا صحيحًا");return;}
+    if(!client||(!selected&&!name.trim())||!username.trim()||!/^0[567][0-9]{8}$/.test(phone)){setError("أدخل الاسم واسم المستخدم ورقم هاتف جزائري صحيحًا");return;}
     const generatedPassword = !password;
     const effectivePassword = password || Array.from(crypto.getRandomValues(new Uint8Array(8)), n => String((n % 8) + 1)).join("");
     setSaving(true);setError("");setSavedMessage("");
-    const {data,error}=await customerAdminRequest({action:"create",party_id:selected,username:username.trim(),phone,email:email.trim(),password:effectivePassword});
+    const {data,error}=await customerAdminRequest(selected?{action:"create",party_id:selected,username:username.trim(),phone,email:email.trim(),password:effectivePassword}:{action:"create_with_master",name:name.trim(),username:username.trim(),phone,email:email.trim(),password:effectivePassword});
     setSaving(false);
     if(error||!data?.customer){
       let details=typeof data?.error==="string"?data.error:"";
       if(error&&"context" in error&&error.context instanceof Response){try{const payload=await error.context.clone().json();if(typeof payload?.error==="string")details=payload.error;}catch{/* Keep safe fallback. */}}
-      const labels:Record<string,string>={"Invalid customer details":"الخادم رفض بيانات الحساب. تحقق من اسم المستخدم والهاتف وكلمة المرور.","Master not eligible":"الماستر المختار غير مؤهل للربط حاليًا.","Password service unavailable":"خدمة تشفير كلمة المرور غير متاحة.","Username, phone or Master already assigned":"اسم المستخدم أو الهاتف أو الماستر مرتبط بحساب آخر.","Creation failed":"فشل حفظ الحساب في قاعدة البيانات.","Unauthorized":"انتهت جلسة الإدارة؛ أعد تسجيل الدخول.","Admin only":"ليس لديك صلاحية إنشاء حساب."};
+      const labels:Record<string,string>={"Invalid customer details":"الخادم رفض بيانات الحساب. تحقق من اسم المستخدم والهاتف وكلمة المرور.","Master not eligible":"الماستر المختار غير مؤهل للربط حاليًا.","Password service unavailable":"خدمة تشفير كلمة المرور غير متاحة.","Username, phone or Master already assigned":"اسم المستخدم أو الهاتف أو الماستر مرتبط بحساب آخر.","Creation failed":"فشل حفظ الحساب في قاعدة البيانات.","Master identity already exists; select existing Master":"الاسم أو الهاتف مرتبط بهوية ماستر موجودة. ابحث عنها واخترها.","Master creation failed":"تعذر إنشاء الماستر. تحقق من البيانات أو وجود سجل مكرر.","Master identity check unavailable":"تعذر التحقق من تكرار الهوية. حاول لاحقًا.","Unauthorized":"انتهت جلسة الإدارة؛ أعد تسجيل الدخول.","Admin only":"ليس لديك صلاحية إنشاء حساب."};
       setError((labels[details]||details||error?.message||"تعذر إنشاء الحساب")+(error?.context instanceof Response?" (HTTP "+error.context.status+")":""));return;
     }
-    setSavedMessage("تم إنشاء الحساب: "+data.customer.username+" — "+data.customer.phone+(generatedPassword?" — كلمة المرور المولّدة: "+effectivePassword:""));
+    setSavedMessage((selected?"تم إنشاء الحساب: ":"تم إنشاء الماستر والحساب: ")+data.customer.username+" — "+data.customer.phone+(generatedPassword?" — كلمة المرور المولّدة: "+effectivePassword:""));
     setPassword("");setCreating(false);void loadAccounts();
   };
   return <Space direction="vertical" size="middle" style={{width:"100%"}}>
@@ -318,8 +318,8 @@ function MasterCustomerLookup() {
         </Card>)}
       </Space>
       {masterRecord&&<Space wrap style={{marginTop:12}}><Button onClick={()=>assignMaster(masterRecord,true)}>إسناد بيانات الماستر</Button><Text type="secondary">تعبئة الاسم والهاتف واسم المستخدم غير التقني من الماستر</Text></Space>}
-      <Alert style={{marginTop:12}} type={selected?"success":"info"} message={selected?"الماستر محدد. أدخل بيانات الدخول واضغط حفظ الزبون لإنشاء الحساب.":"اختر ماستر موجودًا قبل إنشاء الحساب."}/>
-      <Button style={{marginTop:12}} type="primary" loading={saving} disabled={!selected||!username||!phone} onClick={()=>void createAccount()}>حفظ الزبون وإنشاء الحساب</Button>
+      <Alert style={{marginTop:12}} type={selected?"success":"info"} message={selected?"الماستر محدد. أدخل بيانات الدخول واضغط حفظ الزبون لإنشاء الحساب.":"لا يوجد ماستر محدد. إذا تأكدت أن الزبون جديد، أنشئ الماستر والحساب معًا. تحقق من عدم وجود سجل سابق."}/>
+      <Button style={{marginTop:12}} type="primary" loading={saving} disabled={!username||!phone||(!selected&&!name.trim())} onClick={()=>void createAccount()}>{selected?"حفظ الزبون وإنشاء الحساب":"إنشاء ماستر جديد وربط الحساب"}</Button>
     </Card>}
   </Space>;
 }
