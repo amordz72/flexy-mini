@@ -96,7 +96,7 @@ export default function SamaOperationalActions({db}:{db:SupabaseClient}){
    }
   });
  };
- const visible=rows.filter(row=>row.station_online||row.modem_online||row.sim_online);
+ const visible=rows.filter(row=>row.station_online&&row.modem_online&&row.sim_online);
  return <Card title="تجهيز Sama لأول عملية" extra={<Button size="small" loading={loading} onClick={()=>void load()}>تحديث الحالة</Button>}>
   <Space direction="vertical" size="middle" style={{width:"100%"}}>
    <Typography.Text type="secondary">الخطوات: التأكد من شريحة Sama الفعلية، حفظ PIN الخدمة، اعتماد الشريحة، ثم فحص رصيدها. العرض والعمليات المالية لا تُنفذ من هذه البطاقة.</Typography.Text>
