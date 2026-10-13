@@ -43,9 +43,16 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .result.review{background:#fef6dd;color:#865e11}
 .summary{display:flex;gap:10px;justify-content:space-between;align-items:center;margin:12px 0}
 .summary strong{font-size:17px}
-.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:12px;min-width:450px}
-th,td{text-align:right;padding:9px 5px;border-bottom:1px solid #edf1f7;white-space:nowrap}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}
+th,td{text-align:right;padding:9px 5px;border-bottom:1px solid #edf1f7;white-space:normal;overflow-wrap:anywhere;vertical-align:middle;line-height:1.45}
 th{background:#f7f9fc;color:#526079}
+th:nth-child(1){width:24%}th:nth-child(2){width:26%}th:nth-child(3){width:14%}th:nth-child(4){width:16%}th:nth-child(5){width:20%}
+.cell-phone{direction:ltr;unicode-bidi:isolate;text-align:left;font-variant-numeric:tabular-nums}
+.cell-amount{direction:ltr;unicode-bidi:isolate;white-space:nowrap;font-variant-numeric:tabular-nums}
+.cell-when{direction:ltr;unicode-bidi:isolate;text-align:center;font-variant-numeric:tabular-nums}
+.cell-when span{display:block;white-space:nowrap;font-size:10px}
+@media(max-width:550px){th,td{font-size:11px;padding:8px 3px}.card .table-wrap{margin-inline:-2px}}
 #confirmDialog{border:1px solid #bed0f3;border-radius:14px;padding:19px;width:min(92vw,430px);max-width:430px;background:#fff;box-shadow:0 15px 60px #0f172a35;color:#273349}
 #confirmDialog::backdrop{background:#172b4d99}
 #confirmDialog h2{margin:0 0 12px}
@@ -83,7 +90,7 @@ th{background:#f7f9fc;color:#526079}
 </section>
 <section class="card">
 <div class="row justify"><h2>سجل المحاكاة</h2><button id="reset">مسح التجارب</button></div>
-<div class="table-wrap"><table><thead><tr><th>الرقم التجريبي</th><th>العرض</th><th>القيمة</th><th>الحالة</th><th>التاريخ والوقت</th></tr></thead><tbody id="history"></tbody></table></div>
+<div class="table-wrap"><table aria-label="سجل عمليات المحاكاة"><thead><tr><th>الرقم التجريبي</th><th>العرض</th><th>القيمة (دج)</th><th>الحالة</th><th>التاريخ والوقت</th></tr></thead><tbody id="history"></tbody></table></div>
 <p class="small">تُحفظ النتائج محليًا داخل هذا المتصفح فقط في مفتاح مستقل <code>flexy_public_lab_v1</code>. لا ننسخ معلومات العملاء أو مفاتيح الإنتاج.</p>
 </section>
 </main>
@@ -117,13 +124,13 @@ th{background:#f7f9fc;color:#526079}
  const formatWhen=record=>{
   if(record.createdAt){
    const date=new Date(record.createdAt);
-   if(Number.isFinite(date.getTime()))return date.toLocaleString("en-GB",{
-    day:"2-digit",month:"2-digit",year:"numeric",
-    hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false
-   });
+   if(Number.isFinite(date.getTime()))return [
+    date.toLocaleDateString("en-GB",{day:"2-digit",month:"2-digit",year:"numeric"}),
+    date.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false})
+   ];
   }
-  // Old localStorage records only saved a clock time. Never invent their date.
-  return record.time?record.time+" (تاريخ غير محفوظ)":"—";
+  // Historical entries only saved their time. Do not assign them a made-up date.
+  return ["تاريخ غير محفوظ",record.time||"—"];
  };
  const groupOf=f=>f==="PixX"?"PIXX":f==="Revolution"?"REVOLUTION":"SAMA";
  const hash=v=>Array.from(v).reduce((a,c)=>(((a*31)+c.charCodeAt(0))>>>0),7)%3;
@@ -196,9 +203,18 @@ th{background:#f7f9fc;color:#526079}
   if(!state.history.length){const tr=document.createElement("tr");const td=document.createElement("td");td.colSpan=5;td.textContent="لا توجد عمليات وهمية بعد";tr.append(td);$("history").append(tr);return}
   for(const record of state.history.slice(0,30)){
    const tr=document.createElement("tr");
-   for(const v of [record.phone,record.name,fmt(record.amount),record.outcome==="success"?"نجحت وهميًا":record.outcome==="failed"?"فشلت وهميًا":"مراجعة وهمية",formatWhen(record)]){
-    const td=document.createElement("td");td.textContent=v;tr.append(td);
-   }$("history").append(tr);
+   const fields=[record.phone,record.name,Number(record.amount).toLocaleString("en-US"),record.outcome==="success"?"نجحت وهميًا":record.outcome==="failed"?"فشلت وهميًا":"مراجعة وهمية"];
+   fields.forEach((v,i)=>{
+    const td=document.createElement("td");td.textContent=v;
+    if(i===0)td.className="cell-phone";
+    if(i===2)td.className="cell-amount";
+    tr.append(td);
+   });
+   const td=document.createElement("td");td.className="cell-when";
+   for(const part of formatWhen(record)){
+    const span=document.createElement("span");span.textContent=part;td.append(span);
+   }
+   tr.append(td);$("history").append(tr);
   }
  }
  $("nextPhone").onclick=createPhone;
