@@ -6,6 +6,8 @@ import {
 import { CheckCircleOutlined, PhoneOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import SamaOfferDiscoveries from "./SamaOfferDiscoveries";
+import CustomerOfferIdentity from "./CustomerOfferIdentity";
+import type { OfferGroup, OfferIdentity } from "./CustomerOfferIdentity";
 
 type Offer = {
   offer_uuid: string;
@@ -62,6 +64,12 @@ const currency = (amount: number) => new Intl.NumberFormat("en-US").format(amoun
 
 export default function FlexyServicePage({ db, isCustomer }: { db?: SupabaseClient; isCustomer: boolean }) {
   const [mode, setMode] = useState<Mode>("offers");
+  const [identity, setIdentity] = useState<OfferIdentity | null>(null);
+  const handleIdentity = useCallback((value: OfferIdentity | null) => {
+    setIdentity(value);
+    setChosenId(null);
+    setFamily("all");
+  }, []);
   const [phone, setPhone] = useState("");
   const [offers, setOffers] = useState<Offer[]>([]);
   const [loading, setLoading] = useState(false);
@@ -135,10 +143,20 @@ export default function FlexyServicePage({ db, isCustomer }: { db?: SupabaseClie
 
   useEffect(() => { void loadCatalog(); void loadStation(); }, [loadCatalog, loadStation]);
 
-  const families = useMemo(() => [...new Set(offers.map(row => row.family))], [offers]);
-  const visibleOffers = offers.filter(row => family === "all" || row.family === family);
-  const chosen = offers.find(row => row.offer_uuid === chosenId) || null;
-  const samaRoute = Boolean(chosen?.execution_enabled && chosen?.execution_available
+  const verifiedGroup: OfferGroup | null = identity?.phone === normalizePhone(phone)
+    && Date.parse(identity.validUntil) > Date.now() ? identity.group : null;
+  const compatibleGroup = (offer: Offer, group: OfferGroup | null): boolean => {
+    if (!group) return false;
+    if (group === "SAMA") return ["sama mix","sama talk","sama net"].includes(offer.family.toLowerCase());
+    if (group === "PIXX") return offer.family.toLowerCase() === "pixx";
+    return offer.family.toLowerCase() === "revolution";
+  };
+  const eligibleOffers = offers.filter(row => compatibleGroup(row, verifiedGroup));
+  const families = [...new Set(eligibleOffers.map(row => row.family))];
+  const visibleOffers = eligibleOffers.filter(row => family === "all" || row.family === family)
+    .sort((a,b) => a.amount-b.amount || a.family.localeCompare(b.family));
+  const chosen = eligibleOffers.find(row => row.offer_uuid === chosenId) || null;
+  const samaRoute = Boolean(verifiedGroup && chosen?.execution_enabled && chosen?.execution_available
     && chosen?.execution_sim_types?.includes("mobilis-sama")
     && chosen?.network_index);
 
@@ -147,7 +165,7 @@ export default function FlexyServicePage({ db, isCustomer }: { db?: SupabaseClie
       message.warning("حدد عائلة العرض ومبلغه أولًا");
       return;
     }
-    const match = offers.find(row => row.family === manualFamily
+    const match = eligibleOffers.find(row => row.family === manualFamily
       && row.amount === manualAmount
       && (!manualIndex.trim() || row.network_index === manualIndex.trim()));
     if (!match) {
@@ -184,7 +202,7 @@ export default function FlexyServicePage({ db, isCustomer }: { db?: SupabaseClie
   const submit = () => {
     const target = normalizePhone(phone);
     if (!validPhone(target)) { message.warning("اكتب رقم هاتف صحيحًا دون فراغات"); return; }
-    if (!chosen || !samaRoute) { message.warning("اختر عرضًا معتمدًا لمسار Sama"); return; }
+    if (!verifiedGroup || !identity || !chosen || !samaRoute) { message.warning("يجب التحقق من مجموعة عروض هذا الرقم أولًا، ثم اختيار عرض منها"); return; }
     if (isCustomer) { message.warning("شحن الزبون متوقف حتى تفعيل محفظته ومسار الطلبات"); return; }
     if (!stationUuid) { message.warning("Sama غير جاهزة. افحص الشريحة في المحطات والشرائح."); return; }
     if (!db || sendBusy || lastJob) return;
@@ -203,6 +221,17 @@ export default function FlexyServicePage({ db, isCustomer }: { db?: SupabaseClie
       okButtonProps: { danger: true },
       onOk: async () => {
         setSendBusy(true);
+        const verification = await db.rpc("flexy_mini_admin_customer_offer_identity", {p_phone: target});
+        const verified = (Array.isArray(verification.data) ? verification.data[0] : verification.data) as
+          {lookup_status:string;presentation_group:string|null;discovery_uuid:string|null;valid_until:string|null}|null;
+        if (verification.error || verified?.lookup_status !== "CLASSIFIED"
+          || verified.presentation_group !== verifiedGroup
+          || verified.discovery_uuid !== identity.discoveryUuid
+          || !verified.valid_until || Date.parse(verified.valid_until) <= Date.now()) {
+          setSendBusy(false);
+          message.error("تعذر تأكيد نوع عروض الزبون من السيرفر. أعد التحقق دون تنفيذ شحن.");
+          return;
+        }
         const request = requestRef.current || { fingerprint, key: crypto.randomUUID() };
         requestRef.current = request;
         savePending(request);
@@ -283,10 +312,18 @@ export default function FlexyServicePage({ db, isCustomer }: { db?: SupabaseClie
         <Button block size="large" type="primary" disabled>إرسال الرصيد — غير مفعّل</Button>
       </Space>
     </Card> : <>
+      <Card title="معرفة نوع عروض الزبون">
+        <CustomerOfferIdentity db={db} phone={phone} stationUuid={stationUuid}
+          isCustomer={isCustomer} onIdentity={handleIdentity}/>
+      </Card>
       <Card title="العروض" extra={<Button size="small" icon={<ReloadOutlined/>}
         onClick={() => void loadCatalog()} loading={loading}>تحديث</Button>}>
         <Space direction="vertical" size="middle" style={{ width: "100%" }}>
           {catalogError && <Alert type="error" showIcon message={catalogError}/>}
+          {!verifiedGroup && <Alert type="info" showIcon
+            message="العروض تظهر بعد التحقق من نوع الرقم"
+            description="نقرأ تصنيف الرقم المحفوظ إن كان صالحًا، أو نفتح استعلام Sama عند طلب الإدارة. لا نعرض PixX وRevolution وSama معًا دون دليل."/>}
+          {verifiedGroup && <Tag color="green">مجموعة عروض الرقم: {verifiedGroup==="SAMA"?"Sama":verifiedGroup==="PIXX"?"PixX":"Revolution"}</Tag>}
           <Select
             aria-label="عائلة عروض موبيليس"
             style={{ width: "100%" }}
@@ -296,9 +333,10 @@ export default function FlexyServicePage({ db, isCustomer }: { db?: SupabaseClie
             options={[{ value:"all", label:"جميع العروض" }, ...families.map(value => ({ value, label:value }))]}
           />
           {loading ? <Spin/> : visibleOffers.length === 0
-            ? <Empty description={isCustomer
-                ? "لا توجد عروض منشورة لهذا الحساب حاليًا"
-                : "لا توجد عروض مسجلة في الكتالوج"} />
+            ? <Empty description={!verifiedGroup
+                ? "لم يتم التحقق من مجموعة عروض هذا الرقم بعد"
+                : isCustomer ? "لا توجد عروض منشورة لهذا الحساب حاليًا"
+                : "لا توجد عروض متاحة لهذه المجموعة في الكتالوج"} />
             : <Row gutter={[10, 10]}>
               {visibleOffers.map(offer => <Col xs={12} sm={8} lg={6} key={offer.offer_uuid}>
                 <Button block size="large" type={chosenId === offer.offer_uuid ? "primary" : "default"}
@@ -316,7 +354,7 @@ export default function FlexyServicePage({ db, isCustomer }: { db?: SupabaseClie
               </Col>)}
             </Row>}
           {!isCustomer && <Button type="link" icon={<SearchOutlined/>}
-            onClick={() => setManual(value => !value)}>
+            disabled={!verifiedGroup} onClick={() => setManual(value => !value)}>
             {manual ? "إغلاق الإدخال اليدوي" : "اختيار عرض يدويًا من الكتالوج"}
           </Button>}
           {!isCustomer && manual && <Card size="small" title="إدخال رقم عرض معروف">
