@@ -12,6 +12,12 @@
 6. If handling Windows/HiLink, inspect `amordz72/station-connect` and `amordz72/station-services`. Do not add a parallel Node Agent in Flexy Mini.
 7. State which level has been verified (source / DB applied / CI / installed PWA / actual station / financial outcome). Never call a DB function existing “live-tested” merely because it was deployed.
 
+## DEVELOPMENT-GUARD-001 — mandatory release gate
+
+Global rule: [Developer DEVELOPMENT-GUARD.md](https://github.com/amordz72/developer/blob/main/guidelines/DEVELOPMENT-GUARD.md). This project's approved UI system is **Refine + React + Ant Design**, including the existing AntD `Table` for operations. No new parallel HTML/CSS/JS sales screen or another UI framework without separate owner-reviewed architectural approval. The legacy `public/lab.html` is retained **unchanged**, not treated as the future UI template.
+
+Run `node --test tests/development-guard.test.mjs` (prove PASS and deliberate violation REJECTION) then `node scripts/development-guard.mjs`. Both are wired into the Pages deployment workflow; PR CI also runs these plus existing tests/build. Changes to workflow/guard/config require human review. **This gate can stop the configured deployment but cannot stop direct `main` pushes unless GitHub branch protection is independently enabled and verified.** Never misstate that limitation.
+
 ## Architecture contracts
 
 - **One UI shared by users and admins; permissions are enforced server-side.** Do not create separate customer/admin layouts or login systems.
