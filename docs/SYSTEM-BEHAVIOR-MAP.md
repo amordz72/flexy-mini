@@ -1,0 +1,243 @@
+# Flexy Mini — خريطة سلوك النظام ومصادر الحقيقة
+
+**الحالة:** CURRENT WORKING MAP / فحص عبر المستودعات والكود وقراءة قاعدة البيانات فقط  
+**التاريخ:** 2026-10-13  
+**المالك التنفيذي لواجهة هذا المنتج:** `amordz72/flexy-mini`  
+**المرجع المركزي بين المشاريع:** `amordz72/developer`  
+**سياسة مجال Flexy الأحدث:** `amordz72/mytool-dev/flexy/policy/CURRENT-POLICY.md` مع `SOURCES.md`  
+**هذا الملف وثيقة فهم وسلوك، وليس إذنًا بإرسال USSD أو شحن أو تعديل الأرصدة.**
+
+> **اقرأ هذا الملف قبل أي تعديل Flexy**، ثم افحص الملف البرمجي الحقيقي في المستودع المعني والحالة الحية إذا لزم الأمر. لا تبدأ من الصفر. لا تستنتج أن خاصية جاهزة للإنتاج لمجرد وجود وظيفة SQL أو React أو سجل نجاح قديم.
+
+## 0. كيف نستعمل الخريطة ولا نضيع مرة أخرى؟
+
+- **[USER-APPROVED]** قرار صريح أكدّه صاحب المشروع، وهو المطلوب حتى لو التنفيذ ناقص.
+- **[CODE-VERIFIED]** موجود فعلًا في Source أو SQL الذي تمت قراءته؛ لا يعني اختباره على الجهاز.
+- **[DB-OBSERVED]** وجدناه في Supabase أثناء الفحص بتاريخ هذا الملف؛ لقطة تتغير، وليست إثبات اتصال دائم.
+- **[HISTORICAL-TEST]** تجربة أو سجل قديم، لا ننقله تلقائيًا إلى حكم على النسخة الحالية.
+- **[PENDING]** نقص مثبت أو عمل يحتاج اختبارًا، لا نسمّيه نجاحًا.
+- **[SUPERSEDED]** قرار سابق استُبدل بالأحدث، يُحفظ للتاريخ ولا يُنفّذ تلقائيًا.
+
+**ترتيب فضّ التعارض:** تأكيد المستخدم الأحدث + الدليل الحي الأحدث → سياسة `mytool-dev/flexy/policy/CURRENT-POLICY.md` المنطبقة على المجال → كود/Schema الإنتاج بعد التحقق → وثائق Developer المتخصصة → التجارب والمشاريع القديمة. لا يُعامل قرار Tehna 2026-08-23 على أنه يلغي تحديثات 2026-09-21/28.
+
+## 1. لماذا نبني Flexy Mini؟
+
+الهدف [USER-APPROVED]: منصة فليكسي عملية تقلل الاعتماد على تطبيقات خارجية منخفضة الهامش. المطلوب **بيع/تنفيذ فليكسي فعلي** لا مجرد صفحة جميلة أو مختبر اكتشاف.
+
+- **الشاشة المشتركة نفسها** لمدير المحل والعامل/الزبون، مع إمكانات وصلاحيات مختلفة؛ ممنوع إنشاء واجهتين متنافستين للأدوار.
+- شاشة «فليكسي»: رقم المستفيد → «عروض / رصيد عادي» → معرفة المجموعة المتاحة → اختيار العرض/المبلغ → توضيح المصدر والرسوم → تأكيد → متابعة الحالة والنتيجة. العميل لا يشاهد أدوات إدارة المحطة.
+- شاشة «المحطات والشرائح»: الاعتماد، الهوية، المودم، SIM، PIN المحفوظ، الجاهزية، التشخيص والرصيد؛ **لا تتحول إلى صفحة بيع أو صفحة استكشاف عروض منفصلة**.
+- اكتشاف عروض رقم الزبون عملية مساعدة **داخل مسار الفليكسي**؛ التاريخ الإداري قابل للطي، ولا يرسل استعلام عند فتح الصفحة.
+- **الـAgent لا يحدد الأسعار أو الربح أو مجموعة العروض أو اختيار مصدر التنفيذ.**
+
+## 2. المستودعات — من يملك ماذا؟
+
+| المستودع | مصدر الحقيقة/المسؤولية | ممنوع الخلط |
+|---|---|---|
+| `amordz72/flexy-mini` | Refine + React + Vite + Ant Design + PWA، شاشة البيع الحالية، استدعاء RPC، تجربة الإدارة والزبون | لا يملك دفتر الأرصدة أو كود المودم أو SIM مستقلة عن المصدر المركزي |
+| `amordz72/mytool-dev` | سياسة Flexy الحالية، كتالوج/مصادر/Routes/Profiles وسياسات الرصيد ومigrations مشتركة | لا نكرر جداول Master أو المال في Flexy Mini |
+| `amordz72/station-connect` | Agent Windows Node، هوية المحطة، heartbeat، مودمات، jobs/sessions/commands، Gateway، إرجاع رد الشبكة | لا يُوضع تسعير أو تحليل تجاري متين داخل Agent |
+| `amordz72/station-services` | خدمات عامة قابلة لإعادة الاستخدام: Huawei HiLink، Remote NDIS، USB، IP watcher، SMS، diagnostics | ليس سيرفر أعمال الفليكسي؛ hilink-modem 0.2.0 لم يُثبت نهائيًا على Windows الحقيقي |
+| `amordz72/developer` | الوثائق والسياسات السابقة ودروس الأخطاء وخطوة العمل التالية | ليس المستودع التنفيذي ولا مخزن أسرار |
+| `amordz72/tehna-connect-core` و`tehnapay-connect` | مراجع بحث وتجارب Discovery / Laravel / عروض وقدرات سابقة | **REFERENCE ONLY**؛ لا نعتمد قرارات قديمة خالفت سياسة MyTool الحالية أو ننقل التنفيذ آليًا |
+
+**المصدر المركزي الحالي للبيانات:** مشروع Supabase مشترك، لا قاعدة موازية جديدة داخل Flexy Mini. `Station Connect` ينفذ من خلال Server Adapter/DB، ولا يتطلب وجود Laravel لإكمال المنتج الحالي.
+
+## 3. الطبقات الثابتة التي لا تُخلط
+
+`Operator → Offer identity → Knowledge/Discovery → Presentation group → Execution route → Execution profile → Routing policy → Physical SIM / distributor account → Readiness → Execution decision → Job/Session/Command → Result → Operational balance → Reconciliation/Alert/Recharge`
+
+| المفهوم | معناه |
+|---|---|
+| المشغل | Mobilis / Djezzy / Ooredoo |
+| هوية العرض | **operator + family + amount**؛ لا يدخل فيها رقم Index أو نوع الشريحة أو المودم |
+| Family | PixX، Revolution، Sama Mix، Sama Talk، Sama Net... |
+| Presentation Group | PIXX / REVOLUTION / SAMA؛ مجموعات ظهور حسب ما أثبته استكشاف المستفيد |
+| Catalog | بيانات العرض المعروفة والمبالغ والمسارات؛ لا يعاد بناؤها عند كل عملية |
+| Source / Route | كيف يمكن تنفيذ عرض معلوم؛ قد توجد بدائل Sama/Arsselli لاحقًا |
+| Profile | خطوات وقالب USSD وقواعد الأدلة؛ Schema/قراءة إدارة موجودة تاريخيًا، والمحرك الحي المبني على Profiles **غير مثبت كمسار كامل** |
+| Physical SIM | ICCID/IMSI ونوع الشريحة وحالتها ومحطتها ورصيدها؛ ليست هوية العرض |
+| Station/Modem | منفذ Hardware متغير؛ IP/USB ليس هوية دائمة للشريحة |
+| Balance | رصيد تشغيلي لكل SIM أو حساب موزع، لا مجموع عام دون مصدر |
+| Card stock | مخزون تجهيز/تعبئة الشرائح، منفصل عن عروض البيع للعملاء |
+
+**[SUPERSEDED]** هوية `SimType + Family + Amount` القديمة و«Sama المصدر الوحيد ولا fallback» القديم.  
+**[CURRENT]** إمكانية مصادر متعددة وترتيب ديناميكي عندما تكون Routes معتمدة؛ **[CURRENT PHYSICAL PILOT]** التركيز في الاختبارات الحالية على Mobilis Sama فقط، دون الادعاء أن كل المصادر متصلة.
+
+## 4. الرحلة الصحيحة من أول تشغيل حتى إتمام عرض
+
+### F0 — هوية وصلاحيات
+1. المستخدم يدخل بواسطة النظام الحالي؛ جهاز الزبون الموثوق يحتاج اعتمادًا حسب صلاحياته.
+2. الخادم يميز المدير/العامل/الزبون؛ أفعال المال/إدارة الشرائح لا تكفي فيها إخفاء الأزرار.
+3. [CODE-VERIFIED] عمليات استكشاف/تنفيذ الإدارة الحالية RPCs خلف `private.is_shop_admin()`. [PENDING] لا توجد قناة مكتملة مصادق عليها لتمكين الزبون من discovery/send المالي بنفس الطريقة؛ **لا تُفتح RPC إدارية للعميل/anon**.
+
+### F1 — تجهيز المحطة والشريحة تلقائيًا حيثما أمكن
+1. Station Agent يفتح اتصالًا **Outbound HTTPS**، enroll/approved، heartbeat، اكتشاف المودمات/الشرائح.
+2. نربط SIM بهوية مستقرة **ICCID/IMSI**؛ رقم هاتف الشريحة يُقرأ إن تيسر أو يؤكد إداريًا، وليس رقم العميل المستفيد.
+3. تتحقق المنصة من SIM type الحقيقي: `mobilis-sama` أو `mobilis-arsselli`... وليس من ظهور مودم قديم فقط.
+4. خدمة PIN الخاصة بالشريحة تُخزن في Secret/Vault؛ لا توضع في كود الواجهة أو الوثائق أو logs.
+5. **الاعتماد الأمني للشريحة إجراء إدارة صريح عند التجهيز الأول**؛ لا تخلطه مع قراءة الرصيد اليومية.
+6. تُعرض أسباب عدم الجاهزية بدقة: station heartbeat، modem، SIM، operator، sim_type، PIN، approval، baseline/balance، route.
+7. [CODE-VERIFIED] `src/StationOverview.tsx` يجهز Sama، `src/SamaOperationalActions.tsx` يعرض الجاهزية والإذن/الفحص اليدوي؛ ``flexy_mini_admin_sama_readiness()` في DB تقرأ الحالة.
+8. [PENDING] جعل **القراءة الأولى للرصيد آلية بعد اعتماد الشريحة** بدل شرط أن يضغط المستخدم على زر قراءة يدوي؛ الزر القديم يبقى fallback وتشخيص.
+
+### F2 — المستفيد واكتشاف مجموعته
+1. تطبيع رقم الزبون: إزالة الفراغات والفواصل، +213/213 تتحول إلى 0، الاتجاه LTR؛ تحقق رقم جزائري 10 أرقام.
+2. افحص آخر Discovery **موثوق وصالح لنفس رقم المستفيد**؛ TTL ديناميكي. لا تستخدم نتيجة مستفيد آخر.
+3. إذا كان صالحًا، استعمل Group من `station_connect_offer_discoveries` دون إرسال USSD.
+4. إذا لم يوجد/انتهى TTL: يمكن للإدارة بدء **جلسة استكشاف واحدة** عبر Station Connect وSama بعد التأكيد؛ لا فتح جلسة آلية عند فتح الصفحة أو تغيير الرقم حرفًا حرفًا.
+5. Session USSD [مرجع تجارب Sama]: `*665*1*{phone}#` → طلب PIN الخدمة للشريحة حين تطلبه الشبكة → قراءة القوائم → 0/00 للتنقل فقط → raw responses محفوظة. لا اختيار عرض/تأكيد شحن أثناء الاكتشاف.
+6. رد الشبكة يحدد SAMA (Mix/Talk/Net)، PIXX أو REVOLUTION؛ قد يكون الحقل العلوي `family` فارغًا لكن عناصر القائمة تكفي لتحديد مجموعة واحدة. الرد المتناقض = UNKNOWN.
+7. الحالات: CLASSIFIED / IN_PROGRESS / NEEDS_DISCOVERY / UNKNOWN / NETWORK_ERROR؛ **خطأ أو فراغ لا يعني عدم وجود عروض**.
+8. [CODE-VERIFIED] `src/CustomerOfferIdentity.tsx` + RPC `flexy_mini_admin_customer_offer_identity` و`station_connect_admin_create_offer_discovery`؛ المدة الافتراضية الحالية **168 ساعة/7 أيام قابلة للتعديل**. لا نعيد اكتشاف كتالوج العرض الكامل لكل عملية.
+
+### F3 — عرض الكتالوج وتحديد الخدمة
+1. اقرأ `flexy_offer_catalog` عبر `flexy_get_visible_offer_catalog_v2` وفق role policy.
+2. بعد تحقق مجموعة المستفيد، اعرض عروض المجموعة وحدها؛ لا تجمع PixX وRevolution وSama قبل التصنيف.
+3. الظهور **لا يساوي الجاهزية للتنفيذ**؛ إن غابت SIM لا نحذف العرض من Catalog، بل نوضح حالة التنفيذ.
+4. Network Index والـExecution Profile مملوكان للمسار المعتمد؛ الإدخال اليدوي يطابق Catalog موثوقًا، لا يسمح بكود USSD مفتوح.
+5. سياسة الكتالوج تشمل قوائم 50/100... تاريخيًا، لكن Flexy Mini الحالي يخفي ما دون **500 دج** [CODE-VERIFIED]؛ هذا **فلتر واجهة/مرحلة** وليس دليلًا أن الشبكة لا تعرض 50/100. قرارات الإظهار حسب الدور ومستوى الأمان مستقلة.
+6. «رصيد عادي» مستقل عن «عروض»؛ لا تُرسل Sama كرصيد Arsselli بالخطأ. الشاشة الحالية تعرض خيار الرصيد لكن التنفيذ معطل حتى Route مثبت.
+
+### F4 — التحضير والإرسال المالي الآمن
+1. تأكد: رقم مستفيد صحيح + Discovery ما زال موثوقًا + عرض من مجموعته + Route مسموح + Source واقعي + رصيد تشغيلي كافٍ.
+2. السياسة الأحدث يمكنها ترتيب عدة Routes حسب enabled/verified/priority والرصيد؛ **مسار Flexy Mini الحالي موجّه عمليًا إلى Sama** ولم يثبت تطبيق Router متعدد المصادر داخل هذه الشاشة.
+3. تأكيد المستخدم النهائي وحده يرسل Job مالي. لا USSD تلقائي بمجرد اختيار العرض.
+4. [CODE-VERIFIED] `src/FlexyServicePage.tsx` يرسل `flexy_mini_admin_create_verified_offer_execute` الذي يربط رقم الزبون بنتيجة Discovery المعتمدة والعرض داخل الخادم، ثم يفوّض `station_connect_admin_create_offer_execute_v2`.
+5. رقم Idempotency خاص بنيّة الطلب نفسها ويظل محفوظًا عبر تحديث PWA؛ لا يعاد إرسال عملية معلقة بمفتاح جديد، ونتيجة UNKNOWN/REVIEW ليست نجاحًا/فشلًا محسومًا.
+6. الخادم يجهز Job → Session → Commands (`ussd_start`/`ussd_reply`/`ussd_release`) وينتظر رد الشبكة؛ Agent يرجع raw response ولا يصنف نجاحًا ماليًا من مجرد ACK.
+7. النجاح = رد أو دليل مؤكد، الفشل = رد مؤكد، الغموض = REVIEW وتحقيق لا إعادة مالية آلية.
+8. [PENDING] تدقيق ربط `station_connect_begin_command_session` بهوية SIM/جلسة حديثة عبر تبديل المودمات، واختبار end-to-end على النسخة الحالية قبل توسيع الشحن.
+
+### F5 — متابعة النتيجة والعمل اليومي
+1. تظهر الحالة queued/claimed/success/failed/review، Job ID، وقت الطلب، النتيجة، والمصدر.
+2. لا تكرار مالي عند انقطاع شبكة المستخدم أو إعادة تشغيل PWA.
+3. تُسجل عملية العميل/الحساب/الـSIM المسؤولة في طبقة الأعمال/الدفتر المناسبة؛ واجهة Flexy Mini ليست Ledger جديدًا.
+4. [PENDING] تمكين زبائن Flexy Mini من الإرسال مع تحقق المحفظة والحدود والحجز والصلاحيات من الخادم، واختبار آخر حالة وواجهة الجوال بعد النشر.
+
+## 5. الرصيد التلقائي — قرار ملزم لا زر يدوي كل مرة
+
+**[USER-APPROVED، مُعاد تأكيده 2026-10-13]** هذه السياسة كانت موثقة منذ 2026-09-22. مصدرها الأصلي:
+- `amordz72/developer/projects/flexy/BALANCE-DISCOVERY-CUMULATIVE-RECONCILIATION-POLICY-2026-09-22.md`
+- `amordz72/developer/guidelines/operational-balance-inventory-and-reconciliation.md`
+- `amordz72/mytool-dev/supabase/migrations/20260922211500_flexy_cumulative_balance_router_v1.sql`
+
+### دورة الرصيد لكل SIM/Account
+`SIM online & approved → إذا لا يوجد Baseline، اطلب أول Balance Lookup من الخلفية مرة واحدة → احفظ الرصيد الحقيقي → احسب Expected من العمليات المؤكدة → فحص Router/Low threshold → Reconciliation وفق سبب فعلي → سجل الفرق + Snapshot جديد`
+
+المعادلة:
+`expected = last_successful_network_baseline + confirmed_inflows_since_baseline − confirmed_outflows_since_baseline`
+
+- **SAMA:** خصم نجاح عرض = مبلغ العرض **+ 10 دج** ثابتة. نجاح 500 → خصم تشغيلي 510.
+- **Arsselli:** خصم نجاح = المبلغ نفسه من **حساب الموزع المحدد**؛ 04/GTS و05/Mobilis أمثلة، ليست Offer Index.
+- **Failed:** لا خصم. **Unknown/Review/Assumed:** لا خصم نهائي ولا إعادة مالية آلية؛ يمكن Reservation منفصل إذا تأكدت سياسة المحفظة.
+- **لا TTL زمني يمنع التنفيذ** عندما يوجد Baseline ناجح وحساب تراكمي موثوق؛ انتهاء 6/12 ساعة لا يفرض قراءة قبل كل بيع.
+- **المطابقة:** Trigger بالاستهلاك المؤكد منذ آخر Baseline (بداية **20,000 دج** قابلة للتعديل)، أو عودة شبكة/تعبئة خارجية/نتيجة غامضة/اختلاف فعلي؛ المقارنة `actual - expected` تُحفظ للمراجعة ولا تمحو التاريخ.
+- **حد الرصيد المنخفض:** مستقل وقابل للضبط **لكل شريحة أو حساب مصدر**؛ إنذار الإدارة عند عبور الحد، مع منع سيل إشعارات مكررة. نفاد بطاقة التجهيز ليس مانعًا لكل Route مستقل.
+- **فشل قراءة الرصيد:** لا تخمن صفرًا ولا تكرر USSD في حلقة. أول Baseline شرط مصدر جديد؛ بعده المطابقة المستحقة لا توقف شحنًا لمجرد مرور الوقت.
+- **بطاقات تعبئة الشريحة:** تتبع مخزون بطاقات Mobilis 1000/2000 في نظام مستقل؛ لا تستعمل البطاقة أو تعاودها وهي REVIEW. لا تفعّل تعبئة ذاتية من دون سياسة معتمدة منفصلة.
+
+**الحالة الحقيقية للميزات**:
+- [CODE-VERIFIED] النواة التراكمية **موجودة** في MyTool Dev + Supabase (دالة `private.station_connect_operational_balance` وواجهة قراءة الإدارة). تخصم العمليات المؤكدة من Baseline وتحسب reconciliation_due. لا يلزم تحديث رصيد رقمي يدوي عند كل نجاح.
+- [CODE-VERIFIED] زر `station_connect_admin_queue_balance`، وAgent `agent/src/balance.js` موجودان للقراءة الحقيقية؛ إعداد Sama حاليًا يحتوي زرًا يدويًا للاختبار/التشخيص.
+- **[PENDING]** trigger/worker تلقائي موثق لأول Baseline بعد تجهيز SIM، وجدولة آمنة single-flight/backoff لمطابقة الرصيد، وتنبيهات Low/Empty التي تصل للإدارة — **لم يثبت أنها تعمل end-to-end في Flexy Mini الحالي**. لا نكتب نظام أرصدة جديدًا بدل إصلاح ربط الموجود.
+
+## 6. كشف رقم الشريحة ≠ كشف عروض المستفيد
+
+- **رقم الشريحة الموصولة:** خاصية SIM (ICCID/IMSI)، يمكن قراءتها من HiLink ثم وسيلة موثقة **مربوطة بنوع SIM الدقيق**. لا تعتمد على المتعامل وحده. Mobilis `*101#`، Djezzy `99` عبر Service Code مع Agent داعم؛ المسار النهائي يتحدد من سجل القدرات الدقيق.
+- **اكتشاف عروض الزبون:** يستعلم عن *رقم الزبون المستفيد* عبر Sama ويستنتج Family/Group، لا يغيّر رقم SIM أو PIN أو مصدرها.
+- Ooredoo `*200*PIN#` **غير مثبت كاستعلام آمن**؛ لا تجرّبه تلقائيًا ولا تستعمل PIN أو كود بطاقة تخمينًا. توجد حراسة DB تمنع تكرار استعلام رقم أوريدو بعد الخطأ حتى 24 ساعة + موافقة إدارة جديدة.
+- لا تسجّل PIN، كلمة مرور، رقم بطاقة شحن، أو الرد الخام السري في Git أو Developer.
+
+## 7. الدليل التاريخي ≠ اختبار منتج اليوم
+
+**[DB-OBSERVED، 2026-10-13، أرقام تجميعية فقط بلا أرقام زبائن]:**
+- `station_connect_jobs`: **17** `mobilis.offer.discovery` بحالة success، أحدثها 2026-09-28.
+- `station_connect_offer_discoveries`: **28** سجل `DISCOVERY_COMPLETE` ناجح؛ أحدثها 2026-09-28. لم تعد ضمن TTL سبعة أيام بتاريخ الفحص، ولا ينبغي تقديمها كتصنيف صالح اليوم.
+- `station_connect_jobs`: **4** `mobilis.offer.execute` success و**1** review مسجلة قديمًا؛ و**6** نجاحات لمسار `mobilis.flexy.arsselli.696` مع 3 إخفاقات تاريخية. هذه أدلة على مسارات سابقة لا على نجاح الشحن من **Flexy Mini الحالي**.
+- قاعدة البيانات تحتوي SIM records متعددة؛ **وجودها لا يساوي وجود شرائح موصولة فعليًا**. يُفحص Heartbeat لكل محطة/مودم/شريحة عند القرار.
+- [USER-PWA-OBSERVED] وصل `Flexy Mini` للهاتف بكود بناء مرئي `4c97c9c` عند عرض المحطات؛ تغييرات التأكيد اللاحقة كانت Source commits **وليست إثبات PWA عند الجهاز**. يجب الاعتماد على زر «نسخ النسخة» بدل توقع أن آخر Commit وصل.
+- [USER-OBSERVED] النقر سابقًا على أزرار اعتماد Sama/الرصيد لم يُظهر Static Modal في PWA؛ لذلك نُقلت النافذة إلى تأكيد Inline في `src/SamaOperationalActions.tsx`. **ظهور التأكيد الجديد على الهاتف لم يُثبت بعد**.
+
+## 8. حالات الأعمال (لا تختزل كل الحالات في نعم/لا)
+
+| المكوّن | حالة صحيحة | الخطأ الذي نتجنبه |
+|---|---|---|
+| Station | pending / approved / suspended / revoked + heartbeat freshness | «متصل» اعتمادًا على آخر سجل قديم |
+| SIM | unknown / mobilis-sama / mobilis-arsselli / ... مع ICCID/IMSI ومصدر الرصيد | مزج نوع شريحة واسم مجموعة العرض |
+| Discovery | NEEDS_DISCOVERY / IN_PROGRESS / CLASSIFIED / UNKNOWN / NETWORK_ERROR | UNKNOWN = NO OFFERS |
+| Catalog | معروف/مستورد/مدخل يدوي + سياسات عرض | وجود العرض = توفر منفذ تنفيذه |
+| Route | verified/enabled/priority/candidate/review | if amount>=500 use Sama دون سياسة |
+| Financial Job | queued / claimed / success / failed / review | timeout=failed أو ACK=success |
+| Balance | UNINITIALIZED / READY / RECONCILIATION_DUE / DISCOVERY_UNAVAILABLE | قديم زمنيًا = صفر/غير صالح |
+| Low-stock | normal / low / empty + dedup alert | إجبار كل الشرائح على حد واحد |
+| Card Recharge | available/reserved/used/review/failed وفق نظامه | إعادة استخدام بطاقة معلقة/متشكك فيها |
+
+## 9. خريطة الملفات وRPCs — الطريق الأقصر للفحص
+
+### Flexy Mini UI
+- `src/main.tsx`: Shell المشتركة، Auth، مسار `flexy` و`stations`، تنقل الإدارة/العميل.
+- `src/FlexyServicePage.tsx`: إدخال رقم الزبون، عروض/رصيد، كتالوج حسب الدور، اختيار العرض، تأكيد الإرسال، idempotency محلي، فحص جاهزية Sama.
+- `src/CustomerOfferIdentity.tsx`: cached discovery + explicit session request + تحديث الحالة؛ **الاستكشاف الحي للإدارة فقط حاليًا**.
+- `src/SamaOfferDiscoveries.tsx`: السجل الإداري التاريخي داخل Flexy بوضع `historyOnly`.
+- `src/StationOverview.tsx`: المحطات والمودمات والشرائح ومعلوماتها وتجهيز Sama والحراسة الخاصة بأوريدو.
+- `src/SamaOperationalActions.tsx`: حالة الجاهزية، الاعتماد الإداري، وزر رصيد احتياطي بتأكيد Inline؛ **ليس محرك الرصيد التلقائي**.
+- `src/BuildCopyButton.tsx`: نسخة الـPWA المثبتة مع مرجع GitHub Actions.
+
+### Supabase (قاعدة مشتركة)
+- `public.flexy_offer_catalog`، `flexy_offer_execution_routes`، `flexy_offer_role_policies`: العروض والطرق والعرض حسب الدور.
+- `public.station_connect_stations`، `station_connect_modems`، `station_connect_sims`: المورد المادي وحالته وهويته.
+- `public.station_connect_jobs`، `station_connect_sessions`، `station_connect_commands`: سجل العمل/الأوامر، له حالة ونتيجة؛ لا ينشأ Ledger ثاني.
+- `public.station_connect_offer_discoveries` و`station_connect_offer_observations`: تاريخ اكتشاف أرقام العملاء والردود الموثقة.
+- `private.flexy_customer_offer_discovery_settings`: مدة الصلاحية القابلة للضبط.
+- `public.flexy_mini_admin_customer_offer_identity`: تصنيف المستفيد من Discovery موثوق.
+- `public.station_connect_admin_create_offer_discovery`: جلسة استكشاف عبر Sama.
+- `public.flexy_mini_admin_create_verified_offer_execute`: ربط مستفيد/Discovery/عرض قبل التفويض للتنفيذ.
+- `public.station_connect_admin_create_offer_execute_v2`: المسار المالي القائم لدى Station Connect.
+- `private.station_connect_operational_balance` / `station_connect_admin_sim_operational_balances`: الحساب التراكمي وقراءة الإدارة.
+- `public.flexy_mini_admin_sama_readiness`: فحص جاهزية بدون USSD.
+- `public.station_connect_admin_set_sim_flexy_approval`، `station_connect_admin_queue_balance`: اعتماد وسؤال الرصيد اليدوي عند الحاجة.
+
+### Station Connect
+- `agent/src/index.js`: حلقة Agent/heartbeat/Claim (نسخة مصدر GitHub المفحوصة 0.4.12، **ليست إثبات إصدار المثبت على المحطة**).
+- `agent/src/command-executor.js` و`agent/src/workflow.js`: تنفيذ أوامر تقنية USSD.
+- `agent/src/balance.js`: قراءة رصيد شبكة Sama.
+- `server/supabase/functions/station-gateway/orchestrators.ts`: متابعة ردود الشبكة والجلسات بمنطق السيرفر.
+- `contract/station-api-v1.md` و`docs/ARCHITECTURE.md`: العقد/المسؤوليات.
+- `amordz72/station-services/services/hilink-modem/`: قدرة HiLink عامة (فحص Windows حقيقي مستقل قبل الاستبدال).
+- **الـAgent المثبت ليس بالضرورة آخر Source Commit. لا تحدّثه عشوائيًا بدون صورة SHA/Version ومراجعة البروتوكول.**
+
+## 10. المخالفات/الثغرات التي وجدناها — لا نقفز فوقها
+
+1. **[PENDING]** أول قراءة تلقائية للـSIM واستدعاء المصالحة والتنبيه منخفض الرصيد لم تثبت end-to-end، رغم وجود Core DB تجميعي منذ سبتمبر. المطلوب وصل الناقص، لا اختراع نموذج آخر.
+2. **[PENDING]** `SamaOperationalActions` يعرض زر «قراءة الرصيد» يدويًا؛ هذا **fallback / diagnostics** وليس طريقة التشغيل النهائية المعتمدة. يجب تغيير السلوك لاحقًا لا الاكتفاء بالوثيقة.
+3. **[PENDING]** مسار `FlexyServicePage` الحالي يرسل عبر Sama فقط؛ السياسة الأحدث تسمح Routes متعددة/Arsselli إذا ثبتت وأُذن بها، فلا تخلط نطاق pilot بسياسة المنتج الأبدية.
+4. **[PENDING]** تأمين تنفيذ العملاء بالمحفظة وبـRPC/Backend مخصّص لا يسمح بالاستعلام عن أرقام اعتباطية؛ لا فتح admin RPCs للكل.
+5. **[PENDING]** تدقيق ربط Session→SIM والـmodem بعد تبديل USB/IP، idempotency عند فشل الاتصال ومراجعة UNKNOWN قبل أول تجربة مالية من Flexy Mini.
+6. **[PENDING]** اختبارات PWA/CI المنشورة للنسخة الجديدة وتأكيد دور الإدارة/العميل/تأكيدات الهاتف.
+7. **[KNOWN STALE DOC]** كان `README.md` في Flexy Mini يصف المشروع بأنه Scaffold بلا Station Connect أو تنفيذ مالي، وهذا مخالف للكود الحالي؛ يجب تصحيحه والربط بخريطة السلوك.
+8. **[HISTORICAL VS CURRENT]** ملف Developer `projects/flexy/MASTER-REFERENCE.md` يصف `flexy-mini` كـ`EMPTY` في فقرة من 2026-08-31؛ هذا وصف تاريخي **SUPERSEDED** بكود 2026-10-13.
+9. **[PENDING]** Execution Profiles Schema موجودة لكن مسار التنفيذ الحي لم يثبت اعتماده كليًا؛ لا نقل Profiles إلى كل عرض ولا فرض ترحيل كبير بلا اختبار.
+10. **[PENDING]** سياسة threshold والتنبيهات لكل SIM تحتاج واجهة إعداد واختبار منع تكرار الإشعارات، والرصيد التفصيلي مع فرق المطابقة.
+
+## 11. ترتيب الإنجاز القادم (بدون إعادة اختراع)
+
+1. اقرأ هذه الخريطة و`mytool-dev/flexy/policy/CURRENT-POLICY.md`؛ افحص SQL الإنتاج الحالي والـAgent المثبت، ولا تبدأ SQL جديدًا قبل مراجعة القائم.
+2. **الأولوية الحالية:** أكمل Automatic Opening Balance / initial Baseline لشرائح Sama بعد تعريفها واعتمادها، بالاعتماد على Job queue نفسها وبـsingle-flight/fail-safe؛ لا تجعل المدير يضغط «قراءة الرصيد» كل مرة.
+3. أثبت من Core ببيانات اختبار معزولة أن شحن Sama 500 يخصم 510 **مرة واحدة**، وFailure/Review لا يخصمان مؤكدًا، ثم مصالحة على الحد مع تسجيل Delta.
+4. فعّل Low/Empty alerts لكل SIM/Account في الإدارة مع Threshold قابل للتغيير وdedup؛ سجّل الدليل الميداني، لا تكتفِ بتوثيق.
+5. افحص UI الهاتف ووصول كود البناء وتأكيد المستخدم وحراسة Session→SIM.
+6. بعد التهيئة الآمنة، تجربة اكتشاف واحدة ثم **شحن فعلي واحد بإذن المستخدم الصريح**، مع مرجع الطلب والناتج/الخصم والمطابقة.
+7. توسع لاحقًا إلى Arsselli/Routes إضافية والعملاء فقط بعدما تثبت السياسة والقدرات الفعلية؛ لا تستبدل pilot بوعود غير مختبرة.
+
+## 12. طريقة تحديث هذه الخريطة بعد كل تجربة
+
+لكل Feature أو عطل سجل **في هذا الملف أو وثيقة ملحقة مرتبطة به**:
+- **طلب/سلوك المستخدم** + الخطأ الذي كان يحصل؛
+- **المكوّن المالك** (Flexy Mini / DB MyTool / Station Connect / Station Services)؛
+- **ما رأيناه** (Code/DB/فيديو/نتيجة اختبار) + التاريخ + Commit / Migration / Run ID إن توفر؛
+- **ماذا نعرف أنه نجح** مقابل **ما بقي غير مُتحقق**، وهل أُرسل USSD/شحن أم لا؛
+- **القرار الحالي** وهل يلغي قرارًا تاريخيًا؛
+- **الاختبار التالي المحدد** فقط.
+
+**قاعدة الحفظ:** Developer يشير إلى هذه الخريطة ويحتفظ بالمعرفة العامة؛ التفاصيل التنفيذية والملفات وآخر فحص داخل Flexy Mini. لا تُنسخ هذه الوثيقة كاملة في Developer. لا تُدخل فيها بيانات حساسة أو PIN أو أرقام زبائن أو أرصدة شخصية.
