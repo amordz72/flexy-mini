@@ -169,8 +169,7 @@ export default function CustomerOfferIdentity({
         return;
       }
       if (job.status !== "success") {
-        setNetworkError("لم يكتمل استعلام الشبكة (" + (job.result_code || job.status)
-          + "). لا نستنتج أن الزبون بلا عروض، ولا نكرر الاستعلام تلقائيًا.");
+        setNetworkError("لم يكتمل الاستعلام: " + (job.result_code || job.status));
       }
       } catch {
         if (isCurrent()) setError("تعذر متابعة الاستعلام. لن نفتح جلسة أخرى تلقائيًا.");

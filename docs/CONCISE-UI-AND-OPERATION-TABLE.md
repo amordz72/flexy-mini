@@ -24,3 +24,7 @@ Replace instructional blocks across pages with concise field labels, controls, c
 
 Live user-created discovery `dc45806d-22de-4961-8215-5dcc99937161` reached Station and returned `Please Enter your PIN code`; server's isPinPrompt currently matches only mot de passe/password, then ended DISCOVERY_TERMINAL and released session. This turn improves visibility; it does NOT claim this parser defect fixed. Next runtime step must audit previous MyTool/Tehna/Core response fixtures and full PIN/menu/rejection/confirmation lifecycle, then fix/test/deploy server classifier without changing client SIM secrets or automatic retry. Prior instructions to tell user to repeat fresh inquiry are superseded until parser fix verified.
 
+
+## Release evidence
+
+Source `f687c9d` and documentation-inclusive `0a7fc41` passed Actions `38402602418` (12 tests + TypeScript/Vite + Pages). Final copy follow-up removes the remaining generic no-offers/retry explanatory sentence from discovery failure text; the result code and raw reply remain visible in table, no state guard removed. SQL happy-read test passed again against deployed RPC. Advisor `authenticated_security_definer_function_executable` is intentional for this admin RPC: first-statement admin membership guard, revoked anon/PUBLIC, denied nonadmin regression. [Advisor reference](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable). Browser/installed-phone acceptance of this UI release still tracked separately.

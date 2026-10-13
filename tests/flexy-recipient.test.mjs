@@ -144,7 +144,7 @@ test('failed discovery remains unknown and polling never queues a retry',async()
     ?{job_uuid:'job',status:'claimed'}:{job_uuid:'job',status:'failed',result_code:'NETWORK_ERROR'})));
   const r=await mount(Identity,{...base,db});await click(r,'تأكيد الاستعلام');
   await act(async()=>{for(const tick of [...timers.values()])tick();await Promise.resolve()});await flush();
-  assert.equal(timers.size,0);assert.ok(r.root.findAllByType('alert').some(n=>String(n.props.message).includes('لا نستنتج')));
+  assert.equal(timers.size,0);assert.ok(r.root.findAllByType('alert').some(n=>String(n.props.message).includes('NETWORK_ERROR')));
   assert.equal(db.calls.filter(x=>x.name.includes('create_offer')).length,1);await close(r);
 });
 
