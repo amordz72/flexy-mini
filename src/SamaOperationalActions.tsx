@@ -1,5 +1,5 @@
 import {useCallback,useEffect,useState} from "react";
-import {Alert,Button,Card,Descriptions,Modal,Space,Tag,Typography,message} from "antd";
+import {Alert,Button,Card,Descriptions,Space,Tag,Typography,message} from "antd";
 import type {SupabaseClient} from "@supabase/supabase-js";
 
 export type SamaStatus={
@@ -53,48 +53,62 @@ export default function SamaOperationalActions({db}:{db:SupabaseClient}){
  },[db]);
  useEffect(()=>{void load();},[load]);
 
- const confirmApprove=(sim:SamaStatus)=>{
-  if(!sim.station_online||!sim.sim_online||!sim.modem_online||!sim.mobilis_network
-    ||sim.sim_type!=="mobilis-sama"||!sim.has_service_pin){
-    message.warning("عرّف الشريحة وPIN الخدمة وتأكد من اتصالها أولًا");return;
+ const [pending,setPending]=useState<{kind:"approve"|"balance";simUuid:string}|null>(null);
+ const [actionError,setActionError]=useState("");
+ const chooseAction=(sim:SamaStatus,kind:"approve"|"balance")=>{
+  if(busy)return;
+  if(!sim.station_online||!sim.modem_online||!sim.sim_online||!sim.mobilis_network
+    ||sim.sim_type!=="mobilis-sama"){
+   message.warning("المحطة والشريحة يجب أن تكونا متصلتين ومُعرّفتين كـ Sama أولًا");return;
   }
-  Modal.confirm({
-   title:"اعتماد شريحة Sama لتنفيذ الفليكسي",
-   content:"هذا اعتماد إداري للشريحة الموجودة فعليًا. لا ينفذ شحنًا ولا يفتح جلسة USSD. بعد الاعتماد يلزم فحص الرصيد قبل أي عملية مالية.",
-   okText:"اعتماد الشريحة",cancelText:"إلغاء",
-   onOk:async()=>{
-    setBusy(sim.sim_uuid);
-    try{
-      const {error}=await db.rpc("station_connect_admin_set_sim_flexy_approval",{p_sim_uuid:sim.sim_uuid,p_approved:true});
-      if(error)throw error;
-      message.success("تم اعتماد الشريحة إداريًا دون شحن");
-      await load();
-    }catch(e){message.error("تعذر الاعتماد: "+(e instanceof Error?e.message:String(e)));}
-    finally{setBusy(null);}
-   }
-  });
+  if(kind==="approve"&&!sim.has_service_pin){
+   message.warning("يجب حفظ PIN خدمة Sama أولًا");return;
+  }
+  if(kind==="approve"&&sim.flexy_approved){
+   message.info("الشريحة معتمدة مسبقًا");return;
+  }
+  setActionError("");
+  setPending({kind,simUuid:sim.sim_uuid});
  };
- const confirmBalance=(sim:SamaStatus)=>{
-  if(!sim.station_online||!sim.modem_online||!sim.sim_online||!sim.mobilis_network||sim.sim_type!=="mobilis-sama"){
-    message.warning("مطلوب اتصال شريحة Sama الصحيح قبل الاستعلام");return;
+ const executeConfirmedAction=async()=>{
+  if(!pending||busy)return;
+  const current=rows.find(sim=>sim.sim_uuid===pending.simUuid);
+  if(!current){
+   setActionError("الشريحة لم تعد موجودة في القائمة. اضغط تحديث الحالة.");
+   setPending(null);return;
   }
-  Modal.confirm({
-   title:"قراءة رصيد شريحة Sama",
-   content:"سيتم إنشاء طلب USSD لقراءة رصيد شريحة Sama عبر Station Connect. هذه ليست عملية شحن؛ لكنّها اتصال حقيقي بالشبكة. لا تكرر الطلب قبل ظهور النتيجة.",
-   okText:"تأكيد فحص الرصيد",cancelText:"إلغاء",
-   onOk:async()=>{
-    setBusy(sim.sim_uuid);
-    try{
-      const {data,error}=await db.rpc("station_connect_admin_queue_balance",{p_sim_uuid:sim.sim_uuid});
-      if(error)throw error;
-      const result=(Array.isArray(data)?data[0]:data) as {job_uuid:string;status:string}|null;
-      setQueuedJob(result?.job_uuid||null);
-      message.info("طلب قراءة الرصيد: "+(result?.status||"تم الإرسال")+". اضغط تحديث بعد رد Station.");
-      await load();
-    }catch(e){message.error("تعذر فحص الرصيد: "+(e instanceof Error?e.message:String(e)));}
-    finally{setBusy(null);}
+  const action=pending.kind;
+  const simUuid=pending.simUuid;
+  // Network and authorization checks are repeated by the existing server RPC.
+  // No command is issued by merely opening this inline confirmation.
+  setBusy(simUuid);
+  setActionError("");
+  try{
+   if(action==="approve"){
+    const {error}=await db.rpc("station_connect_admin_set_sim_flexy_approval",
+     {p_sim_uuid:simUuid,p_approved:true});
+    if(error)throw error;
+    message.success("تم اعتماد Sama إداريًا دون إرسال USSD");
+   }else{
+    const {data,error}=await db.rpc("station_connect_admin_queue_balance",
+     {p_sim_uuid:simUuid});
+    if(error)throw error;
+    const result=(Array.isArray(data)?data[0]:data) as
+      {job_uuid:string;status:string}|null;
+    if(!result?.job_uuid)throw new Error("لم يرجع السيرفر مرجع طلب القراءة؛ تحقق من العمليات قبل إعادة الطلب");
+    setQueuedJob(result.job_uuid);
+    message.info("طلب قراءة الرصيد: "+result.status+". انتظر رد Station واضغط تحديث الحالة.");
    }
-  });
+   setPending(null);
+   await load();
+  }catch(cause){
+   const reason=cause instanceof Error?cause.message:String(cause);
+   setActionError("تعذر "+(action==="approve"?"اعتماد الشريحة":"طلب قراءة الرصيد")+": "+reason);
+   message.error("تعذّر الإجراء؛ التفاصيل أسفل الأزرار.");
+   // Retain the confirmation panel to make the error visible in the same screen.
+  }finally{
+   setBusy(null);
+  }
  };
  const visible=rows.filter(row=>row.station_online&&row.modem_online&&row.sim_online);
  return <Card title="تجهيز Sama لأول عملية" extra={<Button size="small" loading={loading} onClick={()=>void load()}>تحديث الحالة</Button>}>
@@ -120,10 +134,27 @@ export default function SamaOperationalActions({db}:{db:SupabaseClient}){
         : null}
        {sim.has_service_pin&&sim.sim_type==="mobilis-sama"&&!sim.flexy_approved
          && <Button type="primary" block loading={busy===sim.sim_uuid}
-           onClick={()=>confirmApprove(sim)}>اعتماد الشريحة للتنفيذ</Button>}
+           onClick={()=>chooseAction(sim,"approve")}>اعتماد الشريحة للتنفيذ</Button>}
        {sim.sim_type==="mobilis-sama"&&
         <Button block loading={busy===sim.sim_uuid} disabled={!sim.station_online||!sim.modem_online||!sim.sim_online}
-          onClick={()=>confirmBalance(sim)}>قراءة رصيد Sama عبر الشبكة</Button>}
+          onClick={()=>chooseAction(sim,"balance")}>قراءة رصيد Sama عبر الشبكة</Button>}
+       {pending?.simUuid===sim.sim_uuid&&
+        <Card size="small" title="تأكيد الإجراء" style={{borderColor:"#2563eb"}}>
+         <Space direction="vertical" size="small" style={{width:"100%"}}>
+          <Alert showIcon type={pending.kind==="approve"?"info":"warning"}
+           message={pending.kind==="approve"?"اعتماد شريحة Sama للتنفيذ":"قراءة رصيد Sama من الشبكة"}
+           description={pending.kind==="approve"
+            ?"تأكيد إداري لهذه الشريحة فقط. لا يرسل USSD ولا ينفذ شحنًا."
+            :"سيُرسل طلب USSD واحدًا لقراءة الرصيد. هذا ليس شحنًا. لا تعاود الضغط إذا كانت النتيجة غير مؤكدة."}/>
+          {actionError&&<Alert showIcon type="error" message={actionError}/>}
+          <Space wrap>
+           <Button type="primary" loading={busy===sim.sim_uuid}
+            onClick={()=>void executeConfirmedAction()}>تأكيد الآن</Button>
+           <Button disabled={busy===sim.sim_uuid}
+            onClick={()=>{setPending(null);setActionError("");}}>إلغاء</Button>
+          </Space>
+         </Space>
+        </Card>}
        {queuedJob&&<Typography.Text type="secondary" copyable={{text:queuedJob}}>
         آخر طلب رصيد: {queuedJob}
        </Typography.Text>}
