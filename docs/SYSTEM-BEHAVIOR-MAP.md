@@ -9,6 +9,14 @@
 
 > **اقرأ هذا الملف قبل أي تعديل Flexy**، ثم افحص الملف البرمجي الحقيقي في المستودع المعني والحالة الحية إذا لزم الأمر. لا تبدأ من الصفر. لا تستنتج أن خاصية جاهزة للإنتاج لمجرد وجود وظيفة SQL أو React أو سجل نجاح قديم.
 
+## 20. 2026-10-13 — SIM Type selector: simple UI first; extra mismatch protection deferred
+
+- **[USER-APPROVED]** Use the existing Stations/SIMs table to choose the managed SIM type directly. Minimal effective options: Mobilis SAMA and Arsselli; one standard Djezzy Flexy type; one standard Ooredoo Flexy type. Gross variants remain in the canonical registry but are not offered in this simple first selector; no schema/catalog duplication.
+- **[USER-APPROVED / DEFER]** Owner explicitly postponed new server operator/type mismatch protection. Existing admin authorization and `station_connect_admin_update_sim` validation remain untouched. Do not claim deferred protections implemented or silently add new database constraints. Revisit before expansion to new operators, customer self-service or financial route automation.
+- **[UI IMPLEMENTED IN REVIEW BRANCH]** `src/StationOverview.tsx` reuses Ant Design `Select` and `Button` directly within the current desktop Table/mobile Descriptions. The enabled type list is read from `station_connect_admin_sim_types()`, filtered by detected operator, excluding only `-gros` variants for Djezzy/Ooredoo. Save is explicit via existing `station_connect_admin_update_sim`, passing only SIM ID and type. Existing independent Sama PIN setup is preserved; type-selection itself does not change PIN, approve SIM, dispatch USSD or create financial work.
+- **[USER-REPORTED]** The previously unknown second Mobilis SIM on new station is Arsselli. This fact is not a user instruction to mutate its record automatically; the admin will choose/save from the new interface once published.
+- **[PENDING]** PR CI, published GitHub Pages version and physical browser/PWA test. No live database rows changed through this implementation.
+
 ## 18. 2026-10-13 — واجهة Sama القابلة للفتح وإلغاء فرض مبلغ 500
 
 - **[USER-APPROVED]** Sama تُعرض داخل صندوق قابل للفتح فقط، وفيه Mix/Talk/Net؛ PixX وRevolution في صفوف كاملة الاسم والسعر مثل MyTool؛ لا تكرر بطاقات الفئات أو حاويات الشرح. كود الواجهة: `2734383`.
