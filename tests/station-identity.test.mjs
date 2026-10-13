@@ -14,9 +14,16 @@ export const Alert=c('alert'),Button=c('button'),Card=c('card'),Descriptions=c('
  Empty=c('empty'),Input=c('input'),Select=c('select'),Space=c('space'),Tag=c('tag');
 export const Grid={useBreakpoint:()=>({sm:true})};
 export const Typography={Text:c('text')};
-export const Table=props=>React.createElement('table',props,(props.dataSource||[]).map((r,i)=>
- React.createElement('row',{key:i},(props.columns||[]).map((col,j)=>
- React.createElement('cell',{key:j},col.render?col.render(r[col.dataIndex],r):String(r[col.dataIndex]??'')))));
+export const Table=props=>{
+ const rows=(props.dataSource||[]).map((record,i)=>{
+  const cells=(props.columns||[]).map((col,j)=>{
+   const value=col.dataIndex?record[col.dataIndex]:undefined;
+   return React.createElement('cell',{key:j},col.render?col.render(value,record):String(value??''));
+  });
+  return React.createElement('row',{key:i},cells);
+ });
+ return React.createElement('table',props,rows);
+};
 export const Modal=props=>props.open?React.createElement('modal',props,props.children):null;
 export const message={success(){},warning(){},info(){},error(){}};
 `;
