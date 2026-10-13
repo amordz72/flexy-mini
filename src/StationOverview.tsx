@@ -1,9 +1,10 @@
 import {useCallback,useEffect,useState} from "react";
-import {Alert,Button,Card,Descriptions,Empty,Grid,Input,Modal,Space,Table,Tag,Typography,message} from "antd";
+import {Alert,Button,Card,Descriptions,Empty,Grid,Input,Modal,Select,Space,Table,Tag,Typography,message} from "antd";
 import type {SupabaseClient} from "@supabase/supabase-js";
 import SamaOperationalActions from "./SamaOperationalActions";
 
 type Station={station_uuid:string;status:string;computer_name:string|null;last_seen_at:string|null;agent_version:string|null};
+type SimTypeOption={sim_type:string;display_name:string;operator_key:string;enabled:boolean;sort_order:number};
 type Hardware={modem_uuid:string;modem_ip:string|null;device_name:string|null;modem_last_seen_at:string|null;sim_uuid:string|null;msisdn:string|null;imsi:string|null;sim_type:string|null;has_pin:boolean;sim_last_seen_at:string|null};
 type PhoneAttempt={sim_uuid:string;status:string;result_code:string|null;discovered_msisdn:string|null;started_at:string|null};
 type PhoneQueue={queued:boolean;state:string;job_uuid:string|null};
@@ -55,10 +56,21 @@ export default function StationOverview({db}:{db:SupabaseClient}){
  const [manualNumbers,setManualNumbers]=useState<Record<string,string>>({});
  const [manualBusy,setManualBusy]=useState<string|null>(null);
  const [rearmBusy,setRearmBusy]=useState<string|null>(null);
- const [samaConfigSim,setSamaConfigSim]=useState<string|null>(null);
- const [samaPhone,setSamaPhone]=useState("");
+ const [pinConfigSim,setPinConfigSim]=useState<string|null>(null);
  const [servicePin,setServicePin]=useState("");
- const [samaConfigBusy,setSamaConfigBusy]=useState(false);
+ const [pinConfigBusy,setPinConfigBusy]=useState(false);
+ const [simTypes,setSimTypes]=useState<SimTypeOption[]>([]);
+ const [simTypesLoading,setSimTypesLoading]=useState(false);
+ const [draftTypes,setDraftTypes]=useState<Record<string,string>>({});
+ const [typeSaving,setTypeSaving]=useState<string|null>(null);
+ const loadSimTypes=useCallback(async()=>{
+  setSimTypesLoading(true);
+  const {data,error}=await db.rpc("station_connect_admin_sim_types");
+  setSimTypesLoading(false);
+  if(error){setError("تعذر قراءة أنواع الشرائح: "+error.message);return;}
+  if(!Array.isArray(data)){setError("قائمة أنواع الشرائح غير صالحة");return;}
+  setSimTypes((data as SimTypeOption[]).filter(type=>type.enabled));
+ },[db]);
  const loadOoredooGuards=useCallback(async()=>{
   const {data,error}=await db.rpc("station_connect_admin_ooredoo_lookup_guard");
   if(error){setError("تعذر قراءة حالة حماية أوريدو: "+error.message);return;}
@@ -85,7 +97,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   if(!Array.isArray(data)){setError("استجابة المحطات غير صالحة");return;}
   setStations(data as Station[]);setCheckedAt(new Date().toISOString());
  },[db]);
- useEffect(()=>{void refresh();void loadPhoneAttempts();void loadOoredooGuards();},[refresh,loadPhoneAttempts,loadOoredooGuards]);
+ useEffect(()=>{void refresh();void loadPhoneAttempts();void loadOoredooGuards();void loadSimTypes();},[refresh,loadPhoneAttempts,loadOoredooGuards,loadSimTypes]);
  const saveManualNumber=async(sim:Hardware)=>{
   if(!sim.sim_uuid)return;
   const phone=normalizePhone(manualNumbers[sim.sim_uuid]||"");
@@ -145,35 +157,88 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   }catch{message.error("تعذر الاتصال بخدمة اكتشاف رقم الشريحة");}
   finally{setPhoneBusy(null);}
  };
- const configureSama=async()=>{
-  if(!samaConfigSim||!selected)return;
-  const number=normalizePhone(samaPhone);
-  if(!/^0[5-7]\d{8}$/.test(number)){message.warning("أدخل رقم الشريحة الصحيح من 10 أرقام أولًا");return;}
+ const saveServicePin=async()=>{
+  if(!pinConfigSim||!selected)return;
   if(!/^[0-9]{4,8}$/.test(servicePin)){message.warning("أدخل PIN الخدمة من 4 إلى 8 أرقام");return;}
-  const sim=(hardware[selected]||[]).find(item=>item.sim_uuid===samaConfigSim);
-  if(!sim||sim.sim_type!=="unknown"||!sim.imsi?.startsWith("60301")||!online(sim.sim_last_seen_at)||!online(sim.modem_last_seen_at)){
-   message.warning("الشريحة لم تعد ظاهرة حديثًا كموبيليس؛ حدّث بيانات المودم قبل تجهيزها");return;
-  }
-  const station=stations.find(item=>item.station_uuid===selected);
-  if(!station||station.status!=="approved"||!online(station.last_seen_at)){
-   message.warning("اتصال المحطة غير حديث؛ حدّث حالة المحطة أولًا");return;
-  }
-  setSamaConfigBusy(true);
+  const sim=(hardware[selected]||[]).find(item=>item.sim_uuid===pinConfigSim);
+  if(!sim?.sim_uuid){message.error("الشريحة غير موجودة، حدّث بيانات المحطة");return;}
+  setPinConfigBusy(true);
   try{
-   const {error}=await db.rpc("station_connect_admin_update_sim",{
-    p_sim_uuid:sim.sim_uuid,p_msisdn:number,p_sim_type:"mobilis-sama",p_service_pin:servicePin
+   const {data,error}=await db.rpc("station_connect_admin_update_sim",{
+    p_sim_uuid:sim.sim_uuid,p_service_pin:servicePin
    });
    if(error)throw error;
-   setHardware(old=>Object.fromEntries(Object.entries(old).map(([uuid,items])=>[uuid,items.map(item=>item.sim_uuid===samaConfigSim?{...item,msisdn:number,sim_type:"mobilis-sama",has_pin:true}:item)])));
-   setSamaConfigSim(null);setSamaPhone("");setServicePin("");
-   message.success("تم تسجيل رقم الشريحة ونوع Sama وPIN الخدمة، دون إرسال USSD.");
-  }catch(cause){message.error("تعذر تجهيز Sama: "+(cause instanceof Error?cause.message:String(cause)));}
-  finally{setSamaConfigBusy(false);}
+   const updated=(Array.isArray(data)?data[0]:data) as {has_pin?:boolean}|null;
+   if(updated?.has_pin!==true)throw new Error("لم يؤكد السيرفر حفظ PIN");
+   setHardware(old=>Object.fromEntries(Object.entries(old).map(([station,items])=>[
+    station,items.map(item=>item.sim_uuid===pinConfigSim?{...item,has_pin:true}:item)
+   ])));
+   setPinConfigSim(null);setServicePin("");
+   message.success("تم حفظ PIN للشريحة دون تغيير نوعها أو اعتمادها");
+  }catch(cause){
+   message.error("تعذر حفظ PIN: "+(cause instanceof Error?cause.message:String(cause)));
+  }finally{setPinConfigBusy(false);}
  };
- const typeAction=(sim:Hardware)=><Space direction="vertical" size={4}>
-  <span>{sim.sim_type||"غير محدد"}</span>
-  {sim.sim_uuid&&sim.sim_type==="unknown"&&sim.imsi?.startsWith("60301")&&online(sim.sim_last_seen_at)&&online(sim.modem_last_seen_at)&&
-   <Button size="small" onClick={()=>{setSamaPhone(sim.msisdn||"");setServicePin("");setSamaConfigSim(sim.sim_uuid);}}>تجهيز Mobilis Sama</Button>}
+ const saveSimType=async(sim:Hardware)=>{
+  if(!sim.sim_uuid)return;
+  const chosen=draftTypes[sim.sim_uuid];
+  if(!chosen||chosen===sim.sim_type)return;
+  setTypeSaving(sim.sim_uuid);
+  try{
+   const {data,error}=await db.rpc("station_connect_admin_update_sim",{
+    p_sim_uuid:sim.sim_uuid,p_sim_type:chosen
+   });
+   if(error)throw error;
+   const updated=(Array.isArray(data)?data[0]:data) as {sim_type?:string}|null;
+   if(updated?.sim_type!==chosen)throw new Error("لم يؤكد السيرفر حفظ النوع المختار");
+   setHardware(old=>Object.fromEntries(Object.entries(old).map(([station,items])=>[
+    station,items.map(item=>item.sim_uuid===sim.sim_uuid?{...item,sim_type:chosen}:item)
+   ])));
+   setDraftTypes(old=>{const next={...old};delete next[sim.sim_uuid!];return next;});
+   message.success("تم حفظ نوع الشريحة");
+  }catch(cause){
+   message.error("تعذر حفظ نوع الشريحة: "+(cause instanceof Error?cause.message:String(cause)));
+  }finally{setTypeSaving(null);}
+ };
+ const typeAction=(sim:Hardware)=>{
+  if(!sim.sim_uuid)return <Typography.Text type="secondary">الشريحة غير محددة</Typography.Text>;
+  const operator=operatorOf(sim);
+  const available=simTypes.filter(type=>type.operator_key===operator&&
+   (operator==="mobilis"||!type.sim_type.endsWith("-gros")));
+  const chosen=draftTypes[sim.sim_uuid]??(sim.sim_type!=="unknown"?sim.sim_type:undefined);
+  const dirty=Boolean(draftTypes[sim.sim_uuid]&&draftTypes[sim.sim_uuid]!==sim.sim_type);
+  // A familiar number prefix may suggest an option, but it cannot prove a SIM service type.
+  const suggestArsselli=operator==="mobilis"&&normalizePhone(sim.msisdn||"").startsWith("0660")
+   &&sim.sim_type!=="mobilis-arsselli";
+
+  return <Space direction="vertical" size={4}>
+   <Space.Compact>
+    <Select
+     aria-label="نوع الشريحة"
+     size="small"
+     placeholder="اختر النوع"
+     loading={simTypesLoading}
+     disabled={simTypesLoading||operator==="unknown"||available.length===0||typeSaving===sim.sim_uuid}
+     value={chosen}
+     options={available.map(type=>({value:type.sim_type,label:type.display_name}))}
+     onChange={value=>setDraftTypes(old=>({...old,[sim.sim_uuid!]:value}))}
+     style={{minWidth:145}}
+    />
+    <Button size="small" type={dirty?"primary":"default"} disabled={!dirty||typeSaving!==null} loading={typeSaving===sim.sim_uuid} onClick={()=>void saveSimType(sim)}>حفظ</Button>
+   </Space.Compact>
+   {suggestArsselli&&<Space wrap size={4}>
+    <Typography.Text type="secondary">اقتراح: أرسالي (بادئة 0660، يحتاج تأكيدًا)</Typography.Text>
+    <Button size="small" disabled={typeSaving!==null}
+     onClick={()=>setDraftTypes(old=>({...old,[sim.sim_uuid!]: "mobilis-arsselli"}))}>اختيار أرسالي</Button>
+   </Space>}
+  </Space>;
+ };
+ const pinAction=(sim:Hardware)=><Space direction="vertical" size={4}>
+  <Tag>{sim.has_pin?"مسجل بأمان":"غير مسجل"}</Tag>
+  {sim.sim_uuid&&<Button size="small" disabled={pinConfigBusy}
+   onClick={()=>{setServicePin("");setPinConfigSim(sim.sim_uuid);}}>
+    {sim.has_pin?"تغيير PIN":"تسجيل PIN"}
+   </Button>}
  </Space>;
  const phoneAction=(sim:Hardware)=>{
   if(!sim.sim_uuid)return <Typography.Text type="secondary">الشريحة غير محددة</Typography.Text>;
@@ -227,45 +292,39 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   </Card>
   {selected&&<Card title="المودمات والشرائح" extra={<Button loading={hardwareLoading} onClick={()=>void openHardware(selected)}>تحديث</Button>}>
 
-   {mobile?<Space direction="vertical" style={{width:"100%"}} size="middle">{(hardware[selected]||[]).length===0&&!hardwareLoading?<Empty description="لا توجد مودمات مسجلة"/>:(hardware[selected]||[]).map(r=><Card key={r.modem_uuid+":"+(r.sim_uuid||"none")} size="small" title={<Space wrap><span>{r.device_name||"مودم"}</span><Tag color={online(r.modem_last_seen_at)?"green":"orange"}>{online(r.modem_last_seen_at)?"رُصد حديثًا":"لا يوجد رصد حديث"}</Tag></Space>}><Descriptions size="small" column={1} bordered items={[{key:"ip",label:"IP محلي",children:<span dir="ltr">{r.modem_ip||"—"}</span>},{key:"sim",label:"الشريحة",children:<span dir="ltr">{r.msisdn||"غير معروف"}</span>},{key:"operator",label:"المتعامل",children:operatorNames[operatorOf(r)]},{key:"lookup",label:"معرفة الرقم",children:phoneAction(r)},{key:"type",label:"النوع",children:typeAction(r)},{key:"pin",label:"PIN",children:r.has_pin?"مسجل بأمان":"غير مسجل"},{key:"last",label:"آخر ظهور",children:dateLabel(r.modem_last_seen_at)}]}/></Card>)}</Space>:<Table rowKey={r=>r.modem_uuid+":"+(r.sim_uuid||"none")} loading={hardwareLoading} dataSource={hardware[selected]||[]} size="small" scroll={{x:720}} pagination={{pageSize:10}} columns={[
+   {mobile?<Space direction="vertical" style={{width:"100%"}} size="middle">{(hardware[selected]||[]).length===0&&!hardwareLoading?<Empty description="لا توجد مودمات مسجلة"/>:(hardware[selected]||[]).map(r=><Card key={r.modem_uuid+":"+(r.sim_uuid||"none")} size="small" title={<Space wrap><span>{r.device_name||"مودم"}</span><Tag color={online(r.modem_last_seen_at)?"green":"orange"}>{online(r.modem_last_seen_at)?"رُصد حديثًا":"لا يوجد رصد حديث"}</Tag></Space>}><Descriptions size="small" column={1} bordered items={[{key:"ip",label:"IP محلي",children:<span dir="ltr">{r.modem_ip||"—"}</span>},{key:"sim",label:"الشريحة",children:<span dir="ltr">{r.msisdn||"غير معروف"}</span>},{key:"operator",label:"المتعامل",children:operatorNames[operatorOf(r)]},{key:"lookup",label:"معرفة الرقم",children:phoneAction(r)},{key:"type",label:"النوع",children:typeAction(r)},{key:"pin",label:"PIN",children:pinAction(r)},{key:"last",label:"آخر ظهور",children:dateLabel(r.modem_last_seen_at)}]}/></Card>)}</Space>:<Table rowKey={r=>r.modem_uuid+":"+(r.sim_uuid||"none")} loading={hardwareLoading} dataSource={hardware[selected]||[]} size="small" scroll={{x:720}} pagination={{pageSize:10}} columns={[
     {title:"المودم",render:(_:unknown,r:Hardware)=>r.device_name||r.modem_ip||"—"},
     {title:"IP محلي",dataIndex:"modem_ip",render:(v:string|null)=><span dir="ltr">{v||"—"}</span>},
     {title:"الشريحة",dataIndex:"msisdn",render:(v:string|null)=><span dir="ltr">{v||"غير معروف"}</span>},
     {title:"المتعامل",render:(_:unknown,r:Hardware)=>operatorNames[operatorOf(r)]},
     {title:"معرفة الرقم",render:(_:unknown,r:Hardware)=>phoneAction(r)},
     {title:"النوع",render:(_:unknown,r:Hardware)=>typeAction(r)},
-    {title:"PIN",dataIndex:"has_pin",render:(v:boolean)=><Tag>{v?"مسجل بأمان":"غير مسجل"}</Tag>},
+    {title:"PIN",render:(_:unknown,r:Hardware)=>pinAction(r)},
     {title:"آخر ظهور",dataIndex:"modem_last_seen_at",render:dateLabel},
     {title:"الاتصال",render:(_:unknown,r:Hardware)=><Tag color={online(r.modem_last_seen_at)?"green":"orange"}>{online(r.modem_last_seen_at)?"متصل حديثًا":"غير متصل"}</Tag>}
    ]}/>}
   </Card>}
   <Modal
-   title="تجهيز شريحة Mobilis Sama"
-   open={Boolean(samaConfigSim)}
-   onCancel={()=>{if(!samaConfigBusy){setSamaConfigSim(null);setSamaPhone("");setServicePin("");}}}
-   onOk={()=>void configureSama()}
-   okText="حفظ الرقم والنوع وPIN"
-   okButtonProps={{disabled:!(/^0[5-7]\d{8}$/.test(normalizePhone(samaPhone))&&/^[0-9]{4,8}$/.test(servicePin))}}
-   confirmLoading={samaConfigBusy}
+   title="PIN خدمة الشريحة"
+   open={Boolean(pinConfigSim)}
+   onCancel={()=>{if(!pinConfigBusy){setPinConfigSim(null);setServicePin("");}}}
+   onOk={()=>void saveServicePin()}
+   okText="حفظ PIN"
+   okButtonProps={{disabled:!/^[0-9]{4,8}$/.test(servicePin)}}
+   confirmLoading={pinConfigBusy}
    cancelText="إلغاء"
-   maskClosable={!samaConfigBusy}
-   closable={!samaConfigBusy}
+   maskClosable={!pinConfigBusy}
+   closable={!pinConfigBusy}
   >
-   <Alert type="warning" showIcon message="تأكيد هوية الشريحة" description="يحفظ تعريف Sama في سجل الشرائح المشترك." style={{marginBottom:12}}/>
-   <Typography.Text strong>1. رقم هاتف الشريحة</Typography.Text>
-   <Input
-    aria-label="رقم هاتف شريحة Sama" dir="ltr" inputMode="tel" maxLength={20}
-    style={{marginTop:8,marginBottom:16}}
-    placeholder="0XXXXXXXXX"
-    value={samaPhone} onChange={event=>setSamaPhone(event.target.value)}
-   />
-
-   <div style={{marginTop:16}}><Typography.Text strong>2. PIN خدمة Sama (4 إلى 8 أرقام)</Typography.Text></div>
-   <Input.Password
-    style={{marginTop:8}} inputMode="numeric" autoComplete="new-password" maxLength={8}
-    value={servicePin} onChange={event=>setServicePin(event.target.value.replace(/\D/g,""))}
-    placeholder="PIN الخدمة — لا يظهر في الشاشة"
-   />
+   <Space direction="vertical" size="middle" style={{width:"100%"}}>
+    <Typography.Text>الشريحة: <span dir="ltr">{(hardware[selected||""]||[]).find(item=>item.sim_uuid===pinConfigSim)?.msisdn||"غير معروف"}</span></Typography.Text>
+    <Input.Password
+     aria-label="PIN خدمة الشريحة" inputMode="numeric" autoComplete="new-password" maxLength={8}
+     value={servicePin} onChange={event=>setServicePin(event.target.value.replace(/\D/g,""))}
+     placeholder="PIN الخدمة"
+    />
+    <Typography.Text type="secondary">حفظ PIN لا يغيّر نوع الشريحة ولا يعتمدها للفليكسي.</Typography.Text>
+   </Space>
   </Modal>
  </Space>;
 }
