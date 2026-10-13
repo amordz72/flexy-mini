@@ -226,7 +226,14 @@ export default function FlexyServicePage({ db, isCustomer }: { db?: SupabaseClie
       okButtonProps: { danger: true },
       onOk: async () => {
         setSendBusy(true);
-        const verification = await db.rpc("flexy_mini_admin_customer_offer_identity", {p_phone: target});
+        let verification;
+        try {
+          verification = await db.rpc("flexy_mini_admin_customer_offer_identity", {p_phone: target});
+        } catch {
+          setSendBusy(false);
+          message.error("تعذر الاتصال للتحقق من نوع العرض؛ لم يتم إرسال عملية.");
+          return;
+        }
         const verified = (Array.isArray(verification.data) ? verification.data[0] : verification.data) as
           {lookup_status:string;presentation_group:string|null;discovery_uuid:string|null;valid_until:string|null}|null;
         if (verification.error || verified?.lookup_status !== "CLASSIFIED"
