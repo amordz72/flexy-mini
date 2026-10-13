@@ -284,3 +284,14 @@ USER-PHONE-OBSERVED: first two screenshots are Flexy Mini on Android and display
 READ-ONLY DB: latest three discovery jobs remain claimed with one queued ussd_start each, no result/completion. Station heartbeat is fresh (Agent 0.4.10). `station_connect_claim_command` selects the oldest queued command first, then returns without claiming when its modem/session/SIM checks fail. Oldest queued record dates 2026-09-30, session open, modem stale and SIM no longer bound to that modem; other older queued records also have stale modems. This confirms a head-of-queue blocker in source plus current queue evidence; claimed on Job is not evidence that the Agent received USSD. No command was claimed by this inspection, no queue row mutated, no USSD initiated.
 
 NEXT: fix stale-command queue handling in Station Connect with isolated tests, explicit expired/not-dispatched outcomes and SIM/session freshness; never replay expired commands, weaken identity checks, or blindly release old pending financial/Ooredoo requests. Verify after controlled deployment. UI should expose awaiting-station/time-out rather than indefinite misleading claimed. Preserve screenshot classification and no-secret documentation.
+
+
+## 15. 2026-10-13 — مدة صلاحية الأوامر / USER-APPROVED + DB APPLIED
+
+قرار عمر: الأوامر القديمة تلغيها Station بعد دقيقتين إلى دقيقتين ونصف. اعتمدنا **150 ثانية** للأمر المنتظر، مع منع التسليم بعد انتهاء المدة حتى لو عادت المحطة من انقطاع. الإلغاء المادي للسجل يتم عند heartbeat/claim التالي؛ لا Scheduler منفصل وقت انقطاع المحطة.
+
+المالك: Station Connect / Server Adapter، source `eeb49a21f165cd3f2edebc54abf46ca291030eda`، migration `20261013122038_station_command_queue_ttl_150_seconds.sql` مطبقة ومسجلة. العقد والاختبارات والrollback: [Station queue expiry](https://github.com/amordz72/station-connect/blob/main/docs/COMMAND-QUEUE-EXPIRY.md). Agent 0.4.10 الموجود لم يتغير.
+
+نجح اختبار rollback على الـSchema الفعلية قبل وبعد التطبيق: حد 149/150، الحراسة، تجاوز رأس غير جاهز، idempotency، عدم Retry، heartbeat، legacy queue، REVIEW عند وجود إرسال سابق، وعدم طمس رد أمر claimed. CI Station `38397700314` نجح. نتيجة الإنتاج: **8 أوامر قديمة ألغيت تلقائيًا؛ صفر أمر منتهي ما زال queued**؛ استعلامات العروض الثلاثة العالقة أصبحت failed / QUEUE_EXPIRED_NOT_DISPATCHED. لم نبدأ USSD أو شحنًا حقيقيًا، ولم نغيّر Master أو الرصيد التراكمي أو المحافظ. الأوامر claimed الفعلية لا تُلغى كأنها لم ترسل؛ نحتفظ بدليلها، وطلبات المال المرتبطة تبقى محجوزة/للمراجعة عبر metadata دون تسوية أموال.
+
+خطأ الأداة: apply_migration أعاد Invalid or expired requestState مرتين؛ تحققنا من عدم التطبيق، ثم طبقنا SQL atomically بواسطة execute_sql وأثبتنا schema/history. No advisor notice names the new expiry functions. اختبار اكتشاف جديد على المودم ما زال PENDING؛ لا تعاد الطلبات المنتهية تلقائيًا.
