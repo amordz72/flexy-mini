@@ -244,7 +244,7 @@ test('PixX 50/100/500 display complete catalog names and details without startin
   const db=flexyDb('PIXX',offers);
   const r=await mount(Flexy,{db,isCustomer:false});await setRecipientAndOffers(r);
   const list=r.root.findByType('list');
-  assert.deepEqual(list.props.dataSource.map(o=>display_name),offers.map(o=>o.display_name));
+  assert.deepEqual(list.props.dataSource.map(o=>o.display_name),offers.map(o=>o.display_name));
   const detailButton=r.root.findAllByType('button').find(x=>x.props['aria-label']==='تفاصيل PixX 100 (1Go)');
   await act(async()=>detailButton.props.onClick());
   assert.ok(r.root.findAllByType('modal').some(x=>x.props.title==='PixX 100 (1Go)'));
