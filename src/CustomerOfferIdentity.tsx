@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Button, Modal, Space, Tag, Typography, message } from "antd";
+import { Alert, Button, Card, Space, Tag, Typography, message } from "antd";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type OfferGroup = "SAMA" | "PIXX" | "REVOLUTION";
@@ -42,8 +42,10 @@ const isPhone = (v: string) => /^0[5-7][0-9]{8}$/.test(v);
 const inProgress = (status: string) => status === "queued" || status === "claimed";
 
 export default function CustomerOfferIdentity({
-  db, phone, stationUuid, isCustomer, onIdentity,
+  db, phone, stationUuid, isCustomer, onIdentity, active, requestToken,
 }: {
+  active: boolean;
+  requestToken: number;
   db?: SupabaseClient;
   phone: string;
   stationUuid: string | null;
@@ -59,20 +61,30 @@ export default function CustomerOfferIdentity({
   const [networkError, setNetworkError] = useState("");
   const [error, setError] = useState("");
   const requestSequence = useRef(0);
+  const currentPhone = useRef(normalized);
+  currentPhone.current = normalized;
+  const reading = useRef(false);
+  const dispatching = useRef(false);
+  const [confirming, setConfirming] = useState(false);
+  const [uncertain, setUncertain] = useState(false);
+  const refreshRef = useRef<() => Promise<void>>(async () => {});
 
-  const check = useCallback(async () => {
-    const seq = ++requestSequence.current;
+  const check = useCallback(async (suggestDiscovery = false) => {
+    if (reading.current) return;
+    const seq = requestSequence.current;
+    const isCurrent = () => seq === requestSequence.current && currentPhone.current === normalized;
     if (!db || !isPhone(normalized) || isCustomer) {
       setRow(null);
       onIdentity(null);
       return;
     }
+    reading.current = true;
     setLoading(true);
+    try {
     const result = await db.rpc("flexy_mini_admin_customer_offer_identity", {
       p_phone: normalized,
     });
-    if (seq !== requestSequence.current) return;
-    setLoading(false);
+    if (!isCurrent()) return;
     if (result.error) {
       setRow(null);
       onIdentity(null);
@@ -84,12 +96,14 @@ export default function CustomerOfferIdentity({
     setRow(value || null);
     if (value?.active_job_uuid) {
       setJobUuid(value.active_job_uuid);
-      setJobStatus("claimed");
+      setJobStatus(previous => value.active_job_uuid === jobUuid && previous ? previous : "claimed");
+      setUncertain(false); setConfirming(false);
     }
     if (value?.lookup_status === "CLASSIFIED"
       && groups.includes(value.presentation_group as OfferGroup)
       && value.discovery_uuid && value.discovered_at && value.valid_until
       && Date.parse(value.valid_until) > Date.now()) {
+      setConfirming(false);
       onIdentity({
         phone: normalized,
         group: value.presentation_group as OfferGroup,
@@ -99,55 +113,85 @@ export default function CustomerOfferIdentity({
       });
     } else {
       onIdentity(null);
+      if (suggestDiscovery && !value?.active_job_uuid && stationUuid && !uncertain)
+        setConfirming(true);
     }
-  }, [db, normalized, isCustomer, onIdentity]);
+    } catch {
+      if (isCurrent()) {
+        setRow(null); onIdentity(null);
+        setError("تعذر معرفة عروض الرقم، يرجى المحاولة بعد حين.");
+      }
+    } finally {
+      if (isCurrent()) { reading.current = false; setLoading(false); }
+    }
+  }, [db, normalized, isCustomer, onIdentity, stationUuid, uncertain, jobUuid]);
 
   useEffect(() => {
-    requestSequence.current += 1;
-    setRow(null);
-    setJobUuid(null);
-    setJobStatus(null);
-    setNetworkError("");
-    setError("");
-    onIdentity(null);
-    if (!isPhone(normalized) || isCustomer || !db) return;
-    const timeout = window.setTimeout(() => { void check(); }, 400);
-    return () => { window.clearTimeout(timeout); requestSequence.current += 1; };
-  }, [check, normalized, isCustomer, db, onIdentity]);
+    requestSequence.current++;
+    reading.current = false; dispatching.current = false;
+    setRow(null); setJobUuid(null); setJobStatus(null);
+    setNetworkError(""); setError(""); setConfirming(false); setUncertain(false);
+    setLoading(false); setSending(false); onIdentity(null);
+    return () => { requestSequence.current++; };
+  }, [normalized, isCustomer, db, onIdentity]);
+
+  // Opening Offers is the intent to inspect this number. Typing or page entry sends no USSD.
+  useEffect(() => {
+    if (active && isPhone(normalized) && !isCustomer && db) void check(true);
+    // check changes when job/readiness changes; those must not reopen a dismissed confirmation.
+  }, [active, requestToken, normalized, isCustomer, db]);
 
   const refresh = async () => {
-    if (!db || !isPhone(normalized)) return;
+    if (!db || !isPhone(normalized) || reading.current) return;
+    const seq = requestSequence.current;
+    const isCurrent = () => seq === requestSequence.current && currentPhone.current === normalized;
     setNetworkError("");
     if (jobUuid && (!jobStatus || inProgress(jobStatus))) {
-      setLoading(true);
+      reading.current = true; setLoading(true);
+      try {
       const result = await db.rpc("station_connect_admin_offer_discovery_job", {
         p_job_uuid: jobUuid,
       });
-      setLoading(false);
+      if (!isCurrent()) return;
       if (result.error) {
         setError("تعذر قراءة الجلسة: " + result.error.message);
         return;
       }
       const job = (Array.isArray(result.data) ? result.data[0] : result.data) as DiscoveryJob | null;
-      if (!job) {
+      if (!job || job.job_uuid !== jobUuid) {
         setError("جلسة الاستكشاف غير موجودة. لا نعيد المحاولة تلقائيًا.");
         return;
       }
       setJobStatus(job.status);
       if (inProgress(job.status)) {
-        message.info("الجلسة ما زالت جارية. لن ننشئ جلسة ثانية.");
         return;
       }
       if (job.status !== "success") {
         setNetworkError("لم يكتمل استعلام الشبكة (" + (job.result_code || job.status)
           + "). لا نستنتج أن الزبون بلا عروض، ولا نكرر الاستعلام تلقائيًا.");
       }
+      } catch {
+        if (isCurrent()) setError("تعذر متابعة الاستعلام. لن نفتح جلسة أخرى تلقائيًا.");
+        return;
+      } finally {
+        if (isCurrent()) { reading.current = false; setLoading(false); }
+      }
     }
-    await check();
+    if (isCurrent()) await check();
   };
+  refreshRef.current = refresh;
+  useEffect(() => {
+    if (!active || !jobUuid || !inProgress(jobStatus || "")) return;
+    let polls = 0;
+    const timer = window.setInterval(() => {
+      if (++polls > 60) { window.clearInterval(timer); return; }
+      void refreshRef.current();
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [active, jobUuid, jobStatus]);
 
   const requestDiscovery = () => {
-    if (!db || isCustomer || !isPhone(normalized) || sending) return;
+    if (!db || isCustomer || !isPhone(normalized) || sending || dispatching.current || uncertain || reading.current) return;
     if (jobUuid && (!jobStatus || inProgress(jobStatus))) {
       message.warning("توجد جلسة استكشاف جارية. حدّث نتيجتها أولًا.");
       return;
@@ -156,13 +200,15 @@ export default function CustomerOfferIdentity({
       message.warning("شريحة Mobilis Sama غير جاهزة؛ جهزها في «المحطات والشرائح» أولًا.");
       return;
     }
-    Modal.confirm({
-      title: "فتح جلسة معرفة عروض الرقم",
-      content: "سيرسل Station Connect استعلام USSD لشريحة Sama لمعرفة مجموعة عروض الرقم "
-        + normalized + ". لا يختار عرضًا ولا ينفذ شحنًا. لن نكرر الاستعلام آليًا إذا فشل.",
-      okText: "فتح جلسة استعلام",
-      cancelText: "إلغاء",
-      onOk: async () => {
+    setConfirming(true);
+  };
+  const confirmDiscovery = async () => {
+    if (!db || isCustomer || !stationUuid || !isPhone(normalized) || !confirming
+      || dispatching.current || uncertain || reading.current
+      || Boolean(jobUuid && (!jobStatus || inProgress(jobStatus)))) return;
+    const seq = requestSequence.current;
+    const isCurrent = () => seq === requestSequence.current && currentPhone.current === normalized;
+    dispatching.current = true; setConfirming(false);
         setSending(true);
         setNetworkError("");
         setError("");
@@ -171,12 +217,15 @@ export default function CustomerOfferIdentity({
             p_phone: normalized,
             p_station_uuid: stationUuid,
           });
+          if (!isCurrent()) return;
           if (result.error) {
-            setError("تعذر فتح الجلسة: " + result.error.message);
+            setUncertain(true);
+            setError("تعذر تأكيد فتح الجلسة؛ حدّث الحالة قبل أي طلب آخر: " + result.error.message);
             return;
           }
           const queued = (Array.isArray(result.data) ? result.data[0] : result.data) as Queued | null;
           if (!queued?.job_uuid) {
+            setUncertain(true);
             setError("السيرفر لم يرجع رقم جلسة. لا تعاود الاستعلام قبل التحقق.");
             return;
           }
@@ -185,12 +234,13 @@ export default function CustomerOfferIdentity({
           message.info(queued.reused ? "جلسة سابقة ما زالت جارية؛ لم نكررها" : "تم فتح جلسة استعلام واحدة");
           await check();
         } catch {
-          setError("انقطع الاتصال؛ قد تكون الجلسة بدأت. لا تعاود إرسال الطلب قبل التحقق.");
+          if (isCurrent()) {
+            setUncertain(true);
+            setError("انقطع الاتصال؛ قد تكون الجلسة بدأت. حدّث الحالة ولا ترسل طلبًا ثانيًا قبل التحقق.");
+          }
         } finally {
-          setSending(false);
+          if (isCurrent()) { dispatching.current = false; setSending(false); }
         }
-      },
-    });
   };
 
   if (!isPhone(normalized)) {
@@ -206,17 +256,25 @@ export default function CustomerOfferIdentity({
   return <Space direction="vertical" size="small" style={{ width:"100%" }}>
     {error && <Alert showIcon type="error" message={error} />}
     {networkError && <Alert showIcon type="warning" message={networkError} />}
-    {loading && <Typography.Text type="secondary">جاري فحص آخر استكشاف محفوظ...</Typography.Text>}
+    {loading && <Typography.Text type="secondary">جاري معرفة عروض الرقم...</Typography.Text>}
     {classified ? <Alert type="success" showIcon
       message={"نوع عروض الرقم: " + groupNames[row!.presentation_group as OfferGroup]}
-      description={"مصدر التصنيف: جلسة شبكة محفوظة، صالحة حتى "
-        + new Date(row!.valid_until!).toLocaleString("ar-DZ") + ". يمكن للإدارة تحديثها من الشبكة عند الحاجة."}
+
     /> : !loading && <Alert type={row?.lookup_status === "IN_PROGRESS" ? "info":"warning"} showIcon
-      message={row?.lookup_status==="IN_PROGRESS" ? "جلسة استعلام جارية"
+      message={row?.lookup_status==="IN_PROGRESS" ? "جاري معرفة العروض؛ تظهر النتيجة تلقائيًا"
         : row?.lookup_status==="UNKNOWN" ? "رد سابق غير كافٍ لتحديد نوع عروض الرقم"
         : "لا يوجد تصنيف موثوق وصالح لهذا الرقم"}
       description="لا نستعمل قائمة عروض رقم آخر، ولا نعتبر تعذّر الاستعلام دليلًا على عدم وجود عروض."
     />}
+    {confirming && <Card size="small" title="معرفة عروض الرقم">
+      <Space direction="vertical" style={{width:"100%"}}>
+        <Typography.Text>سيستعلم Station Connect عن عروض <bdi dir="ltr">{normalized}</bdi>. هذا الاستعلام لا ينفذ شحنًا.</Typography.Text>
+        <Space wrap>
+          <Button type="primary" loading={sending} onClick={() => void confirmDiscovery()}>تأكيد الاستعلام</Button>
+          <Button onClick={() => setConfirming(false)}>إلغاء</Button>
+        </Space>
+      </Space>
+    </Card>}
     {jobUuid && <Space wrap>
       <Tag color={jobStatus==="success"?"green":inProgress(jobStatus||"")?"blue":"orange"}>
         حالة الجلسة: {jobStatus||"قيد الانتظار"}
@@ -226,7 +284,7 @@ export default function CustomerOfferIdentity({
     <Space wrap>
       <Button size="small" onClick={() => void refresh()} loading={loading}>تحديث التصنيف / نتيجة الجلسة</Button>
       <Button size="small" type={classified ? "default" : "primary"}
-        disabled={!stationUuid || sending || Boolean(jobUuid && (!jobStatus || inProgress(jobStatus)))}
+        disabled={!stationUuid || sending || loading || uncertain || Boolean(jobUuid && (!jobStatus || inProgress(jobStatus)))}
         loading={sending}
         onClick={requestDiscovery}>
         {classified ? "استكشاف جديد بإذن الإدارة" : "فتح جلسة لمعرفة العروض"}

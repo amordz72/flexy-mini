@@ -113,6 +113,10 @@ function LoginPage() {
           {loginError&&<Alert type="error" showIcon style={{marginBottom:14}} message={loginError}/>}
           <Button htmlType="submit" type="primary" size="large" loading={isPending||customerBusy} block>دخول</Button>
         </Form>
+        <Typography.Text type="secondary" style={{display:"block",marginTop:16,fontSize:12}}
+          copyable={{text:String(import.meta.env.VITE_BUILD_SHA || "local")}}>
+          نسخة الواجهة: {String(import.meta.env.VITE_BUILD_SHA || "local").slice(0,7)}
+        </Typography.Text>
       </Card>
     </div>
   </ConfigProvider>;

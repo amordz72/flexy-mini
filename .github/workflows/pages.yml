@@ -21,6 +21,7 @@ jobs:
       - run: npm install --no-audit --no-fund
       - name: Capture build timestamp
         run: echo "VITE_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+      - run: npm test
       - run: npm run build
         env:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
