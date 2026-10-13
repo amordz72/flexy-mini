@@ -343,7 +343,7 @@ Station-owned fix: `pin-response.mjs` English/French/Arabic prompt and rejection
 **Verification levels:** source UPDATED; offline tests PASS; Edge DEPLOYED/ACTIVE; actual PIN continuation on live Station **NOT YET TESTED**, no USSD triggered by this update, no financial send or ledger/MyTool mutation. Flexy Mini frontend remains the concise-table release `79ff678`. One explicit new recipient discovery through Flexy is now the single next live acceptance step: observe PIN command and menu result in the operation table. No surprise retry or real financial send.
 
 
-## 18. 2026-10-14 — Stable SIM & Station names / DB APPLIED, UI DELIVERY PENDING
+## 18. 2026-10-14 — Stable SIM & Station names / DB APPLIED, PAGES DEPLOYED, PHONE QA PENDING
 
 **User-approved behavior:** automatic, permanent, nonrecycled display identifiers per service type (`sama-1`, `arsely-1`, etc.) for known SIMs and `server-1` for each Windows Station. A user-defined, fully optional label is displayed on the next line; examples: `عمر سما1`, `zb`, `6g`, `PC bach`. Empty label shows no placeholder. Backend UUID/ICCID identification never depends on alias or IP.
 
@@ -354,6 +354,6 @@ Station-owned fix: `pin-response.mjs` English/French/Arabic prompt and rejection
 - Flexy Mini UI: `src/StationOverview.tsx` branch `feature/station-identity-labels-20261013`; read-only `station_connect_admin_identity_labels` and write-only-for-alias `station_connect_admin_save_identity_label`, both admin-gated on backend. Legacy station fallback remains before migration.
 - CI test fixture: `tests/station-identity.test.mjs` uses fake data/RPCs only and asserts station + SIM codes, optional alias edit and no USSD/PIN/type side effects.
 - **User-approved acceptance path (2026-10-14):** owner explicitly waived waiting for hosted automated tests, preferring hands-on testing. Open Stations, confirm service types, edit/clear an alias, refresh web/PWA, then verify identifier persistence. No real USSD/financial execution as part of label testing.
-- Verified CI (previous Flexy feature-branch run `38478920862`): PASS 21/21 and TypeScript/Vite build. Station Windows CI failed before test execution, waived for this user acceptance release, not misrepresented as green. DB applied; actual Pages publishing, installed Android PWA acceptance and physical hardware behavior remain separate evidence until observed.
+- Verified CI (previous Flexy feature-branch run `38478920862`): PASS 21/21 and TypeScript/Vite build. Station Windows CI failed before test execution, waived for this user acceptance release, not misrepresented as green. DB applied; Flexy Mini Pages workflow `38483230412` **SUCCESS** on `5d9ad52` with Development Guard `38483230515` **SUCCESS**. Installed Android PWA acceptance and physical Station behavior still need user confirmation.
 
 Canonical design context: `amordz72/developer/projects/station-connect/CENTRAL-USB-SIM-BRAIN-2026-09-24.md`. Database migration/test details: `station-connect/docs/STABLE-IDENTITY-LABELS-2026-10-13.md`.
