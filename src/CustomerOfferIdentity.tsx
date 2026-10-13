@@ -263,7 +263,7 @@ export default function CustomerOfferIdentity({
     {networkError && <Alert showIcon type="warning" message={networkError} />}
     {loading && <Typography.Text type="secondary">جاري معرفة عروض الرقم...</Typography.Text>}
     {classified ? <Tag color="green">{groupNames[row!.presentation_group as OfferGroup]}</Tag>
-      : !loading && <Typography.Text type="secondary">
+      : !loading && !sending && !jobUuid && !error && !networkError && <Typography.Text type="secondary">
           {row?.lookup_status==="IN_PROGRESS" ? "بانتظار نتيجة المحطة"
             : row?.lookup_status==="UNKNOWN" ? "نوع العروض غير محسوم" : "لم يُكتشف نوع العروض"}
         </Typography.Text>}
