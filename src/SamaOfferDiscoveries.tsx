@@ -39,10 +39,11 @@ function statusColor(status: string): string {
   return status === "success" ? "green" : status === "claimed" || status === "queued" ? "blue" : "orange";
 }
 
-export default function SamaOfferDiscoveries({ db, stationUuid, samaReady }: {
+export default function SamaOfferDiscoveries({ db, stationUuid, samaReady, historyOnly=false }: {
   db: SupabaseClient;
   stationUuid: string | null;
   samaReady: boolean;
+  historyOnly?: boolean;
 }) {
   const [history, setHistory] = useState<Discovery[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -145,6 +146,7 @@ export default function SamaOfferDiscoveries({ db, stationUuid, samaReady }: {
     <Space direction="vertical" size="middle" style={{ width: "100%" }}>
       <Alert type="info" showIcon message="سجل Sama — للقراءة فقط" description="تظهر آخر 20 عملية استكشاف محفوظة في Station Connect، بما فيها النتائج القديمة. نعرض العروض ابتداءً من 500 دج؛ وجود عرض بالسجل لا يعني توفره الآن. لا يُرسل أي USSD عند فتح الصفحة أو الضغط على تحديث النتائج." />
       {error && <Alert type="error" showIcon message={error} />}
+      {!historyOnly && <>
       <Typography.Text strong>طلب استكشاف جديد (إدارة فقط)</Typography.Text>
       <Space.Compact style={{ width: "100%" }}>
         <Input
@@ -167,6 +169,7 @@ export default function SamaOfferDiscoveries({ db, stationUuid, samaReady }: {
         message={"آخر طلب: " + statusLabel(currentStatus || "queued")}
         description={"مرجع الطلب: " + currentJob + " — اضغط «تحديث النتائج» لمتابعة الرد."}
       />}
+      </>}
       <Typography.Text strong>آخر عمليات الاستكشاف</Typography.Text>
       {history.length === 0 && !loading ? <Empty description="لا توجد عمليات Sama محفوظة" /> : <Table<Discovery>
         rowKey="job_uuid"
