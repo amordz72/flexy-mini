@@ -34,7 +34,10 @@ export async function enableLabMocking():Promise<void>{
     },
     quiet:true,
     onUnhandledRequest(request,print) {
-      // Other network calls are a configuration error; refuse to proceed on the lab.
+      // Let the lab's own Vite assets load normally, but NEVER allow an
+      // unhandled fake RPC or an external request to go to the network.
+      const url=new URL(request.url);
+      if(url.origin===window.location.origin && !url.pathname.startsWith(prefix))return;
       print.error();
       throw new Error("طلب خارج خدمات المحاكاة: "+request.url);
     }
