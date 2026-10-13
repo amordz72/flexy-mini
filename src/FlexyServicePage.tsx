@@ -322,7 +322,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
       <Space direction="vertical" size="middle" style={{ width: "100%" }}>
         <Space wrap>
           <Tag color="green">Mobilis</Tag>
-          <Tag>Sama — عروض</Tag>
+          <Tag>عروض Mobilis</Tag>
           {!isCustomer && <Tag color={executePrerequisitesReady ? "green" : "orange"}>
             {stationBusy ? "جاري فحص المحطة" : executePrerequisitesReady ? "Sama مستوفية للشروط الأساسية" : stationUuid ? "Sama للاستكشاف فقط" : "Sama غير جاهزة"}
           </Tag>}
@@ -448,12 +448,13 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
                 description="نفس صفحة الفليكسي للجميع، لكن الإرسال لا يُفعّل لحساب الزبون قبل فحص الصلاحيات والرصيد من الخادم."/>
             : <Space direction="vertical" size="small" style={{width:"100%"}}>
               {stationError && <Alert type="error" message={stationError} showIcon/>}
-              {!executePrerequisitesReady
-                ? <Alert showIcon type="warning" message="تجهيز Sama غير مكتمل"
-                    description={samaStatus ? "ما ينقص: "+readinessProblems(samaStatus).join("، ") : "لا توجد شريحة Sama مرصودة. افتح إدارة المحطات للتحقق."}/>
-                : <Typography.Text type="secondary">محطة التنفيذ: {stationName}. كل عرض يخضع لفحص مساره ورصيده على السيرفر قبل الإرسال.</Typography.Text>}
+              {routeCanSendThroughSama
+                ? <Typography.Text type="secondary">مصدر الإرسال المختار: Sama — محطة {stationName}. يتم التحقق من الرصيد والموافقة مجددًا داخل السيرفر.</Typography.Text>
+                : !routeChoice && samaStatus && chosen
+                  ? <Typography.Text type="secondary">حالة Sama: {readinessProblems(samaStatus).join("، ")}</Typography.Text>
+                  : null}
               <Space wrap>
-                <Button size="small" loading={stationBusy} onClick={()=>void loadStation()}>تحديث حالة Sama</Button>
+                <Button size="small" loading={stationBusy} onClick={()=>void loadStation()}>تحديث مصادر الإرسال</Button>
                 {onOpenStations&&<Button size="small" onClick={onOpenStations}>تجهيز المحطات والشرائح</Button>}
               </Space>
             </Space>}
