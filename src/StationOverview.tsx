@@ -1,9 +1,10 @@
 import {useCallback,useEffect,useState} from "react";
-import {Alert,Button,Card,Descriptions,Empty,Grid,Input,Modal,Space,Table,Tag,Typography,message} from "antd";
+import {Alert,Button,Card,Descriptions,Empty,Grid,Input,Modal,Select,Space,Table,Tag,Typography,message} from "antd";
 import type {SupabaseClient} from "@supabase/supabase-js";
 import SamaOperationalActions from "./SamaOperationalActions";
 
 type Station={station_uuid:string;status:string;computer_name:string|null;last_seen_at:string|null;agent_version:string|null};
+type SimTypeOption={sim_type:string;display_name:string;operator_key:string;enabled:boolean;sort_order:number};
 type Hardware={modem_uuid:string;modem_ip:string|null;device_name:string|null;modem_last_seen_at:string|null;sim_uuid:string|null;msisdn:string|null;imsi:string|null;sim_type:string|null;has_pin:boolean;sim_last_seen_at:string|null};
 type PhoneAttempt={sim_uuid:string;status:string;result_code:string|null;discovered_msisdn:string|null;started_at:string|null};
 type PhoneQueue={queued:boolean;state:string;job_uuid:string|null};
@@ -59,6 +60,18 @@ export default function StationOverview({db}:{db:SupabaseClient}){
  const [samaPhone,setSamaPhone]=useState("");
  const [servicePin,setServicePin]=useState("");
  const [samaConfigBusy,setSamaConfigBusy]=useState(false);
+ const [simTypes,setSimTypes]=useState<SimTypeOption[]>([]);
+ const [simTypesLoading,setSimTypesLoading]=useState(false);
+ const [draftTypes,setDraftTypes]=useState<Record<string,string>>({});
+ const [typeSaving,setTypeSaving]=useState<string|null>(null);
+ const loadSimTypes=useCallback(async()=>{
+  setSimTypesLoading(true);
+  const {data,error}=await db.rpc("station_connect_admin_sim_types");
+  setSimTypesLoading(false);
+  if(error){setError("تعذر قراءة أنواع الشرائح: "+error.message);return;}
+  if(!Array.isArray(data)){setError("قائمة أنواع الشرائح غير صالحة");return;}
+  setSimTypes((data as SimTypeOption[]).filter(type=>type.enabled));
+ },[db]);
  const loadOoredooGuards=useCallback(async()=>{
   const {data,error}=await db.rpc("station_connect_admin_ooredoo_lookup_guard");
   if(error){setError("تعذر قراءة حالة حماية أوريدو: "+error.message);return;}
@@ -85,7 +98,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   if(!Array.isArray(data)){setError("استجابة المحطات غير صالحة");return;}
   setStations(data as Station[]);setCheckedAt(new Date().toISOString());
  },[db]);
- useEffect(()=>{void refresh();void loadPhoneAttempts();void loadOoredooGuards();},[refresh,loadPhoneAttempts,loadOoredooGuards]);
+ useEffect(()=>{void refresh();void loadPhoneAttempts();void loadOoredooGuards();void loadSimTypes();},[refresh,loadPhoneAttempts,loadOoredooGuards,loadSimTypes]);
  const saveManualNumber=async(sim:Hardware)=>{
   if(!sim.sim_uuid)return;
   const phone=normalizePhone(manualNumbers[sim.sim_uuid]||"");
@@ -170,11 +183,53 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   }catch(cause){message.error("تعذر تجهيز Sama: "+(cause instanceof Error?cause.message:String(cause)));}
   finally{setSamaConfigBusy(false);}
  };
- const typeAction=(sim:Hardware)=><Space direction="vertical" size={4}>
-  <span>{sim.sim_type||"غير محدد"}</span>
-  {sim.sim_uuid&&sim.sim_type==="unknown"&&sim.imsi?.startsWith("60301")&&online(sim.sim_last_seen_at)&&online(sim.modem_last_seen_at)&&
-   <Button size="small" onClick={()=>{setSamaPhone(sim.msisdn||"");setServicePin("");setSamaConfigSim(sim.sim_uuid);}}>تجهيز Mobilis Sama</Button>}
- </Space>;
+ const saveSimType=async(sim:Hardware)=>{
+  if(!sim.sim_uuid)return;
+  const chosen=draftTypes[sim.sim_uuid];
+  if(!chosen||chosen===sim.sim_type)return;
+  setTypeSaving(sim.sim_uuid);
+  try{
+   const {data,error}=await db.rpc("station_connect_admin_update_sim",{
+    p_sim_uuid:sim.sim_uuid,p_sim_type:chosen
+   });
+   if(error)throw error;
+   const updated=(Array.isArray(data)?data[0]:data) as {sim_type?:string}|null;
+   if(updated?.sim_type!==chosen)throw new Error("لم يؤكد السيرفر حفظ النوع المختار");
+   setHardware(old=>Object.fromEntries(Object.entries(old).map(([station,items])=>[
+    station,items.map(item=>item.sim_uuid===sim.sim_uuid?{...item,sim_type:chosen}:item)
+   ])));
+   setDraftTypes(old=>{const next={...old};delete next[sim.sim_uuid!];return next;});
+   message.success("تم حفظ نوع الشريحة");
+  }catch(cause){
+   message.error("تعذر حفظ نوع الشريحة: "+(cause instanceof Error?cause.message:String(cause)));
+  }finally{setTypeSaving(null);}
+ };
+ const typeAction=(sim:Hardware)=>{
+  if(!sim.sim_uuid)return <Typography.Text type="secondary">الشريحة غير محددة</Typography.Text>;
+  const operator=operatorOf(sim);
+  const available=simTypes.filter(type=>type.operator_key===operator&&
+   (operator==="mobilis"||!type.sim_type.endsWith("-gros")));
+  const chosen=draftTypes[sim.sim_uuid]??(sim.sim_type!=="unknown"?sim.sim_type:undefined);
+  const dirty=Boolean(draftTypes[sim.sim_uuid]&&draftTypes[sim.sim_uuid]!==sim.sim_type);
+  return <Space direction="vertical" size={4}>
+   <Space.Compact>
+    <Select
+     aria-label="نوع الشريحة"
+     size="small"
+     placeholder="اختر النوع"
+     loading={simTypesLoading}
+     disabled={simTypesLoading||operator==="unknown"||available.length===0||typeSaving===sim.sim_uuid}
+     value={chosen}
+     options={available.map(type=>({value:type.sim_type,label:type.display_name}))}
+     onChange={value=>setDraftTypes(old=>({...old,[sim.sim_uuid!]:value}))}
+     style={{minWidth:145}}
+    />
+    <Button size="small" type={dirty?"primary":"default"} disabled={!dirty||typeSaving!==null} loading={typeSaving===sim.sim_uuid} onClick={()=>void saveSimType(sim)}>حفظ</Button>
+   </Space.Compact>
+   {sim.sim_type==="unknown"&&sim.imsi?.startsWith("60301")&&online(sim.sim_last_seen_at)&&online(sim.modem_last_seen_at)&&
+    <Button size="small" onClick={()=>{setSamaPhone(sim.msisdn||"");setServicePin("");setSamaConfigSim(sim.sim_uuid);}}>تجهيز Mobilis Sama</Button>}
+  </Space>;
+ };
  const phoneAction=(sim:Hardware)=>{
   if(!sim.sim_uuid)return <Typography.Text type="secondary">الشريحة غير محددة</Typography.Text>;
   const attempt=phoneAttempts[sim.sim_uuid];
