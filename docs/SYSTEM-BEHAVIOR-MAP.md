@@ -9,6 +9,15 @@
 
 > **اقرأ هذا الملف قبل أي تعديل Flexy**، ثم افحص الملف البرمجي الحقيقي في المستودع المعني والحالة الحية إذا لزم الأمر. لا تبدأ من الصفر. لا تستنتج أن خاصية جاهزة للإنتاج لمجرد وجود وظيفة SQL أو React أو سجل نجاح قديم.
 
+## 19. 2026-10-13 — Phone discovery error visibility / REVIEW BRANCH ONLY
+
+- **[USER CORRECTION]** The Station/SIM row must show the actual phone lookup outcome and error **next to that SIM**, not a permanent «جاري البحث» and not merely a temporary notification. Use the canonical Refine + Ant Design Stations component, not a second UI.
+- **[DB OBSERVED]** A Mobilis phone lookup from Windows station `DESKTOP-J38NJHG` ended as Job `failed / QUEUE_EXPIRED_NOT_DISPATCHED` after 150 seconds, **before dispatch**, while the matching attempt row remained `running`. The old `station_connect_admin_sim_phone_discovery_state()` returns only attempt status/code; consequently the UI hides the actual failure.
+- **[SOURCE IN REVIEW BRANCH]** Station Connect adds an admin-only, **read-only** diagnostic RPC joining each phone attempt to its actual Job and safe command error. The UI uses that RPC, presents outcome/error code, safe explanation, timestamps and Job ID inline/detail view, and refreshes a pending attempt every 10 seconds. Stale pending does not imply success or failure. No automatic retry, financial action or network send.
+- **[SECURITY]** Errors are admin-only and sanitized; do not display PIN, raw USSD request/response, card codes, full IMEI/ICCID. Preserve shared Master/SIM/financial tables.
+- **[VERIFICATION]** Source commits on branches only: `station-connect/1f7df0a`, `flexy-mini/6878eb3`. Production RPC **NOT APPLIED**, CI/PR review and deployed Chrome/PWA/mobile **NOT VERIFIED**. Do not claim fixed for users yet.
+- **[NEXT]** PR review → additive read-only RPC deploy → CI and browser/PWA acceptance with affected SIM's final and pending jobs. No test USSD without user approval.
+
 ## 18. 2026-10-13 — واجهة Sama القابلة للفتح وإلغاء فرض مبلغ 500
 
 - **[USER-APPROVED]** Sama تُعرض داخل صندوق قابل للفتح فقط، وفيه Mix/Talk/Net؛ PixX وRevolution في صفوف كاملة الاسم والسعر مثل MyTool؛ لا تكرر بطاقات الفئات أو حاويات الشرح. كود الواجهة: `2734383`.

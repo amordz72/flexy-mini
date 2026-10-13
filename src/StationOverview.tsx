@@ -5,7 +5,7 @@ import SamaOperationalActions from "./SamaOperationalActions";
 
 type Station={station_uuid:string;status:string;computer_name:string|null;last_seen_at:string|null;agent_version:string|null};
 type Hardware={modem_uuid:string;modem_ip:string|null;device_name:string|null;modem_last_seen_at:string|null;sim_uuid:string|null;msisdn:string|null;imsi:string|null;sim_type:string|null;has_pin:boolean;sim_last_seen_at:string|null};
-type PhoneAttempt={sim_uuid:string;status:string;result_code:string|null;discovered_msisdn:string|null;started_at:string|null};
+type PhoneAttempt={sim_uuid:string;attempt_uuid:string;job_uuid:string|null;status:string;job_status:string|null;result_code:string|null;result_message:string|null;discovered_msisdn:string|null;auto_triggered:boolean;started_at:string|null;completed_at:string|null;command_error_code:string|null;command_error_message:string|null};
 type PhoneQueue={queued:boolean;state:string;job_uuid:string|null};
 type OoredooGuard={sim_uuid:string;is_locked:boolean;cooldown_until:string|null;last_failed_at:string|null;last_attempt_at:string|null;last_failure_code:string|null;admin_armed:boolean};
 const normalizePhone=(raw:string)=>{
@@ -26,13 +26,22 @@ const operatorNames:Record<ReturnType<typeof operatorOf>,string>={mobilis:"مو�
 const phoneStateLabel=(attempt:PhoneAttempt|undefined)=>{
  if(!attempt)return "لم يُطلب بعد";
  if(attempt.status==="success")return "تم اكتشاف الرقم";
- if(attempt.status==="queued"||attempt.status==="running")return "جاري البحث";
+ if(attempt.status==="queued")return "في الانتظار";
+ if(attempt.status==="running")return "جاري البحث";
  if(attempt.status==="review")return "تحتاج مراجعة";
  if(attempt.status==="failed")return "فشل الاستعلام";
+ if(attempt.status==="unavailable")return "الاستعلام غير متاح";
  return attempt.status||"غير معروف";
 };
 const online=(date:string|null)=>Boolean(date&&Date.now()-new Date(date).getTime()<90000);
 const dateLabel=(value:string|null)=>value?new Date(value).toLocaleString("ar-DZ"):"—";
+const isPhonePending=(attempt:PhoneAttempt|undefined)=>attempt?.status==="queued"||attempt?.status==="running";
+const phoneWaitExceeded=(attempt:PhoneAttempt|undefined)=>Boolean(attempt&&isPhonePending(attempt)&&attempt.started_at&&Date.now()-new Date(attempt.started_at).getTime()>150000);
+const phoneMessage=(attempt:PhoneAttempt|undefined)=>{
+ if(!attempt)return "";
+ if(phoneWaitExceeded(attempt))return "تأخر الطلب أكثر من دقيقتين ونصف، ولم يحسم السيرفر النتيجة بعد. لا تعاود الإرسال قبل مراجعة الحالة.";
+ return attempt.result_message||attempt.command_error_message||"";
+};
 const cooldownActive=(value:string|null|undefined)=>Boolean(value&&Number.isFinite(Date.parse(value))&&Date.parse(value)>Date.now());
 const agentSupportsServiceCode=(version:string|null)=>{
  const match=String(version||"").match(/^([0-9]+)[.]([0-9]+)[.]([0-9]+)/);
@@ -69,8 +78,8 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   setGuardMap(next);
  },[db]);
  const loadPhoneAttempts=useCallback(async()=>{
-  const {data,error}=await db.rpc("station_connect_admin_sim_phone_discovery_state");
-  if(error)return;
+  const {data,error}=await db.rpc("station_connect_admin_sim_phone_diagnostics");
+  if(error){setError("تعذر قراءة نتيجة معرفة الأرقام: "+error.message);return;}
   const results:Record<string,PhoneAttempt>={};
   for(const attempt of (Array.isArray(data)?data:[]) as PhoneAttempt[]){
    if(attempt.sim_uuid)results[attempt.sim_uuid]=attempt;
@@ -86,6 +95,12 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   setStations(data as Station[]);setCheckedAt(new Date().toISOString());
  },[db]);
  useEffect(()=>{void refresh();void loadPhoneAttempts();void loadOoredooGuards();},[refresh,loadPhoneAttempts,loadOoredooGuards]);
+ const hasPendingPhoneAttempts=Object.values(phoneAttempts).some(isPhonePending);
+ useEffect(()=>{
+  if(!hasPendingPhoneAttempts)return;
+  const timer=window.setInterval(()=>{void loadPhoneAttempts();},10000);
+  return ()=>window.clearInterval(timer);
+ },[hasPendingPhoneAttempts,loadPhoneAttempts]);
  const saveManualNumber=async(sim:Hardware)=>{
   if(!sim.sim_uuid)return;
   const phone=normalizePhone(manualNumbers[sim.sim_uuid]||"");
@@ -179,21 +194,41 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   if(!sim.sim_uuid)return <Typography.Text type="secondary">الشريحة غير محددة</Typography.Text>;
   const attempt=phoneAttempts[sim.sim_uuid];
   const state=phoneStateLabel(attempt);
-  if(sim.msisdn)return <Tag color="green">الرقم معروف</Tag>;
   const operator=operatorOf(sim);
+  const delayed=phoneWaitExceeded(attempt);
+  const failed=attempt?.status==="failed"||attempt?.status==="review"||attempt?.status==="unavailable";
+  const showDetails=()=>{
+   if(!attempt)return;
+   Modal.info({
+    title:"تفاصيل معرفة رقم الشريحة",width:620,okText:"إغلاق",
+    content:<Descriptions bordered size="small" column={1} items={[
+     {key:"number",label:"رقم الشريحة",children:<span dir="ltr">{sim.msisdn||attempt.discovered_msisdn||"غير معروف"}</span>},
+     {key:"state",label:"الحالة",children:state},
+     {key:"message",label:"النتيجة / الخطأ",children:phoneMessage(attempt)||"لم تصل نتيجة نهائية بعد"},
+     {key:"code",label:"رمز النتيجة",children:<span dir="ltr">{attempt.result_code||"—"}</span>},
+     {key:"commandError",label:"خطأ الأمر",children:<span dir="ltr">{attempt.command_error_code||"—"}</span>},
+     {key:"start",label:"وقت الطلب",children:dateLabel(attempt.started_at)},
+     {key:"complete",label:"وقت الانتهاء",children:dateLabel(attempt.completed_at)},
+     {key:"job",label:"معرّف العملية",children:attempt.job_uuid?<Typography.Text copyable={{text:attempt.job_uuid}}>{attempt.job_uuid}</Typography.Text>:"—"}
+    ]}/>
+   });
+  };
   return <Space direction="vertical" size={4}>
-   <Tag color={attempt?.status==="success"?"green":attempt?.status==="running"?"blue":"orange"}>{state}</Tag>
-   {attempt?.result_code&&<Typography.Text type="secondary" style={{fontSize:11}}>{attempt.result_code}</Typography.Text>}
-   <Button size="small" loading={phoneBusy===sim.sim_uuid} disabled={hardwareLoading||operator==="unknown"||operator==="ooredoo"||(operator==="djezzy"&&!agentSupportsServiceCode(stations.find(station=>station.station_uuid===selected)?.agent_version||null))} onClick={()=>void discoverPhone(sim)}>معرفة الرقم تلقائيًا</Button>
+   {sim.msisdn&&<Tag color="green">الرقم معروف</Tag>}
+   {attempt&&<Tag color={attempt.status==="success"?"green":failed?"red":delayed?"orange":"blue"}>{delayed?"تأخر الطلب — يحتاج تحقق":state}</Tag>}
+   {attempt?.result_code&&<Typography.Text type={failed?"danger":"secondary"} style={{fontSize:11}}>{attempt.result_code}</Typography.Text>}
+   {(failed||delayed)&&<Typography.Text type="danger" style={{fontSize:12}}>{phoneMessage(attempt)}</Typography.Text>}
+   {attempt&&<Space size={8} wrap><Typography.Text type="secondary" style={{fontSize:11}}>آخر طلب: {dateLabel(attempt.started_at)}</Typography.Text><Button type="link" size="small" onClick={showDetails}>تفاصيل النتيجة</Button></Space>}
+   {!sim.msisdn&&<Button size="small" loading={phoneBusy===sim.sim_uuid} disabled={hardwareLoading||isPhonePending(attempt)||operator==="unknown"||operator==="ooredoo"||(operator==="djezzy"&&!agentSupportsServiceCode(stations.find(station=>station.station_uuid===selected)?.agent_version||null))} onClick={()=>void discoverPhone(sim)}>معرفة الرقم تلقائيًا</Button>}
    {operator==="ooredoo"&&<Typography.Text type="secondary" style={{fontSize:11}}>{guardMap[sim.sim_uuid]?.last_failed_at?"آخر فشل: "+dateLabel(guardMap[sim.sim_uuid].last_failed_at):"لا توجد محاولة موثقة"} — {cooldownActive(guardMap[sim.sim_uuid]?.cooldown_until)?"محظور حتى "+dateLabel(guardMap[sim.sim_uuid].cooldown_until):"المحاولات محمية ومقفلة افتراضيًا"}</Typography.Text>}
    {operator==="ooredoo"&&guardMap[sim.sim_uuid]?.last_failure_code&&<Typography.Text type="secondary" style={{fontSize:11}}>سبب الفشل: {guardMap[sim.sim_uuid].last_failure_code}</Typography.Text>}
    {operator==="ooredoo"&&<Button size="small" loading={rearmBusy===sim.sim_uuid} disabled={!!(cooldownActive(guardMap[sim.sim_uuid]?.cooldown_until))} onClick={()=>void rearmOoredoo(sim)}>إعادة السماح من الإدارة</Button>}
    {operator==="ooredoo"&&<Typography.Text type="secondary" style={{fontSize:11}}>كود *200*PIN# غير مفعّل حتى تثبت وظيفته ويُتحقق من PIN</Typography.Text>}
    {operator==="djezzy"&&!agentSupportsServiceCode(stations.find(station=>station.station_uuid===selected)?.agent_version||null)&&<Typography.Text type="secondary" style={{fontSize:11}}>جيزي 99 تحتاج Agent 0.4.11+</Typography.Text>}
-   <Space.Compact style={{width:"100%"}}>
+   {!sim.msisdn&&<Space.Compact style={{width:"100%"}}>
     <Input aria-label="رقم الشريحة يدويًا" dir="ltr" inputMode="tel" placeholder="0XXXXXXXXX" value={manualNumbers[sim.sim_uuid]||""} maxLength={20} onChange={event=>setManualNumbers(old=>({...old,[sim.sim_uuid!]:event.target.value}))}/>
     <Button loading={manualBusy===sim.sim_uuid} onClick={()=>void saveManualNumber(sim)}>حفظ يدوي</Button>
-   </Space.Compact>
+   </Space.Compact>}
   </Space>;
  };
  const openHardware=async(uuid:string)=>{
@@ -207,7 +242,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   <SamaOperationalActions db={db}/>
   {error&&<Alert type="error" showIcon message={error}/>}
   {checkedAt&&<Typography.Text type="secondary">آخر تحديث: {dateLabel(checkedAt)}</Typography.Text>}
-  <Card title={<Space wrap>المحطات</Space>} extra={<Button loading={loading} onClick={()=>void refresh()}>تحديث</Button>}>
+  <Card title={<Space wrap>المحطات</Space>} extra={<Button loading={loading} onClick={()=>{void refresh();void loadPhoneAttempts();}}>تحديث</Button>}>
    {mobile ? <Space direction="vertical" size="middle" style={{width:"100%"}}>
     {loading ? <Card loading size="small"/> : stations.length === 0 ? <Empty description="لا توجد محطات مرئية للحساب"/> : stations.map(station => <Card key={station.station_uuid} size="small" title={station.computer_name||"محطة دون اسم"} extra={<Tag color={station.status==="approved"&&online(station.last_seen_at)?"green":"orange"}>{station.status==="approved"&&online(station.last_seen_at)?"متصل":"غير متصل"}</Tag>}>
       <Descriptions size="small" bordered column={1} items={[
@@ -225,7 +260,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
     {title:"المودمات",render:(_:unknown,r:Station)=><Button size="small" onClick={()=>void openHardware(r.station_uuid)}>عرض</Button>}
    ]}/>}
   </Card>
-  {selected&&<Card title="المودمات والشرائح" extra={<Button loading={hardwareLoading} onClick={()=>void openHardware(selected)}>تحديث</Button>}>
+  {selected&&<Card title="المودمات والشرائح" extra={<Button loading={hardwareLoading} onClick={()=>{void openHardware(selected);void loadPhoneAttempts();}}>تحديث</Button>}>
 
    {mobile?<Space direction="vertical" style={{width:"100%"}} size="middle">{(hardware[selected]||[]).length===0&&!hardwareLoading?<Empty description="لا توجد مودمات مسجلة"/>:(hardware[selected]||[]).map(r=><Card key={r.modem_uuid+":"+(r.sim_uuid||"none")} size="small" title={<Space wrap><span>{r.device_name||"مودم"}</span><Tag color={online(r.modem_last_seen_at)?"green":"orange"}>{online(r.modem_last_seen_at)?"رُصد حديثًا":"لا يوجد رصد حديث"}</Tag></Space>}><Descriptions size="small" column={1} bordered items={[{key:"ip",label:"IP محلي",children:<span dir="ltr">{r.modem_ip||"—"}</span>},{key:"sim",label:"الشريحة",children:<span dir="ltr">{r.msisdn||"غير معروف"}</span>},{key:"operator",label:"المتعامل",children:operatorNames[operatorOf(r)]},{key:"lookup",label:"معرفة الرقم",children:phoneAction(r)},{key:"type",label:"النوع",children:typeAction(r)},{key:"pin",label:"PIN",children:r.has_pin?"مسجل بأمان":"غير مسجل"},{key:"last",label:"آخر ظهور",children:dateLabel(r.modem_last_seen_at)}]}/></Card>)}</Space>:<Table rowKey={r=>r.modem_uuid+":"+(r.sim_uuid||"none")} loading={hardwareLoading} dataSource={hardware[selected]||[]} size="small" scroll={{x:720}} pagination={{pageSize:10}} columns={[
     {title:"المودم",render:(_:unknown,r:Hardware)=>r.device_name||r.modem_ip||"—"},
