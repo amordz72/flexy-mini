@@ -11,7 +11,8 @@ await mkdir(output,{recursive:true});
 const ui=`import React from 'react';
 const c=name=>props=>React.createElement(name,props,props.children);
 export const Alert=c('alert'),Button=c('button'),Card=c('card'),Descriptions=c('descriptions'),
- Empty=c('empty'),Input=c('input'),Select=c('select'),Space=c('space'),Tag=c('tag');
+ Empty=c('empty'),Input=c('input'),Select=c('select'),Tag=c('tag');
+export const Space=Object.assign(c('space'),{Compact:c('space-compact')});
 export const Grid={useBreakpoint:()=>({sm:true})};
 export const Typography={Text:c('text')};
 export const Table=props=>{
