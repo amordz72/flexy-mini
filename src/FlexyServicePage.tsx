@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Alert, Button, Card, Col, Empty, Input, InputNumber, Modal, Row,
+  Alert, Button, Card, Collapse, Empty, Input, InputNumber, List, Modal, Radio,
   Segmented, Select, Space, Spin, Tag, Typography, message
 } from "antd";
-import { CheckCircleOutlined, PhoneOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
+import { CheckCircleOutlined, InfoCircleOutlined, PhoneOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import FlexyOperationHistory from "./FlexyOperationHistory";
 import CustomerOfferIdentity from "./CustomerOfferIdentity";
@@ -70,14 +70,13 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
   const handleIdentity = useCallback((value: OfferIdentity | null) => {
     setIdentity(value);
     setChosenId(null);
-    setFamily("all");
   }, []);
   const [phone, setPhone] = useState("");
   const [offers, setOffers] = useState<Offer[]>([]);
   const [loading, setLoading] = useState(false);
   const [catalogError, setCatalogError] = useState("");
-  const [family, setFamily] = useState<string>("all");
   const [chosenId, setChosenId] = useState<string | null>(null);
+  const [offerDetails, setOfferDetails] = useState<Offer | null>(null);
   const [manual, setManual] = useState(false);
   const [manualFamily, setManualFamily] = useState<string | undefined>();
   const [manualAmount, setManualAmount] = useState<number | null>(null);
@@ -116,7 +115,8 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
     }
     setCatalogError("");
     const rows = (Array.isArray(data) ? data : []) as Offer[];
-    setOffers(rows.filter(row => row.operator === "mobilis" && row.amount >= 500));
+    // Role visibility is decided by the catalog RPC; never hide an active offer by amount or SIM.
+    setOffers(rows.filter(row => row.operator === "mobilis"));
   }, [db, isCustomer]);
 
   const loadStation = useCallback(async () => {
@@ -156,7 +156,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
   const eligibleOffers = offers.filter(row => compatibleGroup(row, verifiedGroup));
   const families = [...new Set(eligibleOffers.map(row => row.family))];
   const familyOrder = ["Sama Mix", "Sama Talk", "Sama Net"];
-  const visibleOffers = eligibleOffers.filter(row => family === "all" || row.family === family)
+  const visibleOffers = [...eligibleOffers]
     .sort((a,b) => {
       const ia = familyOrder.indexOf(a.family), ib = familyOrder.indexOf(b.family);
       if (ia !== ib && (ia >= 0 || ib >= 0)) return (ia < 0 ? 99 : ia)-(ib < 0 ? 99 : ib);
@@ -215,7 +215,6 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
       message.warning("العرض غير موجود في الكتالوج المعتمد. لا يمكن إرسال رقم USSD غير مسجل.");
       return;
     }
-    setFamily(match.family);
     setChosenId(match.offer_uuid);
     message.success("تم مطابقة العرض مع الكتالوج المعتمد");
   };
@@ -317,12 +316,32 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
     })();
   };
 
+  // Preserve the exact MyTool offer identity/details in a compact, single-select list.
+  // This is display/selection only: dispatch still requires a server-approved route.
+  const renderOfferRows = (rows: Offer[]) => <List
+    bordered size="small" dataSource={rows} rowKey="offer_uuid"
+    renderItem={offer => <List.Item style={{padding:"7px 10px"}}>
+      <div style={{width:"100%",display:"flex",direction:"rtl",alignItems:"center",gap:8}}>
+        <Radio aria-label={`اختيار ${offer.display_name}`}
+          checked={chosenId === offer.offer_uuid}
+          onChange={() => setChosenId(offer.offer_uuid)}/>
+        <Button type="text" onClick={() => setChosenId(offer.offer_uuid)}
+          style={{flex:1,minWidth:0,whiteSpace:"normal",height:"auto",textAlign:"right",padding:"8px 2px"}}>
+          {offer.display_name}
+        </Button>
+        <Tag color={chosenId === offer.offer_uuid ? "processing" : "geekblue"} style={{margin:0,whiteSpace:"nowrap"}}>
+          {currency(offer.amount)}
+        </Tag>
+        <Button type="text" size="small" aria-label={`تفاصيل ${offer.display_name}`}
+          icon={<InfoCircleOutlined />} onClick={() => setOfferDetails(offer)}/>
+      </div>
+    </List.Item>}/>;
+
   return <Space direction="vertical" size="large" style={{ width: "100%" }}>
     <Card>
       <Space direction="vertical" size="middle" style={{ width: "100%" }}>
         <Space wrap>
           <Tag color="green">Mobilis</Tag>
-          <Tag>فليكسي Mobilis</Tag>
           {!isCustomer && <Tag color={executePrerequisitesReady ? "green" : "orange"}>
             {stationBusy ? "جاري فحص المحطة" : executePrerequisitesReady ? "Sama مستوفية للشروط الأساسية" : stationUuid ? "Sama للاستكشاف فقط" : "Sama غير جاهزة"}
           </Tag>}
@@ -337,7 +356,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
           onChange={event => {
             const next = normalizePhone(event.target.value);
             if (next !== normalizePhone(phone)) {
-              setMode("credit"); setIdentity(null); setChosenId(null); setFamily("all");
+              setMode("credit"); setIdentity(null); setChosenId(null); setOfferDetails(null);
               setManual(false); setManualFamily(undefined); setManualAmount(null); setManualIndex("");
               setAmount(null); setConfirmSend(false);
             }
@@ -357,12 +376,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
       </Space>
     </Card>
 
-    <Card title="عروض الزبون" style={{ display: mode === "offers" ? undefined : "none" }}>
-      <CustomerOfferIdentity db={db} phone={phone} stationUuid={stationUuid}
-        active={mode === "offers"} requestToken={offersRequest}
-        isCustomer={isCustomer} onIdentity={handleIdentity} onJobChange={refreshHistory}/>
-    </Card>
-    {mode === "credit" ? <Card title="رصيد عادي">
+    {mode === "credit" ? <Card>
       <Space direction="vertical" style={{ width: "100%" }} size="middle">
         <Alert showIcon type="warning" message="إرسال الرصيد العادي غير متاح حاليًا"
            />
@@ -374,41 +388,34 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
         <Button block size="large" type="primary" disabled>إرسال الرصيد — غير مفعّل</Button>
       </Space>
     </Card> : <>
-      <Card title="العروض" extra={<Button size="small" icon={<ReloadOutlined/>}
+      <Card title="العروض المتاحة" extra={<Button size="small" icon={<ReloadOutlined/>}
         onClick={() => void loadCatalog()} loading={loading}>تحديث</Button>}>
         <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+          <CustomerOfferIdentity db={db} phone={phone} stationUuid={stationUuid}
+            active={mode === "offers"} requestToken={offersRequest}
+            isCustomer={isCustomer} onIdentity={handleIdentity} onJobChange={refreshHistory}/>
           {catalogError && <Alert type="error" showIcon message={catalogError}/>}
-
-          {verifiedGroup && <Tag color="green">مجموعة عروض الرقم: {verifiedGroup==="SAMA"?"Sama":verifiedGroup==="PIXX"?"PixX":"Revolution"}</Tag>}
-          <Select
-            aria-label="عائلة عروض موبيليس"
-            style={{ width: "100%" }}
-            size="large"
-            value={family}
-            onChange={setFamily}
-            options={[{ value:"all", label:"جميع العروض" }, ...families.map(value => ({ value, label:value }))]}
-          />
           {loading ? <Spin/> : visibleOffers.length === 0
             ? <Empty description={!verifiedGroup
                 ? "لم يتم التحقق من مجموعة عروض هذا الرقم بعد"
                 : isCustomer ? "لا توجد عروض منشورة لهذا الحساب حاليًا"
-                : "لا توجد عروض متاحة لهذه المجموعة في الكتالوج"} />
-            : <Row gutter={[10, 10]}>
-              {visibleOffers.map(offer => <Col xs={12} sm={8} lg={6} key={offer.offer_uuid}>
-                <Button block size="large" type={chosenId === offer.offer_uuid ? "primary" : "default"}
-                  onClick={() => setChosenId(offer.offer_uuid)}
-                  style={{ height:"auto", minHeight:76, whiteSpace:"normal", padding:"10px 6px" }}>
-                  <Space direction="vertical" size={2} style={{width:"100%"}}>
-                    <Typography.Text style={{ color:chosenId===offer.offer_uuid?"white":undefined, fontSize:12 }}>
-                      {offer.family}
-                    </Typography.Text>
-                    <Typography.Text strong style={{ color:chosenId===offer.offer_uuid?"white":undefined }}>
-                      {currency(offer.amount)}
-                    </Typography.Text>
-                  </Space>
-                </Button>
-              </Col>)}
-            </Row>}
+                : "لا توجد عروض مسجلة لهذه المجموعة في الكتالوج"} />
+            : verifiedGroup === "SAMA"
+              ? <Collapse
+                  items={[{
+                    key:"sama", label:"عروض Sama",
+                    children:<Collapse accordion
+                      items={familyOrder.filter(name => visibleOffers.some(offer => offer.family === name)).map(name => ({
+                        key:name, label:name,
+                        children:renderOfferRows(visibleOffers.filter(offer => offer.family === name))
+                      }))}
+                    />
+                  }]}
+                />
+              : <Space direction="vertical" size="small" style={{width:"100%"}}>
+                  <Typography.Text strong>{verifiedGroup === "PIXX" ? "PixX" : "Revolution"}</Typography.Text>
+                  {renderOfferRows(visibleOffers)}
+                </Space>}
           {!isCustomer && <Button type="link" icon={<SearchOutlined/>}
             disabled={!verifiedGroup} onClick={() => setManual(value => !value)}>
             {manual ? "إغلاق الإدخال اليدوي" : "اختيار عرض يدويًا من الكتالوج"}
@@ -417,7 +424,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
             <Space direction="vertical" style={{width:"100%"}}>
               <Select placeholder="عائلة العرض" value={manualFamily} onChange={setManualFamily}
                 options={families.map(value => ({label:value,value}))} style={{width:"100%"}}/>
-              <InputNumber<number> style={{width:"100%"}} min={500} max={100000} precision={0}
+              <InputNumber<number> style={{width:"100%"}} min={1} max={100000} precision={0}
                 placeholder="قيمة العرض دج" value={manualAmount} onChange={setManualAmount}/>
               <Input dir="ltr" inputMode="numeric" maxLength={4}
                 placeholder="رقم خيار الشبكة (اختياري)" value={manualIndex}
@@ -437,7 +444,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
             {routeCanSendThroughSama
               ? <Tag color="green"><CheckCircleOutlined/> المصدر: Sama</Tag>
               : routeChoice?.sim_type === "mobilis-arsselli"
-                ? <Tag color="orange">Arsselli — تنفيذ العروض يحتاج اعتماد الربط</Tag>
+                ? <Tag color="orange">Arsselli — ينتظر اعتماد الربط والخصم</Tag>
                 : <Tag color="orange">مصدر الإرسال غير جاهز</Tag>}
           </Space> : <Typography.Text type="secondary">اختر العرض من الأعلى.</Typography.Text>}
           {!isCustomer && chosen && (routeCheckBusy
@@ -448,8 +455,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
                 ? <Alert type="warning" showIcon message="الخدمة غير متاحة حاليًا، يرجى المحاولة بعد حين"
                     />
                 : routeChoice.sim_type === "mobilis-arsselli"
-                  ? <Alert type="warning" showIcon message="وجد النظام مصدر Arsselli"
-                      />
+                  ? <Alert type="warning" showIcon message="مصدر Arsselli يتطلب اعتماد تنفيذ هذا العرض وتسعيره قبل الإرسال" />
                   : null)}
           {isCustomer
             ? <Alert type="info" showIcon message="إرسال الزبائن غير مفعّل"
@@ -492,6 +498,10 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
       </Card>
     </>}
 
+    <Modal open={Boolean(offerDetails)} title={offerDetails?.display_name || "تفاصيل العرض"}
+      footer={null} onCancel={() => setOfferDetails(null)}>
+      <Typography.Paragraph>{offerDetails?.details || "لا توجد تفاصيل إضافية مسجلة لهذا العرض."}</Typography.Paragraph>
+    </Modal>
     <Modal open={confirmSend} title="تأكيد إرسال العرض"
       okText="أؤكد الإرسال" cancelText="إلغاء" okButtonProps={{danger:true}}
       onCancel={() => setConfirmSend(false)} onOk={() => submit(true)}>
