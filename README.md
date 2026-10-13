@@ -30,6 +30,8 @@ This README replaces the historical v0.3/v0.5 scaffold description. **Flexy Mini
 Live Supabase contains Station Connect Jobs, Sessions/Commands, historical discovery results, canonical offer catalogs, SIMs and balance-account logic shared with other projects. **Do not create duplicate financial/master tables or change MyTool business data as a UI side-effect.**
 
 **Known limitations as of this document:**
+- **Sama-first → Arsselli fallback policy (approved 2026-10-13):** the server selects an eligible Sama route for an active Mobilis offer, else an independently verified and enabled Arsselli route supporting the **same** offer *before* any financial network send. No automatic second financial attempt on failure/unknown. Network failure with confirmed no execution shows «يرجى المحاولة بعد حين»; uncertain result remains REVIEW. The current Arsselli offer routes remain draft/disabled in production; the ordinary Arsselli 696 sender is **not** an offer replacement. The UI now probes `station_connect_admin_offer_route_preview`; the financial send remains Sama-only until a true verified Arsselli **offer** executor and route are tested. Do not claim live fallback works yet.
+
 - Customer wallet-backed financial send and secure customer discovery endpoint are not complete.
 - Ordinary balance recharge is not available from the Sama-only pilot route.
 - Backend verification of recipient group is present, but multi-source router/UI and multi-modem binding require further validation.
