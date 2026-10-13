@@ -735,6 +735,10 @@ function Dashboard({customerToken,customerAccount,customerError,onCustomerLogout
           <div className="app-footer">Flexy Mini · Refine + Ant Design · عرض تجريبي فقط</div>
         </Content>
         <nav className="bottom-service-nav" aria-label="خدمات الموقع" dir="rtl">
+          {!isCustomer && <a className="flexy-lab-shortcut" href="/flexy-mini/lab.html"
+            target="_blank" rel="noopener noreferrer" aria-label="فتح مختبر محاكاة فليكسي">
+            🧪 المحاكاة
+          </a>}
           {[
             {key:"flexy",label:"فليكسي",symbol:"PhoneOutlined"},
             {key:"idoom",label:"تعبئة إيدوم",symbol:"WifiOutlined"},
