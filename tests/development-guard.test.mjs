@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { validateArchitecture } from '../scripts/development-guard.mjs';
 
-const LEGACY = '47c01e9e9b4a4ec0a5e854de76bd3980c3dc8197';
+const LEGACY = '830a2a9c1dca7cd4e38d2c696f6d655a852a1ffe';
 const config = {
   decision: 'DEVELOPMENT-GUARD-001',
   requiredPackages: ['antd', '@refinedev/core', '@refinedev/antd'],
