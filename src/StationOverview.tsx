@@ -1,6 +1,7 @@
 import {useCallback,useEffect,useState} from "react";
 import {Alert,Button,Card,Descriptions,Empty,Grid,Input,Modal,Space,Table,Tag,Typography,message} from "antd";
 import type {SupabaseClient} from "@supabase/supabase-js";
+import SamaOperationalActions from "./SamaOperationalActions";
 
 type Station={station_uuid:string;status:string;computer_name:string|null;last_seen_at:string|null;agent_version:string|null};
 type Hardware={modem_uuid:string;modem_ip:string|null;device_name:string|null;modem_last_seen_at:string|null;sim_uuid:string|null;msisdn:string|null;imsi:string|null;sim_type:string|null;has_pin:boolean;sim_last_seen_at:string|null};
@@ -203,6 +204,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   setHardware(previous=>({...previous,[uuid]:(data||[]) as Hardware[]}));setCheckedAt(new Date().toISOString());await Promise.all([loadPhoneAttempts(),loadOoredooGuards()]);
  };
  return <Space direction="vertical" size="middle" style={{width:"100%"}}>
+  <SamaOperationalActions db={db}/>
   <Alert type="info" showIcon message="Station Connect" description="المرحلة الحالية تستعمل Mobilis Sama فقط لاكتشاف العروض. ظهور مودم أو شريحة في السجل لا يثبت أنها موصولة الآن؛ الحالة حسب آخر معلومات Agent. لا شحن ولا عرض لأسرار الشرائح."/>
   {error&&<Alert type="error" showIcon message={error}/>}
   <Alert type="info" showIcon message="معرفة رقم الشريحة من شبكة المتعامل" description="يُحدد المتعامل من IMSI ثم يختار السيرفر الاستعلام المسجل: موبيليس *101#، جيزي 99 بعد تحديث Agent. أوريدو *200*PIN# متوقف حتى تأكيد معنى PIN؛ لا أكواد عشوائية." />
