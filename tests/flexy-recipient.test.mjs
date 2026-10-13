@@ -73,7 +73,7 @@ test('valid cache supplies same recipient group without network discovery',async
   await close(r);
 });
 
-test('missing cache presents confirmation; double confirmation dispatches once; poll publishes result',async()=>{
+test('one Offers action reads cache then queues one automatic discovery with no extra button or payment',async()=>{
   let identity;let resolveQueue;let complete=false;
   const db=makeDb(name=>{
     if(name==='flexy_mini_admin_customer_offer_identity')return Promise.resolve(ok(complete?classified:missing));
@@ -82,16 +82,37 @@ test('missing cache presents confirmation; double confirmation dispatches once; 
     throw Error(name);
   });
   const r=await mount(Identity,{...base,db,onIdentity:v=>{identity=v}});
-  assert.equal(db.calls.length,1);
-  const confirm=button(r,'تأكيد الاستعلام').props.onClick;
-  await act(async()=>{confirm();confirm()});
+  assert.equal(db.calls.filter(x=>x.name==='flexy_mini_admin_customer_offer_identity').length,1);
   assert.equal(db.calls.filter(x=>x.name==='station_connect_admin_create_offer_discovery').length,1);
+  assert.equal(button(r,'تأكيد الاستعلام'),undefined);
+  assert.equal(button(r,'استكشاف العروض'),undefined);
+  assert.equal(db.calls.filter(x=>x.name.includes('verified_offer_execute')).length,0);
   assert.equal(db.calls.at(-1).args.p_phone,base.phone);
   await act(async()=>resolveQueue(ok({job_uuid:'job',status:'claimed',reused:false})));
   assert.equal(timers.size,1);
   await act(async()=>{for(const tick of [...timers.values()])tick();await Promise.resolve()});await flush();
   assert.equal(identity.group,'PIXX');assert.equal(timers.size,0);
   assert.equal(db.calls.filter(x=>x.name==='station_connect_admin_create_offer_discovery').length,1);
+  await close(r);
+});
+
+test('cache lookup by itself never starts USSD unless Offers is active and a usable station exists',async()=>{
+  const db=makeDb(name=>Promise.resolve(ok(missing)));
+  const r=await mount(Identity,{...base,active:false,db});
+  assert.equal(db.calls.length,0);
+  await act(async()=>r.update(React.createElement(Identity,{...base,active:true,stationUuid:null,db})));
+  await flush();
+  assert.equal(db.calls.filter(x=>x.name==='flexy_mini_admin_customer_offer_identity').length,1);
+  assert.equal(db.calls.filter(x=>x.name==='station_connect_admin_create_offer_discovery').length,0);
+  await close(r);
+});
+
+test('an already pending discovery is reused and never opened again automatically',async()=>{
+  const db=makeDb(name=>Promise.resolve(ok({...missing,lookup_status:'IN_PROGRESS',active_job_uuid:'running-job'})));
+  const r=await mount(Identity,{...base,db});
+  assert.equal(db.calls.filter(x=>x.name==='station_connect_admin_create_offer_discovery').length,0);
+  assert.equal(button(r,'تأكيد الاستعلام'),undefined);
+  assert.equal(button(r,'استكشاف العروض'),undefined);
   await close(r);
 });
 
@@ -109,9 +130,10 @@ test('late cached response cannot restore previous phone identity',async()=>{
 test('lost queue response blocks another discovery until existing job is recovered',async()=>{
   let recover=false;
   const db=makeDb(name=>name==='station_connect_admin_create_offer_discovery'?Promise.reject(Error('lost')):Promise.resolve(ok(recover?{...missing,lookup_status:'IN_PROGRESS',active_job_uuid:'job'}:missing)));
-  const r=await mount(Identity,{...base,db});await click(r,'تأكيد الاستعلام');
-  assert.equal(button(r,'استكشاف العروض').props.disabled,true);
-  recover=true;await click(r,'تحديث النتيجة');
+  const r=await mount(Identity,{...base,db});
+  assert.equal(db.calls.filter(x=>x.name.includes('create_offer')).length,1);
+  assert.equal(button(r,'تأكيد الاستعلام'),undefined);
+  recover=true;await click(r,'تحديث الحالة');
   assert.equal(timers.size,1);assert.equal(db.calls.filter(x=>x.name.includes('create_offer')).length,1);
   await close(r);
 });
@@ -119,7 +141,7 @@ test('lost queue response blocks another discovery until existing job is recover
 test('late queued response and job polling cannot publish state for changed recipient',async()=>{
   let resolveQueue;const db=makeDb(name=>name.includes('create_offer')?new Promise(resolve=>{resolveQueue=resolve}):Promise.resolve(ok(missing)));
   const r=await mount(Identity,{...base,db});
-  await act(async()=>{button(r,'تأكيد الاستعلام').props.onClick()});
+  assert.equal(db.calls.filter(x=>x.name.includes('create_offer')).length,1);
   await act(async()=>r.update(React.createElement(Identity,{...base,phone:'0500000002',active:false,db})));
   await act(async()=>resolveQueue(ok({job_uuid:'old-job',status:'claimed'})));
   assert.equal(timers.size,0);assert.equal(r.root.findAllByType('tag').length,0);
@@ -134,17 +156,20 @@ test('customer cannot access administrative discovery RPC',async()=>{
 
 test('expired cache cannot authorize offer selection',async()=>{
   let identity;
-  const db=makeDb(()=>Promise.resolve(ok({...classified,valid_until:'2020-01-01T00:00:00Z'})));
+  const db=makeDb(name=>Promise.resolve(ok(name==='flexy_mini_admin_customer_offer_identity'
+    ?{...classified,valid_until:'2020-01-01T00:00:00Z'}
+    :{job_uuid:'expired-cache-requery',status:'claimed'})));
   const r=await mount(Identity,{...base,db,onIdentity:v=>{identity=v}});
-  assert.equal(identity,null);assert.ok(button(r,'تأكيد الاستعلام'));
-  assert.equal(db.calls.filter(x=>x.name.includes('create_offer')).length,0);await close(r);
+  assert.equal(identity,null);assert.equal(button(r,'تأكيد الاستعلام'),undefined);
+  assert.equal(db.calls.filter(x=>x.name.includes('create_offer')).length,1);await close(r);
 });
 
 test('failed discovery remains unknown and polling never queues a retry',async()=>{
   const db=makeDb(name=>Promise.resolve(ok(name==='flexy_mini_admin_customer_offer_identity'
     ?missing:name==='station_connect_admin_create_offer_discovery'
     ?{job_uuid:'job',status:'claimed'}:{job_uuid:'job',status:'failed',result_code:'NETWORK_ERROR'})));
-  const r=await mount(Identity,{...base,db});await click(r,'تأكيد الاستعلام');
+  const r=await mount(Identity,{...base,db});
+  assert.equal(db.calls.filter(x=>x.name.includes('create_offer')).length,1);
   await act(async()=>{for(const tick of [...timers.values()])tick();await Promise.resolve()});await flush();
   assert.equal(timers.size,0);assert.ok(r.root.findAllByType('alert').some(n=>String(n.props.message).includes('NETWORK_ERROR')));
   assert.equal(db.calls.filter(x=>x.name.includes('create_offer')).length,1);await close(r);
@@ -155,7 +180,7 @@ test('polling is bounded and pending job prevents a new discovery',async()=>{
   const r=await mount(Identity,{...base,db});
   const tick=[...timers.values()][0];assert.ok(tick);
   for(let i=0;i<61;i++)await act(async()=>{tick();await Promise.resolve()});
-  assert.equal(timers.size,0);assert.equal(button(r,'استكشاف العروض').props.disabled,true);
+  assert.equal(timers.size,0);assert.equal(button(r,'استكشاف العروض'),undefined);
   assert.equal(db.calls.filter(x=>x.name.includes('create_offer')).length,0);await close(r);
 });
 
