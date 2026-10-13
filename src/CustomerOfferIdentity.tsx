@@ -42,8 +42,9 @@ const isPhone = (v: string) => /^0[5-7][0-9]{8}$/.test(v);
 const inProgress = (status: string) => status === "queued" || status === "claimed";
 
 export default function CustomerOfferIdentity({
-  db, phone, stationUuid, isCustomer, onIdentity, active, requestToken,
+  db, phone, stationUuid, isCustomer, onIdentity, active, requestToken, onJobChange,
 }: {
+  onJobChange?: () => void;
   active: boolean;
   requestToken: number;
   db?: SupabaseClient;
@@ -163,6 +164,7 @@ export default function CustomerOfferIdentity({
         return;
       }
       setJobStatus(job.status);
+      if (!inProgress(job.status)) onJobChange?.();
       if (inProgress(job.status)) {
         return;
       }
@@ -230,7 +232,7 @@ export default function CustomerOfferIdentity({
             return;
           }
           setJobUuid(queued.job_uuid);
-          setJobStatus(queued.status);
+          setJobStatus(queued.status); onJobChange?.();
           message.info(queued.reused ? "جلسة سابقة ما زالت جارية؛ لم نكررها" : "تم فتح جلسة استعلام واحدة");
           await check();
         } catch {
@@ -244,11 +246,10 @@ export default function CustomerOfferIdentity({
   };
 
   if (!isPhone(normalized)) {
-    return <Alert showIcon type="info" message="أدخل رقم الزبون لمعرفة نوع عروضه" />;
+    return <Typography.Text type="secondary">رقم غير مكتمل</Typography.Text>;
   }
   if (isCustomer) {
-    return <Alert showIcon type="info" message="نوع عروض هذا الرقم غير متحقق بعد"
-      description="الاستعلام الخاص بالزبائن يحتاج ربط مصادقة الحساب بالخادم. لا نعرض عروضًا غير مؤكدة ولا نكشف معلومات أرقام أخرى." />;
+    return <Typography.Text type="secondary">استكشاف عروض الزبائن غير مفعّل</Typography.Text>;
   }
 
   const classified = row?.lookup_status === "CLASSIFIED" && groups.includes(row.presentation_group as OfferGroup)
@@ -257,18 +258,14 @@ export default function CustomerOfferIdentity({
     {error && <Alert showIcon type="error" message={error} />}
     {networkError && <Alert showIcon type="warning" message={networkError} />}
     {loading && <Typography.Text type="secondary">جاري معرفة عروض الرقم...</Typography.Text>}
-    {classified ? <Alert type="success" showIcon
-      message={"نوع عروض الرقم: " + groupNames[row!.presentation_group as OfferGroup]}
-
-    /> : !loading && <Alert type={row?.lookup_status === "IN_PROGRESS" ? "info":"warning"} showIcon
-      message={row?.lookup_status==="IN_PROGRESS" ? "جاري معرفة العروض؛ تظهر النتيجة تلقائيًا"
-        : row?.lookup_status==="UNKNOWN" ? "رد سابق غير كافٍ لتحديد نوع عروض الرقم"
-        : "لا يوجد تصنيف موثوق وصالح لهذا الرقم"}
-      description="لا نستعمل قائمة عروض رقم آخر، ولا نعتبر تعذّر الاستعلام دليلًا على عدم وجود عروض."
-    />}
+    {classified ? <Tag color="green">{groupNames[row!.presentation_group as OfferGroup]}</Tag>
+      : !loading && <Typography.Text type="secondary">
+          {row?.lookup_status==="IN_PROGRESS" ? "بانتظار نتيجة المحطة"
+            : row?.lookup_status==="UNKNOWN" ? "نوع العروض غير محسوم" : "لم يُكتشف نوع العروض"}
+        </Typography.Text>}
     {confirming && <Card size="small" title="معرفة عروض الرقم">
       <Space direction="vertical" style={{width:"100%"}}>
-        <Typography.Text>سيستعلم Station Connect عن عروض <bdi dir="ltr">{normalized}</bdi>. هذا الاستعلام لا ينفذ شحنًا.</Typography.Text>
+        <Typography.Text>استعلام عروض <bdi dir="ltr">{normalized}</bdi></Typography.Text>
         <Space wrap>
           <Button type="primary" loading={sending} onClick={() => void confirmDiscovery()}>تأكيد الاستعلام</Button>
           <Button onClick={() => setConfirming(false)}>إلغاء</Button>
@@ -282,16 +279,16 @@ export default function CustomerOfferIdentity({
       <Typography.Text copyable={{text:jobUuid}} type="secondary" style={{fontSize:11}}>مرجع الجلسة</Typography.Text>
     </Space>}
     <Space wrap>
-      <Button size="small" onClick={() => void refresh()} loading={loading}>تحديث التصنيف / نتيجة الجلسة</Button>
+      <Button size="small" onClick={() => void refresh()} loading={loading}>تحديث النتيجة</Button>
       <Button size="small" type={classified ? "default" : "primary"}
         disabled={!stationUuid || sending || loading || uncertain || Boolean(jobUuid && (!jobStatus || inProgress(jobStatus)))}
         loading={sending}
         onClick={requestDiscovery}>
-        {classified ? "استكشاف جديد بإذن الإدارة" : "فتح جلسة لمعرفة العروض"}
+        {classified ? "استكشاف جديد" : "استكشاف العروض"}
       </Button>
     </Space>
     {!stationUuid && <Typography.Text type="secondary" style={{fontSize:12}}>
-      الاستكشاف الحي متوقف حتى تصبح شريحة Sama جاهزة. عرض نتائج موثوقة مخزنة لا يحتاج المودم.
+      Sama غير جاهزة للاستكشاف
     </Typography.Text>}
   </Space>;
 }

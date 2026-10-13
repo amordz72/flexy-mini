@@ -20,7 +20,6 @@ export default function SupplierSites({db}:{db:SupabaseClient}) {
  };
  const edit=(row:Site)=>{setEditing(row.id);form.setFieldsValue(row);};
  return <Space direction="vertical" style={{width:"100%"}} size="middle">
-  <Alert type="info" showIcon message="سجل مواقع الموردين" description="إضافة الموقع هنا لا تنفذ أي عملية تلقائية. الربط الفعلي يتطلب موصلًا معتمدًا في السيرفر؛ لا نحدث Station Connect من هذه الصفحة."/>
   <Card title={editing?"تعديل الموقع":"إضافة موقع"} extra={editing?<Button onClick={()=>{setEditing(null);form.resetFields();}}>إلغاء التعديل</Button>:null}>
    <Form form={form} layout="vertical" initialValues={{integration_kind:"manual",enabled:false,notes:""}} onFinish={values=>void save(values)}>
     <Form.Item name="name" label="اسم الموقع" rules={[{required:true}]}><Input maxLength={100}/></Form.Item>

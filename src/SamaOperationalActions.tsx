@@ -111,9 +111,8 @@ export default function SamaOperationalActions({db}:{db:SupabaseClient}){
   }
  };
  const visible=rows.filter(row=>row.station_online&&row.modem_online&&row.sim_online);
- return <Card title="تجهيز Sama لأول عملية" extra={<Button size="small" loading={loading} onClick={()=>void load()}>تحديث الحالة</Button>}>
+ return <Card title="شرائح Sama" extra={<Button size="small" loading={loading} onClick={()=>void load()}>تحديث الحالة</Button>}>
   <Space direction="vertical" size="middle" style={{width:"100%"}}>
-   <Typography.Text type="secondary">الخطوات: التأكد من شريحة Sama الفعلية، حفظ PIN الخدمة، اعتماد الشريحة، ثم فحص رصيدها. العرض والعمليات المالية لا تُنفذ من هذه البطاقة.</Typography.Text>
    {error&&<Alert type="error" showIcon message={error}/>}
    {visible.length===0?<Alert type="warning" showIcon message="لا توجد شريحة موبيليس مرصودة حديثًا"/>:
     visible.map(sim=><Card key={sim.sim_uuid} size="small"
@@ -130,7 +129,7 @@ export default function SamaOperationalActions({db}:{db:SupabaseClient}){
          :"لم يُقرأ بعد"}
        ]}/>
        {!sim.has_service_pin||sim.sim_type!=="mobilis-sama"
-        ? <Alert type="info" showIcon message="اضغط «عرض مودمات المحطة» في الأسفل، ثم «تجهيز Mobilis Sama» للشريحة الصحيحة، وأدخل رقمها وPIN الخدمة في الموقع."/>
+        ? <Alert type="info" showIcon message="تعريف Sama أو PIN غير مكتمل"/>
         : null}
        {sim.has_service_pin&&sim.sim_type==="mobilis-sama"&&!sim.flexy_approved
          && <Button type="primary" block loading={busy===sim.sim_uuid}
@@ -144,8 +143,8 @@ export default function SamaOperationalActions({db}:{db:SupabaseClient}){
           <Alert showIcon type={pending.kind==="approve"?"info":"warning"}
            message={pending.kind==="approve"?"اعتماد شريحة Sama للتنفيذ":"قراءة رصيد Sama من الشبكة"}
            description={pending.kind==="approve"
-            ?"تأكيد إداري لهذه الشريحة فقط. لا يرسل USSD ولا ينفذ شحنًا."
-            :"سيُرسل طلب USSD واحدًا لقراءة الرصيد. هذا ليس شحنًا. لا تعاود الضغط إذا كانت النتيجة غير مؤكدة."}/>
+            ?"اعتماد الشريحة"
+            :"استعلام رصيد واحد"}/>
           {actionError&&<Alert showIcon type="error" message={actionError}/>}
           <Space wrap>
            <Button type="primary" loading={busy===sim.sim_uuid}

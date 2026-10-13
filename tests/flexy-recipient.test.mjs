@@ -11,7 +11,7 @@ const output = new URL('../node_modules/.flexy-tests/', import.meta.url);
 await mkdir(output, { recursive: true });
 const ui = `import React from 'react';
 const c = name => props => React.createElement(name, props, props.children);
-export const Alert=c('alert'), Button=c('button'), Card=c('card'), Descriptions=c('descriptions'), Col=c('col'), Empty=c('empty'), Input=c('input'), InputNumber=c('amount'), Row=c('row'), Segmented=c('segmented'), Select=c('select'), Space=c('space'), Spin=c('spin'), Tag=c('tag');
+export const Alert=c('alert'), Button=c('button'), Card=c('card'), Table=c('table'), Descriptions=c('descriptions'), Col=c('col'), Empty=c('empty'), Input=c('input'), InputNumber=c('amount'), Row=c('row'), Segmented=c('segmented'), Select=c('select'), Space=c('space'), Spin=c('spin'), Tag=c('tag');
 export const Typography={Text:c('text'),Paragraph:c('paragraph')};
 export const Modal=props=>props.open?React.createElement('modal',props,props.children):null;
 export const message={warning(){},success(){},info(){},error(){}};`;
@@ -21,11 +21,12 @@ const plugins = [{ name:'test-ui', setup(b) {
   b.onResolve({filter:/SamaOfferDiscoveries$/},()=>({path:'history',namespace:'stub'}));
   b.onLoad({filter:/.*/,namespace:'stub'},args=>({contents:args.path==='ui'?ui:args.path==='history'?'export default function History(){return null}':`import React from 'react'; const Icon=()=>null; export {Icon as CheckCircleOutlined,Icon as PhoneOutlined,Icon as ReloadOutlined,Icon as SearchOutlined};`,loader:'js'}));
 }}];
-for (const component of ['CustomerOfferIdentity','FlexyServicePage']) {
+for (const component of ['CustomerOfferIdentity','FlexyServicePage','FlexyOperationHistory']) {
   const result = await build({entryPoints:[`src/${component}.tsx`],bundle:true,write:false,format:'esm',platform:'node',external:['react','react/jsx-runtime'],plugins});
   await writeFile(new URL(`${component}.mjs`,output),result.outputFiles[0].text);
 }
 const Identity=(await import(new URL('CustomerOfferIdentity.mjs',output))).default;
+const History=(await import(new URL('FlexyOperationHistory.mjs',output))).default;
 const Flexy=(await import(new URL('FlexyServicePage.mjs',output))).default;
 globalThis.IS_REACT_ACT_ENVIRONMENT=true;
 const timers=new Map(); let timerId=0;
@@ -107,8 +108,8 @@ test('lost queue response blocks another discovery until existing job is recover
   let recover=false;
   const db=makeDb(name=>name==='station_connect_admin_create_offer_discovery'?Promise.reject(Error('lost')):Promise.resolve(ok(recover?{...missing,lookup_status:'IN_PROGRESS',active_job_uuid:'job'}:missing)));
   const r=await mount(Identity,{...base,db});await click(r,'تأكيد الاستعلام');
-  assert.equal(button(r,'فتح جلسة').props.disabled,true);
-  recover=true;await click(r,'تحديث التصنيف');
+  assert.equal(button(r,'استكشاف العروض').props.disabled,true);
+  recover=true;await click(r,'تحديث النتيجة');
   assert.equal(timers.size,1);assert.equal(db.calls.filter(x=>x.name.includes('create_offer')).length,1);
   await close(r);
 });
@@ -152,7 +153,7 @@ test('polling is bounded and pending job prevents a new discovery',async()=>{
   const r=await mount(Identity,{...base,db});
   const tick=[...timers.values()][0];assert.ok(tick);
   for(let i=0;i<61;i++)await act(async()=>{tick();await Promise.resolve()});
-  assert.equal(timers.size,0);assert.equal(button(r,'فتح جلسة').props.disabled,true);
+  assert.equal(timers.size,0);assert.equal(button(r,'استكشاف العروض').props.disabled,true);
   assert.equal(db.calls.filter(x=>x.name.includes('create_offer')).length,0);await close(r);
 });
 
@@ -165,6 +166,19 @@ test('financial REVIEW retains pending intent and offers no reset/new request ac
   assert.equal(button(r,'إرسال العرض').props.disabled,true);
   assert.equal(db.calls.filter(x=>x.name.includes('create_verified_offer_execute')).length,0);
   await close(r);window.localStorage.getItem=()=>null;
+});
+
+test('history is visible by default with raw response and all essential columns',async()=>{
+ const record={job_uuid:'history-job',phone:'0500000001',service:'استكشاف عروض',offer_name:'—',amount:null,status:'unavailable',result_code:'DISCOVERY_TERMINAL',result_text:'Please Enter your PIN code',created_at:new Date().toISOString(),responses:[{sequence:1,action:'ussd_start',status:'success',response:'Please Enter your PIN code',created_at:new Date().toISOString()}],total_count:21};
+ const db=makeDb(()=>Promise.resolve(ok(record)));
+ const r=await mount(History,{db});const table=r.root.findByType('table');
+ assert.deepEqual(table.props.columns.map(c=>c.title),['التاريخ','الرقم','الخدمة','اسم العرض','المبلغ','الحالة','رد الشبكة','رمز النتيجة']);
+ assert.equal(table.props.dataSource[0].result_text,record.result_text);
+ assert.deepEqual(db.calls[0].args,{p_limit:10,p_offset:0});
+ assert.equal(table.props.pagination.total,21);
+ await act(async()=>table.props.pagination.onChange(2));await flush();
+ assert.deepEqual(db.calls.at(-1).args,{p_limit:10,p_offset:10});
+ assert.ok(table.props.expandable.rowExpandable(record));await close(r);
 });
 
 after(()=>rm(output,{recursive:true,force:true}));

@@ -9,8 +9,7 @@ export default function CreditAdmin({db}:{db:SupabaseClient}){
  useEffect(()=>{void load();},[]);
  const save=async(v:{enabled:boolean;credit_limit:number})=>{if(!editing)return;setBusy(true);const r=await db.rpc("flexy_mini_admin_set_credit",{p_user_id:editing.user_id,p_party_id:editing.party_id,p_enabled:!!v.enabled,p_limit:v.credit_limit});setBusy(false);if(r.error)message.error("تعذر الحفظ: "+r.error.message);else{message.success("تم حفظ الصلاحية والسقف");setEditing(null);void load();}};
  return <Card title="الشحن الذاتي بالدَّين" style={{marginTop:16}}>
- <Typography.Paragraph type="secondary">تفعيل الشحن وسقف الدين يكونان لكل حساب عميل مربوط ومتحقق منه، وليس لكل عملاء الماستر تلقائيًا.</Typography.Paragraph>
- <Table rowKey="user_id" size="small" loading={loading} dataSource={rows} pagination={{pageSize:10}} locale={{emptyText:<Empty description="لا توجد حسابات عملاء مربوطة بعد. يجب إكمال دخول العملاء وربطهم بالماستر أولًا."/>}} columns={[
+ <Table rowKey="user_id" size="small" loading={loading} dataSource={rows} pagination={{pageSize:10}} locale={{emptyText:<Empty description="لا توجد حسابات مرتبطة"/>}} columns={[
  {title:"العميل",render:(_,r:Credit)=>parties[r.party_id]||"عميل #"+r.party_id},
  {title:"الشحن",render:(_,r:Credit)=><Tag color={r.enabled?"green":"default"}>{r.enabled?"مسموح":"موقوف"}</Tag>},
  {title:"السقف",render:(_,r:Credit)=>Number(r.credit_limit).toLocaleString("en-US")+" دج"},
@@ -22,7 +21,7 @@ export default function CreditAdmin({db}:{db:SupabaseClient}){
  <Form form={form} layout="vertical" onFinish={save}>
  <Form.Item label="سقف الدين (مضاعفات 5,000 دج)" name="credit_limit" rules={[{required:true},{validator:async(_,v)=>{if(v<0||v%5000!==0)throw Error("السقف يجب أن يكون من مضاعفات 5,000 دج");}}]}><InputNumber min={0} max={10000000} step={5000} precision={0} style={{width:"100%"}}/></Form.Item>
  <Form.Item label="السماح بالشحن الذاتي" name="enabled" valuePropName="checked"><Switch/></Form.Item>
- <Alert type="info" showIcon style={{marginBottom:16}} message="لا يُسمح بالشحن إلا إذا كان الدين الحالي + مبلغ الشحن لا يتجاوز السقف. أقل شحن 5,000 دج."/>
+ <Alert type="info" showIcon style={{marginBottom:16}} message="أقل شحن: 5,000 دج · ضمن سقف الدين"/>
  <Space><Button type="primary" htmlType="submit" loading={busy}>حفظ</Button><Button onClick={()=>setEditing(null)}>إلغاء</Button></Space>
  </Form>
  </Modal>

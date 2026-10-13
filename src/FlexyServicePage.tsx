@@ -5,7 +5,7 @@ import {
 } from "antd";
 import { CheckCircleOutlined, PhoneOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import SamaOfferDiscoveries from "./SamaOfferDiscoveries";
+import FlexyOperationHistory from "./FlexyOperationHistory";
 import CustomerOfferIdentity from "./CustomerOfferIdentity";
 import type { OfferGroup, OfferIdentity } from "./CustomerOfferIdentity";
 import {readSamaStatus,readinessProblems} from "./SamaOperationalActions";
@@ -94,7 +94,8 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
   const [routeError, setRouteError] = useState("");
   const [routeRefreshToken, setRouteRefreshToken] = useState(0);
   const routeCheckSequence = useRef(0);
-  const [showDiscovery, setShowDiscovery] = useState(false);
+  const [historyRefresh, setHistoryRefresh] = useState(0);
+  const refreshHistory = useCallback(() => setHistoryRefresh(value => value + 1), []);
   const [sendBusy, setSendBusy] = useState(false);
   const initialRequest = useRef<PendingRequest | null>(isCustomer ? null : readPending());
   const [lastJob, setLastJob] = useState<Job | null>(initialRequest.current?.job || null);
@@ -232,7 +233,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
     }
     const result = (Array.isArray(data) ? data[0] : data) as Job | null;
     if (result) {
-      setLastJob(result);
+      setLastJob(result); refreshHistory();
       setUnknownResult(false);
       if (requestRef.current) {
         requestRef.current = { ...requestRef.current, job: result };
@@ -302,7 +303,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
           return;
         }
         const job = { job_uuid: result.job_uuid, status: result.status };
-        setLastJob(job);
+        setLastJob(job); refreshHistory();
         requestRef.current = { ...request, job };
         savePending(requestRef.current);
         setUnknownResult(false);
@@ -359,12 +360,12 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
     <Card title="عروض الزبون" style={{ display: mode === "offers" ? undefined : "none" }}>
       <CustomerOfferIdentity db={db} phone={phone} stationUuid={stationUuid}
         active={mode === "offers"} requestToken={offersRequest}
-        isCustomer={isCustomer} onIdentity={handleIdentity}/>
+        isCustomer={isCustomer} onIdentity={handleIdentity} onJobChange={refreshHistory}/>
     </Card>
     {mode === "credit" ? <Card title="رصيد عادي">
       <Space direction="vertical" style={{ width: "100%" }} size="middle">
         <Alert showIcon type="warning" message="إرسال الرصيد العادي غير متاح حاليًا"
-          description="يلزم مصدر Arsselli جاهز ومسار معتمد لإرسال الرصيد العادي." />
+           />
         <Space wrap>{[100, 200, 500].map(value =>
           <Button key={value} type={amount === value ? "primary" : "default"}
             onClick={() => setAmount(value)}>{currency(value)}</Button>)}</Space>
@@ -377,9 +378,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
         onClick={() => void loadCatalog()} loading={loading}>تحديث</Button>}>
         <Space direction="vertical" size="middle" style={{ width: "100%" }}>
           {catalogError && <Alert type="error" showIcon message={catalogError}/>}
-          {!verifiedGroup && <Alert type="info" showIcon
-            message="العروض تظهر بعد التحقق من نوع الرقم"
-            description="نقرأ تصنيف الرقم المحفوظ إن كان صالحًا، أو نفتح استعلام Sama عند طلب الإدارة. لا نعرض PixX وRevolution وSama معًا دون دليل."/>}
+
           {verifiedGroup && <Tag color="green">مجموعة عروض الرقم: {verifiedGroup==="SAMA"?"Sama":verifiedGroup==="PIXX"?"PixX":"Revolution"}</Tag>}
           <Select
             aria-label="عائلة عروض موبيليس"
@@ -424,9 +423,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
                 placeholder="رقم خيار الشبكة (اختياري)" value={manualIndex}
                 onChange={event => setManualIndex(event.target.value.replace(/[^0-9]/g,""))}/>
               <Button block onClick={chooseManual}>مطابقة العرض</Button>
-              <Typography.Text type="secondary" style={{fontSize:12}}>
-                الإدخال اليدوي يختار عرضًا مسجلًا ولا يرسل كودًا مجهولًا للشبكة.
-              </Typography.Text>
+
             </Space>
           </Card>}
         </Space>
@@ -449,18 +446,18 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
               ? <Alert type="warning" showIcon message="يرجى المحاولة بعد حين" description={routeError}/>
               : !routeChoice
                 ? <Alert type="warning" showIcon message="الخدمة غير متاحة حاليًا، يرجى المحاولة بعد حين"
-                    description="لا توجد شريحة معتمدة جاهزة برصيد كافٍ لتنفيذ نفس العرض. يظهر العرض في الكتالوج حتى لو لم يوجد مصدر تنفيذ."/>
+                    />
                 : routeChoice.sim_type === "mobilis-arsselli"
                   ? <Alert type="warning" showIcon message="وجد النظام مصدر Arsselli"
-                      description="نفس العرض يحتاج مسار Arsselli معتمدًا وربط تنفيذ العروض، ولن نحوله إلى رصيد عادي تلقائيًا."/>
+                      />
                   : null)}
           {isCustomer
-            ? <Alert type="info" showIcon message="طلبات الزبائن لم تُربط بالمحفظة بعد"
-                description="نفس صفحة الفليكسي للجميع، لكن الإرسال لا يُفعّل لحساب الزبون قبل فحص الصلاحيات والرصيد من الخادم."/>
+            ? <Alert type="info" showIcon message="إرسال الزبائن غير مفعّل"
+                />
             : <Space direction="vertical" size="small" style={{width:"100%"}}>
               {stationError && <Alert type="error" message={stationError} showIcon/>}
               {routeCanSendThroughSama
-                ? <Typography.Text type="secondary">مصدر الإرسال المختار: Sama — محطة {stationName}. يتم التحقق من الرصيد والموافقة مجددًا داخل السيرفر.</Typography.Text>
+                ? <Typography.Text type="secondary">مصدر الإرسال المختار: Sama — محطة {stationName}. </Typography.Text>
                 : !routeChoice && samaStatus && chosen
                   ? <Typography.Text type="secondary">حالة Sama: {readinessProblems(samaStatus).join("، ")}</Typography.Text>
                   : null}
@@ -490,9 +487,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
           <Button type="primary" size="large" block loading={sendBusy}
             disabled={isCustomer||!db||!routeCanSendThroughSama||!validPhone(normalizePhone(phone))||Boolean(lastJob)}
             onClick={() => submit()}>إرسال العرض</Button>
-          <Typography.Text type="secondary" style={{fontSize:12}}>
-            لا تُرسل أي عملية بمجرد اختيار العرض. الإرسال الفعلي يتطلب تأكيدًا صريحًا، وموافقة السيرفر.
-          </Typography.Text>
+
         </Space>
       </Card>
     </>}
@@ -504,14 +499,6 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
       <Typography.Paragraph>{chosen?.display_name} — {currency(chosen?.amount || 0)}</Typography.Paragraph>
       <Typography.Paragraph>المصدر: Sama. تكلفة الشريحة عند النجاح: {currency((chosen?.amount || 0) + 10)}. هذه عملية شحن حقيقية.</Typography.Paragraph>
     </Modal>
-    {!isCustomer && <Card size="small">
-      <Space direction="vertical" style={{width:"100%"}}>
-        <Button type="default" block onClick={() => setShowDiscovery(value => !value)}>
-          {showDiscovery ? "إغلاق سجل استكشافات Sama" : "سجل استكشافات Sama السابقة"}
-        </Button>
-        {showDiscovery && db && <SamaOfferDiscoveries db={db} stationUuid={stationUuid}
-          samaReady={Boolean(stationUuid)} historyOnly/>}
-      </Space>
-    </Card>}
+    {!isCustomer && db && <FlexyOperationHistory db={db} refreshToken={historyRefresh}/> }
   </Space>;
 }

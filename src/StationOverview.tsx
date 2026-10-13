@@ -205,11 +205,9 @@ export default function StationOverview({db}:{db:SupabaseClient}){
  };
  return <Space direction="vertical" size="middle" style={{width:"100%"}}>
   <SamaOperationalActions db={db}/>
-  <Alert type="info" showIcon message="Station Connect" description="المرحلة الحالية تستعمل Mobilis Sama فقط لاكتشاف العروض. ظهور مودم أو شريحة في السجل لا يثبت أنها موصولة الآن؛ الحالة حسب آخر معلومات Agent. لا شحن ولا عرض لأسرار الشرائح."/>
   {error&&<Alert type="error" showIcon message={error}/>}
-  <Alert type="info" showIcon message="معرفة رقم الشريحة من شبكة المتعامل" description="يُحدد المتعامل من IMSI ثم يختار السيرفر الاستعلام المسجل: موبيليس *101#، جيزي 99 بعد تحديث Agent. أوريدو *200*PIN# متوقف حتى تأكيد معنى PIN؛ لا أكواد عشوائية." />
-  <Alert type="info" showIcon message="اختبار اتصال للقراءة فقط" description={checkedAt?"آخر قراءة ناجحة من السيرفر: "+dateLabel(checkedAt)+". الاتصال بالمودم نفسه غير مختبر.":"اضغط تحديث لاختبار قراءة بيانات المحطات من السيرفر؛ لا يُرسل أي أمر إلى المودم."}/>
-  <Card title={<Space wrap>المحطات <Tag color="blue">واجهة الهاتف v2.1</Tag></Space>} extra={<Button loading={loading} onClick={()=>void refresh()}>اختبار القراءة / تحديث</Button>}>
+  {checkedAt&&<Typography.Text type="secondary">آخر تحديث: {dateLabel(checkedAt)}</Typography.Text>}
+  <Card title={<Space wrap>المحطات</Space>} extra={<Button loading={loading} onClick={()=>void refresh()}>تحديث</Button>}>
    {mobile ? <Space direction="vertical" size="middle" style={{width:"100%"}}>
     {loading ? <Card loading size="small"/> : stations.length === 0 ? <Empty description="لا توجد محطات مرئية للحساب"/> : stations.map(station => <Card key={station.station_uuid} size="small" title={station.computer_name||"محطة دون اسم"} extra={<Tag color={station.status==="approved"&&online(station.last_seen_at)?"green":"orange"}>{station.status==="approved"&&online(station.last_seen_at)?"متصل":"غير متصل"}</Tag>}>
       <Descriptions size="small" bordered column={1} items={[
@@ -228,7 +226,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
    ]}/>}
   </Card>
   {selected&&<Card title="المودمات والشرائح" extra={<Button loading={hardwareLoading} onClick={()=>void openHardware(selected)}>تحديث</Button>}>
-   <Typography.Text type="secondary">قراءة بيانات المحطة، ويمكن للإدارة إرسال طلب معرفة الرقم فقط للشريحة المتوافقة، دون تعديل PIN أو تنفيذ شحن.</Typography.Text>
+
    {mobile?<Space direction="vertical" style={{width:"100%"}} size="middle">{(hardware[selected]||[]).length===0&&!hardwareLoading?<Empty description="لا توجد مودمات مسجلة"/>:(hardware[selected]||[]).map(r=><Card key={r.modem_uuid+":"+(r.sim_uuid||"none")} size="small" title={<Space wrap><span>{r.device_name||"مودم"}</span><Tag color={online(r.modem_last_seen_at)?"green":"orange"}>{online(r.modem_last_seen_at)?"رُصد حديثًا":"لا يوجد رصد حديث"}</Tag></Space>}><Descriptions size="small" column={1} bordered items={[{key:"ip",label:"IP محلي",children:<span dir="ltr">{r.modem_ip||"—"}</span>},{key:"sim",label:"الشريحة",children:<span dir="ltr">{r.msisdn||"غير معروف"}</span>},{key:"operator",label:"المتعامل",children:operatorNames[operatorOf(r)]},{key:"lookup",label:"معرفة الرقم",children:phoneAction(r)},{key:"type",label:"النوع",children:typeAction(r)},{key:"pin",label:"PIN",children:r.has_pin?"مسجل بأمان":"غير مسجل"},{key:"last",label:"آخر ظهور",children:dateLabel(r.modem_last_seen_at)}]}/></Card>)}</Space>:<Table rowKey={r=>r.modem_uuid+":"+(r.sim_uuid||"none")} loading={hardwareLoading} dataSource={hardware[selected]||[]} size="small" scroll={{x:720}} pagination={{pageSize:10}} columns={[
     {title:"المودم",render:(_:unknown,r:Hardware)=>r.device_name||r.modem_ip||"—"},
     {title:"IP محلي",dataIndex:"modem_ip",render:(v:string|null)=><span dir="ltr">{v||"—"}</span>},
@@ -253,7 +251,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
    maskClosable={!samaConfigBusy}
    closable={!samaConfigBusy}
   >
-   <Alert type="warning" showIcon message="تأكيد هوية الشريحة" description="تحقق أن الشريحة المتصلة حاليًا هي Mobilis Sama فعلًا. هذا الحفظ يحدّث أيضًا سجل الشرائح المشترك مع MyTool. لا يتم إرسال USSD ولا تنفيذ شحن." style={{marginBottom:12}}/>
+   <Alert type="warning" showIcon message="تأكيد هوية الشريحة" description="يحفظ تعريف Sama في سجل الشرائح المشترك." style={{marginBottom:12}}/>
    <Typography.Text strong>1. رقم هاتف الشريحة</Typography.Text>
    <Input
     aria-label="رقم هاتف شريحة Sama" dir="ltr" inputMode="tel" maxLength={20}
@@ -261,7 +259,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
     placeholder="0XXXXXXXXX"
     value={samaPhone} onChange={event=>setSamaPhone(event.target.value)}
    />
-   <Typography.Text type="secondary">اكتب رقم الشريحة نفسها، وليس رقم الزبون المراد شحنه.</Typography.Text>
+
    <div style={{marginTop:16}}><Typography.Text strong>2. PIN خدمة Sama (4 إلى 8 أرقام)</Typography.Text></div>
    <Input.Password
     style={{marginTop:8}} inputMode="numeric" autoComplete="new-password" maxLength={8}

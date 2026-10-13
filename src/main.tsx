@@ -168,7 +168,6 @@ function MiniMembers() {
     return () => { live = false; };
   }, []);
   return <Card title="عضويات Flexy Mini">
-    <Alert type="info" showIcon message="العضويات مستقلة عن MyTool. الدخول بالـPIN لم يُفعّل بعد. لا تمنح العضوية وحدها دخولًا." style={{ marginBottom: 16 }} />
     {error && <Alert type="warning" showIcon message={error} style={{ marginBottom: 16 }} />}
     <Table loading={loading} rowKey="id" dataSource={members} pagination={{ pageSize: 10 }} size="small" scroll={{ x: 430 }} columns={[
       { title: "معرّف الماستر", dataIndex: "party_id" },
@@ -227,7 +226,6 @@ function CardsCatalog() {
   const visibleVariants = variants.filter(v => v.product_id === productId && v.active)
     .sort((a, b) => a.sort_index - b.sort_index || (a.denomination ?? 999999) - (b.denomination ?? 999999) || a.id - b.id);
   return <Space direction="vertical" size="large" style={{ width: "100%" }}>
-    <Alert type="info" showIcon message="إدارة كتالوج البطاقات: قسم ← نوع ← بطاقة. لا توجد مبيعات أو أكواد شحن مفعّلة." />
     {error && <Alert type="error" showIcon message={error} closable onClose={() => setError("")} />}
     <Card title="1 — الأقسام" loading={busy && !categories.length}>
       <Space wrap>{categories.filter(c => c.active).map(c => <Button key={c.id} type={categoryId === c.id ? "primary" : "default"} onClick={() => { setCategoryId(c.id); setProductId(null); }}>{c.name} <Tag style={{marginInlineStart:6}}>{products.filter(p=>p.category_id===c.id).length} أنواع</Tag></Button>)}</Space>
@@ -381,7 +379,6 @@ function MasterCustomerLookup() {
   };
   return <Space direction="vertical" size="middle" style={{width:"100%"}}>
     <Card title="زبائن Flexy Mini" extra={<Button type="primary" onClick={()=>{if(!creating){setCopyCredentials("");setSavedMessage("");setPassword(Array.from(crypto.getRandomValues(new Uint8Array(8)), n => String((n % 8) + 1)).join(""));}setCreating(v=>!v);}}>{creating?"إغلاق":"زبون جديد +"}</Button>}>
-      <Alert type="info" showIcon message="الجدول يعرض حسابات Flexy Mini عند تفعيل خدمة الحسابات. لا نعرض كل الماستر كأنهم زبائن مسجلون."/>
       {savedMessage&&<Alert type="success" style={{marginTop:12}} message={savedMessage}/>}
       {copyCredentials&&<Space wrap style={{marginTop:10}}>
         <Button type="primary" onClick={()=>{void navigator.clipboard.writeText(copyCredentials).then(()=>message.success("تم نسخ بيانات الدخول")).catch(()=>message.error("تعذر النسخ"));}}>نسخ بيانات الدخول</Button>
@@ -409,7 +406,6 @@ function MasterCustomerLookup() {
       ]} locale={{emptyText:"لا توجد حسابات Flexy Mini مؤكدة بعد"}}/>
     </Card>
     {creating&&<Card title="زبون جديد — مطابقة الماستر">
-      <Alert type="info" showIcon message="أدخل اسم المستخدم وكلمة المرور، ثم البيانات الاختيارية. نقترح الماستر تلقائيًا عند وجود تطابق؛ لا نربط أي شخص دون اختيارك."/>
       <Form layout="vertical" style={{marginTop:14}}>
         <Form.Item label="اسم المستخدم" validateStatus={username&&!/^[a-z0-9_]{3,32}$/.test(username.trim().toLowerCase())?"error":undefined} help={username&&!/^[a-z0-9_]{3,32}$/.test(username.trim().toLowerCase())?"اسم المستخدم من 3 إلى 32 حرفًا إنجليزيًا أو رقمًا أو _":undefined}><Input dir="ltr" value={username} onChange={e=>{setUsername(e.target.value);setSelected(null);setMasterRecord(null);}} placeholder="username"/></Form.Item>
         <Form.Item label="كلمة المرور (مولّدة تلقائيًا — يمكنك تعديلها)"><Input.Password value={password} onChange={e=>setPassword(e.target.value)} autoComplete="new-password"/></Form.Item>
@@ -420,8 +416,8 @@ function MasterCustomerLookup() {
       </Form>
       {error&&<Alert type="warning" message={error}/>}
       {busy&&<Text type="secondary">جاري فحص تطابق الماستر...</Text>}
-      {!busy&&matches.length>0&&<Alert type="info" showIcon message="اقتراحات ماستر محتملة — تحقق من هوية الزبون قبل الربط. النسبة مؤشر تقريبي وليست إثباتًا."/>}
-      {!busy&&matches.length===0&&<Alert type="info" message="لم تظهر مطابقة من البيانات المدخلة. يمكنك إنشاء ماستر جديد، بعد التأكد أن الشخص غير موجود سابقًا."/>}
+      {!busy&&matches.length>0&&<Alert type="info" showIcon message="مطابقات محتملة"/>}
+      {!busy&&matches.length===0&&<Alert type="info" message="لا توجد مطابقة"/>}
       <Space direction="vertical" size="small" style={{width:"100%",marginTop:12}}>
         {matches.map(r=><Card key={r.id} size="small" style={{borderColor:selected===r.id?"#1677ff":undefined}}>
           <Space direction="vertical" size="small" style={{width:"100%"}}>
@@ -433,7 +429,7 @@ function MasterCustomerLookup() {
           </Space>
         </Card>)}
       </Space>
-      {selected&&<Alert style={{marginTop:12}} type="success" message="تم اختيار الماستر؛ سيتم إنشاء حساب Flexy Mini مرتبط به."/>}
+      {selected&&<Alert style={{marginTop:12}} type="success" message="الماستر محدد"/>}
       <Button style={{marginTop:12}} type="primary" loading={saving} disabled={saving||busy} onClick={()=>void createAccount()}>{selected?"حفظ الزبون وإنشاء الحساب":"إنشاء ماستر جديد وربط الحساب"}</Button>
     </Card>}
   </Space>;
@@ -509,7 +505,7 @@ function MiniWalletAdmin(){
  <Modal title={selected?"تفاصيل الزبون: "+selected.username:"تفاصيل الزبون"} open={!!selected} onCancel={()=>setSelected(null)} footer={null} width={720}>
  {selected&&<Space direction="vertical" style={{width:"100%"}}>
  <Descriptions bordered size="small" column={1} items={[{key:"user",label:"اسم المستخدم",children:selected.username},{key:"phone",label:"الهاتف",children:selected.phone},{key:"status",label:"الحالة",children:selected.active?"نشط":"معطل"},{key:"balance",label:"الرصيد",children:selected.wallet?money(selected.wallet.balance):"لم تُفتح"},{key:"debt",label:"الديون",children:selected.wallet?money(selected.wallet.debt):"—"},{key:"profit",label:"الأرباح",children:selected.wallet?money(selected.wallet.profit):"—"}]}/>
- <Alert type="warning" message="التسجيل المالي معطل مؤقتًا إلى حين التحقق من نشر نسخة الخادم المطابقة."/>
+ <Alert type="warning" message="التسجيل المالي غير مفعّل"/>
  <Select value={kind} onChange={setKind} style={{width:"100%"}} options={[{value:"deposit",label:"إيداع رصيد"},{value:"withdrawal",label:"سحب رصيد"},{value:"debt_increase",label:"زيادة دين"},{value:"debt_payment",label:"تسديد دين"},{value:"profit_credit",label:"إضافة أرباح"}]}/>
  <Input value={amount} onChange={e=>setAmount(e.target.value)} placeholder="المبلغ بالدينار" inputMode="decimal"/>
  <Input value={note} onChange={e=>setNote(e.target.value)} placeholder="سبب الحركة / مرجع العملية"/>
@@ -531,7 +527,7 @@ function TrustedDevices(){
   useEffect(()=>{if(!busy&&view==="pending"&&pendingCount===0)setView("approved");},[busy,view,pendingCount]);
   const visibleDevices=devices.filter(d=>(view==="pending"?state(d)==="بانتظار الاعتماد":view==="approved"?state(d)==="معتمد":state(d)==="ملغى"||state(d)==="منتهي"));
   return <Card title="الأجهزة الموثوقة" extra={<Button loading={busy} onClick={()=>void load()}>تحديث</Button>}>
-    <Alert type="info" message="جهازان كحد أقصى لكل زبون. اعتماد الكمبيوتر 7 أيام والهاتف 30 يومًا، وإلغاء الاعتماد يبطل كل جلسات الجهاز." style={{marginBottom:12}}/>
+    <Alert type="info" message="جهازان لكل زبون · الكمبيوتر 7 أيام · الهاتف 30 يومًا" style={{marginBottom:12}}/>
     {error&&<Alert type="error" message={error} style={{marginBottom:12}}/>}
     <Space direction="vertical" style={{width:"100%",marginBottom:16}}>{pendingCount>0&&<Button block type={view==="pending"?"primary":"default"} onClick={()=>setView("pending")}>طلبات الاعتماد ({pendingCount})</Button>}<Button block type={view==="approved"?"primary":"default"} onClick={()=>setView("approved")}>الأجهزة المعتمدة ({devices.filter(d=>state(d)==="معتمد").length})</Button><Button block type={view==="history"?"primary":"default"} onClick={()=>setView("history")}>سجل الأجهزة ({devices.filter(d=>["ملغى","منتهي"].includes(state(d))).length})</Button></Space>
     <Table rowKey="id" loading={busy} dataSource={visibleDevices} pagination={{pageSize:10}} scroll={{x:850}} columns={[
@@ -570,7 +566,7 @@ function SharedCardsStore({token}:{token?:string}){
     {error&&<Alert type="error" message={error}/>}
     {catalog&&(chosen?<Card title={<Space><Button onClick={()=>setSelectedProduct(null)}>رجوع</Button><Text strong>{chosen.name}</Text></Space>}>
       <Row gutter={[12,12]}>{catalog.variants.filter(v=>v.product_id===chosen.id).map(v=><Col xs={12} sm={8} key={v.id}><Card size="small" style={{textAlign:"center"}}><Text strong>{v.name||String(v.denomination||"بطاقة")}</Text><div><Tag color={v.stock_quantity>0?"green":"default"}>{v.stock_quantity>0?"متوفر":"غير متوفر"}</Tag></div></Card></Col>)}</Row>
-      <Alert style={{marginTop:14}} type="info" showIcon message="الشراء غير مفعّل حتى تتوفر أكواد فعلية ونظام خصم وتسليم موثوق. لا يتم خصم أي رصيد حاليًا."/>
+      <Alert style={{marginTop:14}} type="info" showIcon message="شراء البطاقات غير مفعّل"/>
     </Card>:<>
       <Typography.Title level={4}>بطاقات</Typography.Title>
       <Row gutter={[16,20]} justify="center">{products.map(product=>{const b=brand(product.name);const logo=(()=>{const n=product.name.toLowerCase();if(n.includes("mobilis"))return "https://upload.wikimedia.org/wikipedia/commons/8/89/Mobilis_Logo.svg";if(n.includes("ooredoo"))return "https://upload.wikimedia.org/wikipedia/commons/4/43/Ooredoo_logo.svg";if(n.includes("djezzy"))return "https://upload.wikimedia.org/wikipedia/commons/5/5b/Djezzy_logo.svg";return null;})();return <Col xs={8} sm={6} md={4} key={product.id}><div role="button" tabIndex={0} onClick={()=>setSelectedProduct(product.id)} onKeyDown={e=>{if(e.key==="Enter")setSelectedProduct(product.id);}} style={{cursor:"pointer",textAlign:"center"}}><div style={{aspectRatio:"1",borderRadius:15,background:logo?"#fff":b.color,color:"white",display:"grid",placeItems:"center",fontWeight:800,fontSize:b.label.length>9?13:19,boxShadow:"0 4px 12px rgba(0,0,0,.10)",padding:6,overflow:"hidden"}}>{logo?<><img src={logo} alt={product.name} loading="lazy" onError={e=>{e.currentTarget.style.display="none";const fallback=e.currentTarget.nextElementSibling as HTMLElement|null;if(fallback)fallback.style.display="block";}} style={{width:"92%",height:"80%",objectFit:"contain"}}/><span style={{display:"none",color:b.color,fontSize:15,fontWeight:800}}>{b.label}</span></>:b.label}</div><Text style={{display:"block",marginTop:7,fontSize:12}}>{product.name}</Text></div></Col>})}</Row>
@@ -619,7 +615,7 @@ function CustomerDashboard() {
   };
   return <ConfigProvider direction="rtl"><div dir="rtl" style={{padding:20,maxWidth:700,margin:"auto"}}>
     <Space style={{width:"100%",justifyContent:"space-between"}}><Typography.Title level={3}>حسابي — فليكسي ميني</Typography.Title><Button onClick={()=>logout()}>خروج</Button></Space>
-    <Alert type="info" showIcon message="عرض حساب العميل فقط. لا يوجد شحن أو تنفيذ مالي مفعّل." style={{marginBottom:16}}/>
+    <Alert type="info" showIcon message="الشحن غير مفعّل" style={{marginBottom:16}}/>
     {error ? <Alert type="error" message={error}/> : status ? <Card title="حالة حسابي"><Descriptions column={1} bordered size="small">
       <Descriptions.Item label="صلاحية الشحن">{status.enabled === true ? "مسموح مبدئيًا — التنفيذ معطّل" : "غير مفعّلة"}</Descriptions.Item>
       <Descriptions.Item label="سقف الدين">{money("credit_limit")}</Descriptions.Item>
@@ -656,7 +652,7 @@ function MovementLedger({admin}:{admin:boolean}) {
  const [range,setRange]=useState<[string,string]>(["",""]);
  const [search,setSearch]=useState("");
  return <Card title={admin?"سجل التحويلات":"تحويلاتي"}>
-  <Alert type="info" showIcon message="سجل التحويلات المالية لم يُربط بالخادم بعد. لا توجد حركات تجريبية أو أرصدة مفترضة." style={{marginBottom:16}}/>
+  <Alert type="info" showIcon message="التحويلات غير مفعّلة" style={{marginBottom:16}}/>
   <Space wrap style={{marginBottom:14}}>
    <Select value={kind} style={{width:165}} onChange={v=>setKind(v)} options={[
     {value:"all",label:"الكل"},{value:"debt",label:"دين"},{value:"payment",label:"دفع"},

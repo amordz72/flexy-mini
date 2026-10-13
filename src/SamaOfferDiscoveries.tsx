@@ -144,7 +144,6 @@ export default function SamaOfferDiscoveries({ db, stationUuid, samaReady, histo
     extra={<Button onClick={() => void refresh()} loading={loading}>تحديث النتائج</Button>}
   >
     <Space direction="vertical" size="middle" style={{ width: "100%" }}>
-      <Alert type="info" showIcon message="سجل Sama — للقراءة فقط" description="تظهر آخر 20 عملية استكشاف محفوظة في Station Connect، بما فيها النتائج القديمة. نعرض العروض ابتداءً من 500 دج؛ وجود عرض بالسجل لا يعني توفره الآن. لا يُرسل أي USSD عند فتح الصفحة أو الضغط على تحديث النتائج." />
       {error && <Alert type="error" showIcon message={error} />}
       {!historyOnly && <>
       <Typography.Text strong>طلب استكشاف جديد (إدارة فقط)</Typography.Text>
@@ -162,7 +161,7 @@ export default function SamaOfferDiscoveries({ db, stationUuid, samaReady, histo
         <Button type="primary" disabled={!stationUuid || !samaReady || busy || currentStatus === "claimed" || currentStatus === "queued"} loading={busy} onClick={submit}>استكشاف</Button>
       </Space.Compact>
       {!stationUuid && <Typography.Text type="secondary">اختر المحطة من الأعلى لتمكين استعلام الشبكة.</Typography.Text>}
-      {stationUuid && !samaReady && <Alert type="warning" showIcon message="Sama غير جاهزة للاستكشاف" description="المحطة قد تكون متصلة، لكن يلزم ظهور شريحة من نوع mobilis-sama حديثًا مع PIN الخدمة محفوظ. استخدم «عرض مودمات المحطة» ثم «تجهيز Mobilis Sama» للشريحة الصحيحة."/>}
+      {stationUuid && !samaReady && <Alert type="warning" showIcon message="Sama غير جاهزة للاستكشاف" />}
       {currentJob && <Alert
         type="info"
         showIcon
@@ -187,7 +186,7 @@ export default function SamaOfferDiscoveries({ db, stationUuid, samaReady, histo
         ]}
       />}
       {current && <Card size="small" title={"عروض العملية المحددة — " + (current.family || "كل الفئات")}>
-        {(!current.completed_at || !Number.isFinite(Date.parse(current.completed_at)) || Date.now() - Date.parse(current.completed_at) > 7 * 24 * 60 * 60 * 1000) && <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="بيانات اكتشاف قديمة أو غير مؤرخة" description="هذه نتيجة محفوظة، وليست تأكيدًا حيًا لتوفر العرض. لا نستعمل ترتيب القائمة في تنفيذ شحن دون تحقق جديد وصريح." />}
+        {(!current.completed_at || !Number.isFinite(Date.parse(current.completed_at)) || Date.now() - Date.parse(current.completed_at) > 7 * 24 * 60 * 60 * 1000) && <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="بيانات اكتشاف قديمة أو غير مؤرخة"  />}
         {offersOf(current).length === 0 ? <Empty description="لا توجد عروض قابلة للعرض في هذه النتيجة" /> : <Table<Offer>
           rowKey={(offer, index) => String(offer.family || "") + ":" + String(offer.index || index) + ":" + String(offer.amount || "")}
           dataSource={offersOf(current)}
