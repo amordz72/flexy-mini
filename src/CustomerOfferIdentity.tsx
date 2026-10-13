@@ -106,6 +106,7 @@ export default function CustomerOfferIdentity({
       setJobStatus(queued.status);
       onJobChange?.();
       message.info(queued.reused ? "استعلام جارٍ مسبقًا؛ لم نكرره" : "جاري استعلام عروض الرقم من الشبكة");
+      if (queued.status === "success") void refreshRef.current();
     } catch {
       if (isCurrent()) {
         setUncertain(true);
@@ -161,8 +162,8 @@ export default function CustomerOfferIdentity({
     } else {
       onIdentity(null);
       const intent = normalized + "|" + requestToken;
-      if (suggestDiscovery && !value?.active_job_uuid && currentStation.current
-        && !uncertain && !dispatching.current && !jobUuid
+      if (suggestDiscovery && !value?.active_job_uuid && value?.lookup_status !== "IN_PROGRESS"
+        && currentStation.current && !uncertain && !dispatching.current && !jobUuid
         && autoDiscoveryIntent.current !== intent) {
         autoDiscoveryIntent.current = intent;
         startAutomatically = true;
