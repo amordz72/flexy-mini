@@ -96,14 +96,21 @@ test('one Offers action reads cache then queues one automatic discovery with no 
   await close(r);
 });
 
-test('cache lookup by itself never starts USSD unless Offers is active and a usable station exists',async()=>{
-  const db=makeDb(name=>Promise.resolve(ok(missing)));
+test('typing or a missing station does not dispatch; ready station triggers one automatic query',async()=>{
+  const db=makeDb(name=>Promise.resolve(ok(name==='station_connect_admin_create_offer_discovery'
+    ?{job_uuid:'ready-job',status:'claimed'}:missing)));
   const r=await mount(Identity,{...base,active:false,db});
   assert.equal(db.calls.length,0);
   await act(async()=>r.update(React.createElement(Identity,{...base,active:true,stationUuid:null,db})));
   await flush();
   assert.equal(db.calls.filter(x=>x.name==='flexy_mini_admin_customer_offer_identity').length,1);
   assert.equal(db.calls.filter(x=>x.name==='station_connect_admin_create_offer_discovery').length,0);
+  await act(async()=>r.update(React.createElement(Identity,{...base,active:true,stationUuid:'station',db})));
+  await flush();
+  assert.equal(db.calls.filter(x=>x.name==='station_connect_admin_create_offer_discovery').length,1);
+  await act(async()=>r.update(React.createElement(Identity,{...base,active:true,stationUuid:'station',db})));
+  await flush();
+  assert.equal(db.calls.filter(x=>x.name==='station_connect_admin_create_offer_discovery').length,1);
   await close(r);
 });
 
