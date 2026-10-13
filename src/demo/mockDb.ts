@@ -23,7 +23,7 @@ const save = (data:DemoState) => localStorage.setItem(KEY,JSON.stringify(data));
 export const resetDemo = () => {localStorage.removeItem(KEY);localStorage.removeItem("flexy_mini_admin_pending_sama_v1");};
 export const setDemoOutcome = (outcome:DemoOutcome) => {const data=load();data.outcome=outcome;save(data);};
 export const currentDemoOutcome = () => load().outcome;
-export const getDemoGroup = (phone:string):DemoGroup => load().phones[phone]?.group||["PIXX","REVOLUTION","SAMA"][Array.from(phone).reduce((a,c)=>a*31+c.charCodeAt(0),7)>>>0 % 3] as DemoGroup;
+export const getDemoGroup = (phone:string):DemoGroup => load().phones[phone]?.group || (["PIXX","REVOLUTION","SAMA"] as const)[(Array.from(phone).reduce((a,c)=>((a*31+c.charCodeAt(0))>>>0),7))%3];
 export const setDemoGroup = (phone:string,group:DemoGroup) => {
   const data=load();delete data.phones[phone];data.phones[phone]={group,at:""};save(data);
 };
