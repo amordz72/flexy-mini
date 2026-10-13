@@ -57,16 +57,23 @@ const rows:(readonly [string,number,string?,string?])[]=[
   ["Sama Net",1500,"Sama Net 1500","60Go — 30 يومًا"],
   ["Sama Net",2000,"Sama Net 2000","90Go — 30 يومًا"],
 ];
+const networkIndexSnapshot:Record<string,Record<number,string|null>> = {
+  "PixX":{50:"1",100:"2",500:"3",1000:"4",2000:"5"},
+  "Revolution":{100:null,500:null,1000:"6",1200:"5",1500:"4",1800:"3",2000:"2",2500:"1"},
+  "Sama Mix":{100:"1",500:"2",1000:"3",1500:"4",2000:"5"},
+  "Sama Talk":{500:"6",1000:"7",1500:"8",2000:"9"},
+  "Sama Net":{500:"1",1000:"2",1500:"3",2000:"4"},
+};
 const groupOf = (f:string):DemoGroup => f==="PixX"?"PIXX":f==="Revolution"?"REVOLUTION":"SAMA";
 export const demoCatalog:Offer[] = rows.map(([family,amount,name,details],i)=>{
   // Demo uses synthetic IDs. Keep offer identity / display_name / amount compatible with the actual catalog.
-  const index=family==="Revolution"&&amount===100||family==="Revolution"&&amount===500?null:String(i+1);
+  const index=networkIndexSnapshot[family]?.[amount]??null;
   const enabled=!(family==="Revolution"&&amount===500);
   return {
     offer_uuid:"sim-"+family.toLowerCase().replaceAll(" ","-")+"-"+amount,
     operator:"mobilis",family,group_code:groupOf(family),amount,
     display_name:name||family+" "+amount,network_index:index,
-    details:details||"اسم ومبلغ من كتالوج Mobilis المحفوظ — بيانات محاكاة",
+    details:details||(family==="Revolution"&&(amount===100||amount===500)?"عرض معروف يدويًا؛ ليس مطلوبًا أن يظهر في استكشاف SAMA.":"اسم ومبلغ من كتالوج Mobilis المحفوظ — بيانات محاكاة"),
     sort_index:i,execution_enabled:enabled,execution_available:enabled&&Boolean(index),
     execution_sim_types:enabled&&index?["mobilis-sama"]:[],
   };
