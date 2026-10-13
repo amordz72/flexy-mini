@@ -174,11 +174,11 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
       return;
     }
     setRouteCheckBusy(true);
-    void db.rpc("station_connect_admin_offer_route_preview", {
+    void Promise.resolve(db.rpc("station_connect_admin_offer_route_preview", {
       p_family: chosen.family,
       p_amount: chosen.amount,
       p_station_uuid: null
-    }).then(({data,error}) => {
+    })).then(({data,error}) => {
       if (sequence !== routeCheckSequence.current) return;
       setRouteCheckBusy(false);
       if (error) {
