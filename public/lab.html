@@ -34,6 +34,9 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .offer strong{flex:1;font-size:14px}.offer .price{font-weight:700;white-space:nowrap}
 .offer.disabled{opacity:.55;cursor:not-allowed}
 .family{font-weight:750;color:#34445e;padding:11px 8px;background:#f4f7fb;border-radius:7px;margin-top:12px}
+.family-toggle{display:flex;align-items:center;justify-content:space-between;width:100%;text-align:right;margin-top:12px;border:1px solid #dce4f2;border-radius:9px;padding:13px 12px;font-weight:750;color:#34445e;background:#f4f7fb}
+.family-toggle[aria-expanded="true"]{background:#e5efff;border-color:#bad0f6;color:#174a94}
+.family-toggle .arrow{font-size:14px;color:inherit}
 .empty{color:#718096;text-align:center;padding:22px}
 .result{padding:12px;border-radius:9px;background:#eaf7f0;color:#166439}
 .result.failed{background:#fff3e9;color:#9e4b21}
@@ -105,7 +108,7 @@ th{background:#f7f9fc;color:#526079}
  const read=()=>{try{const v=JSON.parse(localStorage.getItem(STORE)||"null");return v&&typeof v==="object"&&v.phoneGroups&&Array.isArray(v.history)?v:null}catch{return null}};
  let state=read()||{phoneGroups:{},history:[],outcome:"success"};
  const save=()=>{try{localStorage.setItem(STORE,JSON.stringify(state))}catch{toast("تعذر الحفظ محليًا؛ تحقق من مساحة المتصفح")}};
- let currentPhone="",currentGroup="",selected=null,mode="offers",confirming=false;
+ let currentPhone="",currentGroup="",selected=null,mode="offers",confirming=false,activeFamily="Sama Mix";
  const fmt=n=>Number(n).toLocaleString("en-US")+" دج";
  const groupOf=f=>f==="PixX"?"PIXX":f==="Revolution"?"REVOLUTION":"SAMA";
  const hash=v=>Array.from(v).reduce((a,c)=>(((a*31)+c.charCodeAt(0))>>>0),7)%3;
@@ -119,9 +122,9 @@ th{background:#f7f9fc;color:#526079}
   currentPhone=p;currentGroup=state.phoneGroups[p]?.group||groups[hash(p)];
   if(!state.phoneGroups[p]||Date.now()-(state.phoneGroups[p].at||0)>7*86400000)
      state.phoneGroups[p]={group:currentGroup,at:Date.now()};
-  mode="offers";selected=null;confirming=false;save();render();
+  mode="offers";selected=null;confirming=false;activeFamily="Sama Mix";save();render();
  }
- function setGroup(g){if(!groups.includes(g))return;currentGroup=g;state.phoneGroups[currentPhone]={group:g,at:Date.now()};save();selected=null;confirming=false;render()}
+ function setGroup(g){if(!groups.includes(g))return;currentGroup=g;state.phoneGroups[currentPhone]={group:g,at:Date.now()};save();selected=null;confirming=false;activeFamily="Sama Mix";render()}
  function setMode(m){mode=m;selected=null;confirming=false;render()}
  function render(){
   $("phone").textContent=currentPhone;
@@ -137,15 +140,32 @@ th{background:#f7f9fc;color:#526079}
   const visible=raw.filter(o=>groupOf(o[0])===currentGroup);
   $("offerCount").textContent=visible.length+" عروض";
   const container=$("offers");container.replaceChildren();
-  let family="";
-  for(const offer of visible){
-   if(offer[0]!==family){family=offer[0];if(currentGroup==="SAMA"){const label=document.createElement("div");label.className="family";label.textContent=family;container.append(label)}}
+  const renderOfferRow=(offer)=>{
    const row=document.createElement("label");row.className="offer"+(offer[3]?"":" disabled");
    const input=document.createElement("input");input.type="radio";input.name="offer";input.disabled=!offer[3];input.checked=Boolean(selected&&selected[2]===offer[2]);
    input.onchange=()=>{selected=offer;confirming=false;render()};
    const name=document.createElement("strong");name.textContent=offer[2]+(!offer[3]?" — التنفيذ غير متاح":"");
    const price=document.createElement("span");price.className="price";price.textContent=fmt(offer[1]);
    row.append(input,name,price);container.append(row);
+  };
+  if(currentGroup==="SAMA"){
+   // Sama Mix starts expanded because it is the most commonly selected family.
+   // The three subfamilies form a single-open accordion.
+   for(const family of ["Sama Mix","Sama Talk","Sama Net"]){
+    const expanded=activeFamily===family;
+    const header=document.createElement("button");header.type="button";header.className="family-toggle";
+    header.setAttribute("aria-expanded",String(expanded));
+    header.setAttribute("aria-label",family);
+    const label=document.createElement("span");label.textContent=family;
+    const arrow=document.createElement("span");arrow.className="arrow";arrow.setAttribute("aria-hidden","true");
+    arrow.textContent=expanded?"⌃":"⌄";
+    header.append(label,arrow);
+    header.onclick=()=>{activeFamily=expanded?null:family;selected=null;confirming=false;render()};
+    container.append(header);
+    if(expanded)for(const offer of visible.filter(row=>row[0]===family))renderOfferRow(offer);
+   }
+  }else{
+   for(const offer of visible)renderOfferRow(offer);
   }
   const slot=$("selected");slot.replaceChildren();
   if(selected){
