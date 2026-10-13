@@ -89,6 +89,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
   const [routeChoice, setRouteChoice] = useState<EligibleRoute | null>(null);
   const [routeCheckBusy, setRouteCheckBusy] = useState(false);
   const [routeError, setRouteError] = useState("");
+  const [routeRefreshToken, setRouteRefreshToken] = useState(0);
   const routeCheckSequence = useRef(0);
   const [showDiscovery, setShowDiscovery] = useState(false);
   const [sendBusy, setSendBusy] = useState(false);
@@ -192,7 +193,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
       setRouteError("تعذر الاتصال بفحص مصدر التنفيذ.");
     });
     return () => { routeCheckSequence.current++; };
-  }, [db, isCustomer, chosen?.offer_uuid, verifiedGroup, mode]);
+  }, [db, isCustomer, chosen?.offer_uuid, verifiedGroup, mode, routeRefreshToken]);
 
   const routeCanSendThroughSama = Boolean(samaRoute && stationUuid && executePrerequisitesReady
     && !routeCheckBusy && !routeError
@@ -454,7 +455,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
                   ? <Typography.Text type="secondary">حالة Sama: {readinessProblems(samaStatus).join("، ")}</Typography.Text>
                   : null}
               <Space wrap>
-                <Button size="small" loading={stationBusy} onClick={()=>void loadStation()}>تحديث مصادر الإرسال</Button>
+                <Button size="small" loading={stationBusy} onClick={()=>{setRouteRefreshToken(value=>value+1);void loadStation();}}>تحديث مصادر الإرسال</Button>
                 {onOpenStations&&<Button size="small" onClick={onOpenStations}>تجهيز المحطات والشرائح</Button>}
               </Space>
             </Space>}
