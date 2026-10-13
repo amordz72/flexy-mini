@@ -418,10 +418,10 @@ export default function FlexyServicePage({ db, isCustomer }: { db?: SupabaseClie
     {!isCustomer && <Card size="small">
       <Space direction="vertical" style={{width:"100%"}}>
         <Button type="default" block onClick={() => setShowDiscovery(value => !value)}>
-          {showDiscovery ? "إغلاق أداة اكتشاف Sama" : "أداة الإدارة: اكتشاف عروض Sama عبر USSD"}
+          {showDiscovery ? "إغلاق سجل استكشافات Sama" : "سجل استكشافات Sama السابقة"}
         </Button>
         {showDiscovery && db && <SamaOfferDiscoveries db={db} stationUuid={stationUuid}
-          samaReady={Boolean(stationUuid)}/>}
+          samaReady={Boolean(stationUuid)} historyOnly/>}
       </Space>
     </Card>}
   </Space>;
