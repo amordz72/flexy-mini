@@ -18,6 +18,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: DEVELOPMENT-GUARD-001 — test both allowed and rejected architecture fixtures
+        run: node --test tests/development-guard.test.mjs
+      - name: DEVELOPMENT-GUARD-001 — block unapproved standalone UI and frameworks
+        run: node scripts/development-guard.mjs
       - run: npm install --no-audit --no-fund
       - name: Capture build timestamp
         run: echo "VITE_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"

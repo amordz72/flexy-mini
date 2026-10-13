@@ -1,0 +1,26 @@
+name: Development Guard
+on:
+  pull_request:
+  push:
+    branches: [main, governance/development-guard-001]
+permissions:
+  contents: read
+jobs:
+  architecture-and-build:
+    name: architecture-and-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify guard rejects known architectural violations
+        run: node --test tests/development-guard.test.mjs
+      - name: Enforce approved UI framework and entry points
+        run: node scripts/development-guard.mjs
+      - name: Install existing project dependencies
+        run: npm install --no-audit --no-fund
+      - name: Existing Flexy Mini behavior tests
+        run: npm test
+      - name: TypeScript and production build
+        run: npm run build

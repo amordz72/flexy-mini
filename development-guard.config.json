@@ -1,0 +1,30 @@
+{
+  "decision": "DEVELOPMENT-GUARD-001",
+  "canonicalPolicy": "https://github.com/amordz72/developer/blob/main/guidelines/DEVELOPMENT-GUARD.md",
+  "framework": "Refine + React + Ant Design",
+  "requiredPackages": [
+    "@refinedev/core",
+    "@refinedev/antd",
+    "antd"
+  ],
+  "forbiddenUiPackages": [
+    "@mui/material",
+    "react-bootstrap",
+    "bootstrap",
+    "@chakra-ui/react",
+    "@mantine/core",
+    "primereact",
+    "@nextui-org/react"
+  ],
+  "allowedHtml": {
+    "index.html": null,
+    "public/lab.html": "830a2a9c1dca7cd4e38d2c696f6d655a852a1ffe"
+  },
+  "allowedStyles": [
+    "src/style.css"
+  ],
+  "allowedPublicJavascript": [
+    "public/sw.js"
+  ],
+  "notes": "Existing public/lab.html is frozen legacy evidence; use the production Refine/Ant Design shell with mocked data for new simulations. Changes requiring an architecture exception need owner review and a deliberate config/guard change plus tests. This guard cannot prevent direct commits without GitHub branch protection."
+}
