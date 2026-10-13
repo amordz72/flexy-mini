@@ -87,6 +87,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
  const identityCell=(kind:"sim"|"station",uuid:string|null,fallback:string)=>{
   if(!uuid)return <Typography.Text type="secondary">{fallback}</Typography.Text>;
   const identity=kind==="station"?identityNames.stations[uuid]:identityNames.sims[uuid];
+  if(!identity)return <Typography.Text strong>{fallback}</Typography.Text>;
   return <Space size={4} align="start">
    <Space direction="vertical" size={0}>
     <Typography.Text strong>{identity?.display_code||fallback}</Typography.Text>
