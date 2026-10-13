@@ -164,7 +164,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   if(!/^0[5-7]\d{8}$/.test(number)){message.warning("أدخل رقم الشريحة الصحيح من 10 أرقام أولًا");return;}
   if(!/^[0-9]{4,8}$/.test(servicePin)){message.warning("أدخل PIN الخدمة من 4 إلى 8 أرقام");return;}
   const sim=(hardware[selected]||[]).find(item=>item.sim_uuid===samaConfigSim);
-  if(!sim||sim.sim_type!=="unknown"||!sim.imsi?.startsWith("60301")||!online(sim.sim_last_seen_at)||!online(sim.modem_last_seen_at)){
+  if(!sim||(sim.sim_type!=="unknown"&&sim.sim_type!=="mobilis-sama")||!sim.imsi?.startsWith("60301")||!online(sim.sim_last_seen_at)||!online(sim.modem_last_seen_at)){
    message.warning("الشريحة لم تعد ظاهرة حديثًا كموبيليس؛ حدّث بيانات المودم قبل تجهيزها");return;
   }
   const station=stations.find(item=>item.station_uuid===selected);
@@ -173,9 +173,11 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   }
   setSamaConfigBusy(true);
   try{
-   const {error}=await db.rpc("station_connect_admin_update_sim",{
-    p_sim_uuid:sim.sim_uuid,p_msisdn:number,p_sim_type:"mobilis-sama",p_service_pin:servicePin
-   });
+   const params:{p_sim_uuid:string;p_sim_type:string;p_service_pin:string;p_msisdn?:string}={
+    p_sim_uuid:sim.sim_uuid!,p_sim_type:"mobilis-sama",p_service_pin:servicePin
+   };
+   if(sim.msisdn!==number)params.p_msisdn=number;
+   const {error}=await db.rpc("station_connect_admin_update_sim",params);
    if(error)throw error;
    setHardware(old=>Object.fromEntries(Object.entries(old).map(([uuid,items])=>[uuid,items.map(item=>item.sim_uuid===samaConfigSim?{...item,msisdn:number,sim_type:"mobilis-sama",has_pin:true}:item)])));
    setSamaConfigSim(null);setSamaPhone("");setServicePin("");
@@ -226,10 +228,15 @@ export default function StationOverview({db}:{db:SupabaseClient}){
     />
     <Button size="small" type={dirty?"primary":"default"} disabled={!dirty||typeSaving!==null} loading={typeSaving===sim.sim_uuid} onClick={()=>void saveSimType(sim)}>حفظ</Button>
    </Space.Compact>
-   {sim.sim_type==="unknown"&&sim.imsi?.startsWith("60301")&&online(sim.sim_last_seen_at)&&online(sim.modem_last_seen_at)&&
-    <Button size="small" onClick={()=>{setSamaPhone(sim.msisdn||"");setServicePin("");setSamaConfigSim(sim.sim_uuid);}}>تجهيز Mobilis Sama</Button>}
   </Space>;
  };
+ const pinAction=(sim:Hardware)=><Space direction="vertical" size={4}>
+  <Tag>{sim.has_pin?"مسجل بأمان":"غير مسجل"}</Tag>
+  {sim.sim_uuid&&sim.imsi?.startsWith("60301")&&!sim.has_pin&&
+   (sim.sim_type==="unknown"||sim.sim_type==="mobilis-sama")&&
+   online(sim.sim_last_seen_at)&&online(sim.modem_last_seen_at)&&
+   <Button size="small" onClick={()=>{setSamaPhone(sim.msisdn||"");setServicePin("");setSamaConfigSim(sim.sim_uuid);}}>تجهيز Mobilis Sama</Button>}
+ </Space>;
  const phoneAction=(sim:Hardware)=>{
   if(!sim.sim_uuid)return <Typography.Text type="secondary">الشريحة غير محددة</Typography.Text>;
   const attempt=phoneAttempts[sim.sim_uuid];
@@ -282,14 +289,14 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   </Card>
   {selected&&<Card title="المودمات والشرائح" extra={<Button loading={hardwareLoading} onClick={()=>void openHardware(selected)}>تحديث</Button>}>
 
-   {mobile?<Space direction="vertical" style={{width:"100%"}} size="middle">{(hardware[selected]||[]).length===0&&!hardwareLoading?<Empty description="لا توجد مودمات مسجلة"/>:(hardware[selected]||[]).map(r=><Card key={r.modem_uuid+":"+(r.sim_uuid||"none")} size="small" title={<Space wrap><span>{r.device_name||"مودم"}</span><Tag color={online(r.modem_last_seen_at)?"green":"orange"}>{online(r.modem_last_seen_at)?"رُصد حديثًا":"لا يوجد رصد حديث"}</Tag></Space>}><Descriptions size="small" column={1} bordered items={[{key:"ip",label:"IP محلي",children:<span dir="ltr">{r.modem_ip||"—"}</span>},{key:"sim",label:"الشريحة",children:<span dir="ltr">{r.msisdn||"غير معروف"}</span>},{key:"operator",label:"المتعامل",children:operatorNames[operatorOf(r)]},{key:"lookup",label:"معرفة الرقم",children:phoneAction(r)},{key:"type",label:"النوع",children:typeAction(r)},{key:"pin",label:"PIN",children:r.has_pin?"مسجل بأمان":"غير مسجل"},{key:"last",label:"آخر ظهور",children:dateLabel(r.modem_last_seen_at)}]}/></Card>)}</Space>:<Table rowKey={r=>r.modem_uuid+":"+(r.sim_uuid||"none")} loading={hardwareLoading} dataSource={hardware[selected]||[]} size="small" scroll={{x:720}} pagination={{pageSize:10}} columns={[
+   {mobile?<Space direction="vertical" style={{width:"100%"}} size="middle">{(hardware[selected]||[]).length===0&&!hardwareLoading?<Empty description="لا توجد مودمات مسجلة"/>:(hardware[selected]||[]).map(r=><Card key={r.modem_uuid+":"+(r.sim_uuid||"none")} size="small" title={<Space wrap><span>{r.device_name||"مودم"}</span><Tag color={online(r.modem_last_seen_at)?"green":"orange"}>{online(r.modem_last_seen_at)?"رُصد حديثًا":"لا يوجد رصد حديث"}</Tag></Space>}><Descriptions size="small" column={1} bordered items={[{key:"ip",label:"IP محلي",children:<span dir="ltr">{r.modem_ip||"—"}</span>},{key:"sim",label:"الشريحة",children:<span dir="ltr">{r.msisdn||"غير معروف"}</span>},{key:"operator",label:"المتعامل",children:operatorNames[operatorOf(r)]},{key:"lookup",label:"معرفة الرقم",children:phoneAction(r)},{key:"type",label:"النوع",children:typeAction(r)},{key:"pin",label:"PIN",children:pinAction(r)},{key:"last",label:"آخر ظهور",children:dateLabel(r.modem_last_seen_at)}]}/></Card>)}</Space>:<Table rowKey={r=>r.modem_uuid+":"+(r.sim_uuid||"none")} loading={hardwareLoading} dataSource={hardware[selected]||[]} size="small" scroll={{x:720}} pagination={{pageSize:10}} columns={[
     {title:"المودم",render:(_:unknown,r:Hardware)=>r.device_name||r.modem_ip||"—"},
     {title:"IP محلي",dataIndex:"modem_ip",render:(v:string|null)=><span dir="ltr">{v||"—"}</span>},
     {title:"الشريحة",dataIndex:"msisdn",render:(v:string|null)=><span dir="ltr">{v||"غير معروف"}</span>},
     {title:"المتعامل",render:(_:unknown,r:Hardware)=>operatorNames[operatorOf(r)]},
     {title:"معرفة الرقم",render:(_:unknown,r:Hardware)=>phoneAction(r)},
     {title:"النوع",render:(_:unknown,r:Hardware)=>typeAction(r)},
-    {title:"PIN",dataIndex:"has_pin",render:(v:boolean)=><Tag>{v?"مسجل بأمان":"غير مسجل"}</Tag>},
+    {title:"PIN",render:(_:unknown,r:Hardware)=>pinAction(r)},
     {title:"آخر ظهور",dataIndex:"modem_last_seen_at",render:dateLabel},
     {title:"الاتصال",render:(_:unknown,r:Hardware)=><Tag color={online(r.modem_last_seen_at)?"green":"orange"}>{online(r.modem_last_seen_at)?"متصل حديثًا":"غير متصل"}</Tag>}
    ]}/>}
