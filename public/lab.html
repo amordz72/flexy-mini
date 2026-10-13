@@ -46,8 +46,12 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:12px;min-width:450px}
 th,td{text-align:right;padding:9px 5px;border-bottom:1px solid #edf1f7;white-space:nowrap}
 th{background:#f7f9fc;color:#526079}
-#confirmBox{border:1px solid #bed0f3;border-radius:10px;padding:12px;background:#f4f8ff;margin:13px 0}
-#confirmBox p{margin:6px 0 11px}
+#confirmDialog{border:1px solid #bed0f3;border-radius:14px;padding:19px;width:min(92vw,430px);max-width:430px;background:#fff;box-shadow:0 15px 60px #0f172a35;color:#273349}
+#confirmDialog::backdrop{background:#172b4d99}
+#confirmDialog h2{margin:0 0 12px}
+#confirmDialog p{line-height:1.8;margin:0 0 15px}
+#confirmDialog .row{display:flex}
+#confirmDialog button{flex:1}
 #toast{position:fixed;bottom:18px;left:12px;right:12px;max-width:520px;margin:auto;background:#24344a;color:white;padding:10px;border-radius:9px;text-align:center;display:none;z-index:2}
 @media(max-width:420px){.controls{grid-template-columns:1fr}.card{padding:12px}main{padding:10px 9px 55px}h1{font-size:19px}}
 </style>
@@ -72,11 +76,6 @@ th{background:#f7f9fc;color:#526079}
 <section class="card" id="offerSection">
  <div class="row justify"><h2>العروض المتاحة</h2><span id="offerCount" class="small"></span></div>
  <div id="offers"></div>
- <div id="selected"></div>
- <div id="confirmBox" hidden>
-  <strong>تأكيد إرسال وهمي</strong><p id="confirmText"></p>
-  <div class="row"><button class="primary" id="confirmYes">تأكيد تجريبي</button><button id="confirmNo">إلغاء</button></div>
- </div>
  <div id="operationResult" role="status"></div>
 </section>
 <section class="card" id="creditSection" hidden>
@@ -88,6 +87,11 @@ th{background:#f7f9fc;color:#526079}
 <p class="small">تُحفظ النتائج محليًا داخل هذا المتصفح فقط في مفتاح مستقل <code>flexy_public_lab_v1</code>. لا ننسخ معلومات العملاء أو مفاتيح الإنتاج.</p>
 </section>
 </main>
+<dialog id="confirmDialog" aria-labelledby="modalTitle" aria-describedby="confirmText">
+ <h2 id="modalTitle">هل تريد تنفيذ هذا العرض؟</h2>
+ <p id="confirmText"></p>
+ <div class="row"><button class="primary" id="confirmYes" type="button">تأكيد التنفيذ الوهمي</button><button id="confirmNo" type="button">إلغاء</button></div>
+</dialog>
 <div id="toast" role="status"></div>
 <script>
 "use strict";
@@ -108,7 +112,7 @@ th{background:#f7f9fc;color:#526079}
  const read=()=>{try{const v=JSON.parse(localStorage.getItem(STORE)||"null");return v&&typeof v==="object"&&v.phoneGroups&&Array.isArray(v.history)?v:null}catch{return null}};
  let state=read()||{phoneGroups:{},history:[],outcome:"success"};
  const save=()=>{try{localStorage.setItem(STORE,JSON.stringify(state))}catch{toast("تعذر الحفظ محليًا؛ تحقق من مساحة المتصفح")}};
- let currentPhone="",currentGroup="",selected=null,mode="offers",confirming=false,activeFamily="Sama Mix";
+ let currentPhone="",currentGroup="",selected=null,mode="offers",activeFamily="Sama Mix";
  const fmt=n=>Number(n).toLocaleString("en-US")+" دج";
  const groupOf=f=>f==="PixX"?"PIXX":f==="Revolution"?"REVOLUTION":"SAMA";
  const hash=v=>Array.from(v).reduce((a,c)=>(((a*31)+c.charCodeAt(0))>>>0),7)%3;
@@ -122,10 +126,17 @@ th{background:#f7f9fc;color:#526079}
   currentPhone=p;currentGroup=state.phoneGroups[p]?.group||groups[hash(p)];
   if(!state.phoneGroups[p]||Date.now()-(state.phoneGroups[p].at||0)>7*86400000)
      state.phoneGroups[p]={group:currentGroup,at:Date.now()};
-  mode="offers";selected=null;confirming=false;activeFamily="Sama Mix";save();render();
+  dismissConfirm();mode="offers";activeFamily="Sama Mix";save();render();
  }
- function setGroup(g){if(!groups.includes(g))return;currentGroup=g;state.phoneGroups[currentPhone]={group:g,at:Date.now()};save();selected=null;confirming=false;activeFamily="Sama Mix";render()}
- function setMode(m){mode=m;selected=null;confirming=false;render()}
+ function dismissConfirm(){if($("confirmDialog").open)$("confirmDialog").close();selected=null;}
+ function requestConfirm(offer){
+  if(!offer[3])return;
+  selected=offer;render();
+  $("confirmText").textContent="هل تريد تنفيذ "+offer[2]+" للرقم "+currentPhone+" بقيمة "+fmt(offer[1])+"؟ هذه محاكاة فقط ولا ترسل شحنًا حقيقيًا.";
+  $("confirmDialog").showModal();
+ }
+ function setGroup(g){if(!groups.includes(g))return;dismissConfirm();currentGroup=g;state.phoneGroups[currentPhone]={group:g,at:Date.now()};save();activeFamily="Sama Mix";render()}
+ function setMode(m){dismissConfirm();mode=m;render()}
  function render(){
   $("phone").textContent=currentPhone;
   $("groupSelect").value=currentGroup;
@@ -135,15 +146,15 @@ th{background:#f7f9fc;color:#526079}
   $("offerTab").classList.toggle("active",mode==="offers");
   $("creditTab").classList.toggle("active",mode==="credit");
   $("offerSection").hidden=mode!=="offers";$("creditSection").hidden=mode!=="credit";
-  $("confirmBox").hidden=!confirming;
   $("operationResult").textContent="";
   const visible=raw.filter(o=>groupOf(o[0])===currentGroup);
   $("offerCount").textContent=visible.length+" عروض";
   const container=$("offers");container.replaceChildren();
   const renderOfferRow=(offer)=>{
    const row=document.createElement("label");row.className="offer"+(offer[3]?"":" disabled");
-   const input=document.createElement("input");input.type="radio";input.name="offer";input.disabled=!offer[3];input.checked=Boolean(selected&&selected[2]===offer[2]);
-   input.onchange=()=>{selected=offer;confirming=false;render()};
+   const input=document.createElement("input");input.type="checkbox";input.name="offer";input.disabled=!offer[3];input.checked=Boolean(selected&&selected[2]===offer[2]);
+   input.setAttribute("aria-label","تنفيذ "+offer[2]);
+   input.onchange=()=>requestConfirm(offer);
    const name=document.createElement("strong");name.textContent=offer[2]+(!offer[3]?" — التنفيذ غير متاح":"");
    const price=document.createElement("span");price.className="price";price.textContent=fmt(offer[1]);
    row.append(input,name,price);container.append(row);
@@ -160,21 +171,13 @@ th{background:#f7f9fc;color:#526079}
     const arrow=document.createElement("span");arrow.className="arrow";arrow.setAttribute("aria-hidden","true");
     arrow.textContent=expanded?"⌃":"⌄";
     header.append(label,arrow);
-    header.onclick=()=>{activeFamily=expanded?null:family;selected=null;confirming=false;render()};
+    header.onclick=()=>{dismissConfirm();activeFamily=expanded?null:family;render()};
     container.append(header);
     if(expanded)for(const offer of visible.filter(row=>row[0]===family))renderOfferRow(offer);
    }
   }else{
    for(const offer of visible)renderOfferRow(offer);
   }
-  const slot=$("selected");slot.replaceChildren();
-  if(selected){
-   const box=document.createElement("div");box.className="summary";
-   const label=document.createElement("strong");label.textContent=selected[2];
-   const button=document.createElement("button");button.className="primary";button.textContent="إرسال تجريبي";button.onclick=()=>{confirming=true;render()};
-   box.append(label,button);slot.append(box);
-  }
-  if(confirming&&selected)$("confirmText").textContent=currentPhone+" — "+selected[2]+" — "+fmt(selected[1])+". لا يوجد خصم أو إرسال حقيقي.";
   drawHistory();
  }
  function drawHistory(){
@@ -191,12 +194,15 @@ th{background:#f7f9fc;color:#526079}
  $("groupSelect").onchange=e=>setGroup(e.target.value);
  $("resultSelect").onchange=e=>{state.outcome=e.target.value;save();toast("تم حفظ نتيجة المحاكاة القادمة")};
  $("offerTab").onclick=()=>setMode("offers");$("creditTab").onclick=()=>setMode("credit");
- $("confirmNo").onclick=()=>{confirming=false;render()};
+ $("confirmNo").onclick=()=>{dismissConfirm();render()};
+ $("confirmDialog").addEventListener("cancel",event=>{event.preventDefault();dismissConfirm();render()});
  $("confirmYes").onclick=()=>{
-  if(!selected)return;
+  if(!selected || !$("confirmDialog").open)return;
   const outcome=state.outcome,copy=selected;
+  // Persist the simulated operation only after an explicit confirmation.
+  dismissConfirm();
   state.history.unshift({phone:currentPhone,name:copy[2],amount:copy[1],outcome,time:new Date().toLocaleTimeString("ar-DZ")});
-  state.history=state.history.slice(0,100);save();confirming=false;selected=null;render();
+  state.history=state.history.slice(0,100);save();render();
   const box=$("operationResult");box.className="result"+(outcome==="success"?"":(" "+outcome));
   box.textContent=outcome==="success"?"نجحت العملية الوهمية — لم يُخصم أي رصيد":outcome==="failed"?"فشلت العملية الوهمية — دون أي إرسال":"النتيجة الوهمية غير مؤكدة — لا تكرر العملية";
  };
