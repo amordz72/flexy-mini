@@ -31,6 +31,23 @@ type Job = {
 };
 type QueueResult = { job_uuid: string; status: string; reused: boolean };
 type Mode = "offers" | "credit";
+type PendingRequest = { fingerprint: string; key: string; job?: Job };
+const pendingKey = "flexy_mini_admin_pending_sama_v1";
+const readPending = (): PendingRequest | null => {
+  try {
+    const parsed: unknown = JSON.parse(window.localStorage.getItem(pendingKey) || "null");
+    if (!parsed || typeof parsed !== "object") return null;
+    const row = parsed as PendingRequest;
+    return typeof row.key === "string" && row.key.length > 7 && typeof row.fingerprint === "string"
+      ? row : null;
+  } catch { return null; }
+};
+const savePending = (item: PendingRequest | null) => {
+  try {
+    if (item) window.localStorage.setItem(pendingKey, JSON.stringify(item));
+    else window.localStorage.removeItem(pendingKey);
+  } catch { /* Best effort; in-memory lock still applies. */ }
+};
 
 const normalizePhone = (value: string) => {
   const digits = value.replace(/\D/g, "");
@@ -61,10 +78,11 @@ export default function FlexyServicePage({ db, isCustomer }: { db?: SupabaseClie
   const [stationBusy, setStationBusy] = useState(false);
   const [showDiscovery, setShowDiscovery] = useState(false);
   const [sendBusy, setSendBusy] = useState(false);
-  const [lastJob, setLastJob] = useState<Job | null>(null);
+  const initialRequest = useRef<PendingRequest | null>(isCustomer ? null : readPending());
+  const [lastJob, setLastJob] = useState<Job | null>(initialRequest.current?.job || null);
   const [jobCheckBusy, setJobCheckBusy] = useState(false);
-  const [unknownResult, setUnknownResult] = useState(false);
-  const requestRef = useRef<{ fingerprint: string; key: string } | null>(null);
+  const [unknownResult, setUnknownResult] = useState(Boolean(initialRequest.current && !initialRequest.current.job));
+  const requestRef = useRef<PendingRequest | null>(initialRequest.current);
 
   const loadCatalog = useCallback(async () => {
     if (!db) return;
@@ -153,7 +171,14 @@ export default function FlexyServicePage({ db, isCustomer }: { db?: SupabaseClie
       return;
     }
     const result = (Array.isArray(data) ? data[0] : data) as Job | null;
-    if (result) { setLastJob(result); setUnknownResult(false); }
+    if (result) {
+      setLastJob(result);
+      setUnknownResult(false);
+      if (requestRef.current) {
+        requestRef.current = { ...requestRef.current, job: result };
+        savePending(requestRef.current);
+      }
+    }
   };
 
   const submit = () => {
@@ -180,6 +205,7 @@ export default function FlexyServicePage({ db, isCustomer }: { db?: SupabaseClie
         setSendBusy(true);
         const request = requestRef.current || { fingerprint, key: crypto.randomUUID() };
         requestRef.current = request;
+        savePending(request);
         try {
           const { data, error } = await db.rpc("station_connect_admin_create_offer_execute_v2", {
             p_phone: target,
@@ -200,7 +226,10 @@ export default function FlexyServicePage({ db, isCustomer }: { db?: SupabaseClie
             message.warning("نتيجة غير مؤكدة. تجنب إرسال طلب جديد قبل المراجعة.");
             return;
           }
-          setLastJob({ job_uuid: result.job_uuid, status: result.status });
+          const job = { job_uuid: result.job_uuid, status: result.status };
+          setLastJob(job);
+          requestRef.current = { ...request, job };
+          savePending(requestRef.current);
           setUnknownResult(false);
           message.success(result.reused ? "طلب موجود مسبقًا، لم يُكرر" : "تم إرسال الطلب إلى Station Connect");
         } catch {
@@ -330,7 +359,7 @@ export default function FlexyServicePage({ db, isCustomer }: { db?: SupabaseClie
               {lastJob.result_code&&<Typography.Text>رمز النتيجة: {lastJob.result_code}</Typography.Text>}
               <Button size="small" loading={jobCheckBusy} onClick={() => void checkJob()}>تحديث حالة العملية</Button>
               {lastJob.status!=="queued"&&lastJob.status!=="claimed"&&<Button size="small"
-                onClick={() => {setLastJob(null);requestRef.current=null;setUnknownResult(false);}}>
+                onClick={() => {setLastJob(null);requestRef.current=null;savePending(null);setUnknownResult(false);}}>
                 طلب جديد بعد مراجعة النتيجة
               </Button>}
             </Space>}
