@@ -341,3 +341,19 @@ User's new recipient discovery reached the actual modem with `Please Enter your 
 Station-owned fix: `pin-response.mjs` English/French/Arabic prompt and rejection classifier, server-only once-per-session `pin_submitted` guard, review on repeat, failed on explicit rejection, retained confirmation/menu/discovery flow. Source commits `0c55d125`, `310c2eb5`, `e4f24b60`, `32c0638c`, CI step `1fd29236`. Prior Edge `station-gateway` v20 had extra runtime routing absent from GitHub; synchronized with full running code instead of overwriting it. New Supabase Edge `station-gateway` **v21 ACTIVE**, 4 deployed file contents match GitHub. No Windows Agent update or DB migration. 27 isolated Node tests passed; GitHub Actions final conclusion not independently observed.
 
 **Verification levels:** source UPDATED; offline tests PASS; Edge DEPLOYED/ACTIVE; actual PIN continuation on live Station **NOT YET TESTED**, no USSD triggered by this update, no financial send or ledger/MyTool mutation. Flexy Mini frontend remains the concise-table release `79ff678`. One explicit new recipient discovery through Flexy is now the single next live acceptance step: observe PIN command and menu result in the operation table. No surprise retry or real financial send.
+
+
+## 18. 2026-10-13 — Stable SIM & Station names / REVIEW BRANCH ONLY
+
+**User-approved behavior:** automatic, permanent, nonrecycled display identifiers per service type (`sama-1`, `arsely-1`, etc.) for known SIMs and `server-1` for each Windows Station. A user-defined, fully optional label is displayed on the next line; examples: `عمر سما1`, `zb`, `6g`, `PC bach`. Empty label shows no placeholder. Backend UUID/ICCID identification never depends on alias or IP.
+
+**Owning repositories:** Station Connect owns shared schema, persistent numbering and authenticated admin-only RPCs. Flexy Mini reuses its existing Ant Design `StationOverview.tsx` (no new page) for display/edit. There is no Windows Agent update or change to USSD, wallet, routing, PIN, approvals, pricing or MyTool shared ledgers.
+
+**Source only / verification pending:** 
+- Station migration: `station-connect/server/supabase/migrations/20261013_station_identity_display_labels.sql` on `feature/station-identity-labels-20261013`. Counter prefix locking uses PostgreSQL atomic ON CONFLICT updates. Unknown-type SIMs remain without a service-code until operator/type classification is explicitly saved. No DB migration has been applied.
+- Flexy Mini UI: `src/StationOverview.tsx` branch `feature/station-identity-labels-20261013`; read-only `station_connect_admin_identity_labels` and write-only-for-alias `station_connect_admin_save_identity_label`, both admin-gated on backend. Legacy station fallback remains before migration.
+- CI test fixture: `tests/station-identity.test.mjs` uses fake data/RPCs only and asserts station + SIM codes, optional alias edit and no USSD/PIN/type side effects.
+- User QA after review and authorized migration: open Stations, confirm correct existing SIM service types, add/remove a custom name, refresh web/PWA, disconnect/reconnect and move SIM across modems; verify no identifier changes or duplicate code.
+- **No claim** of successful CI, database application, GitHub Pages release, installed Android PWA acceptance or real hardware testing from these source commits alone.
+
+Canonical design context: `amordz72/developer/projects/station-connect/CENTRAL-USB-SIM-BRAIN-2026-09-24.md`. Database migration/test details: `station-connect/docs/STABLE-IDENTITY-LABELS-2026-10-13.md`.
