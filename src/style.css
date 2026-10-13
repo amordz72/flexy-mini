@@ -28,3 +28,31 @@ html{direction:rtl}body{overflow-x:hidden}.app-layout{min-width:0}.app-sider{pos
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .service-nav-icon{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;min-width:28px;font-family:"Segoe UI Symbol","Noto Sans Symbols 2",sans-serif;font-size:24px!important;font-weight:400;line-height:1!important;font-variant-emoji:text}
 .bottom-service-nav .ant-btn{font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+
+
+/* Admin-only standalone simulator link, visually anchored immediately above the Flexy bottom tab.
+   Do not change the production Flexy tab or intercept its click. */
+.bottom-service-nav .flexy-lab-shortcut{
+  position:absolute;
+  inset-inline-start:max(10px,env(safe-area-inset-right));
+  bottom:calc(72px + env(safe-area-inset-bottom));
+  z-index:101;
+  display:inline-flex;
+  justify-content:center;
+  align-items:center;
+  white-space:nowrap;
+  border:1px solid #adc6f8;
+  border-radius:999px;
+  background:#eef5ff;
+  box-shadow:0 3px 10px #172b4d1f;
+  color:#184fa9;
+  text-decoration:none;
+  font-size:12px;
+  font-weight:700;
+  padding:9px 12px;
+  min-height:35px;
+}
+.bottom-service-nav .flexy-lab-shortcut:focus-visible{
+  outline:3px solid #2563eb;
+  outline-offset:3px;
+}
