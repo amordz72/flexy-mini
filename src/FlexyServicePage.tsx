@@ -8,6 +8,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import SamaOfferDiscoveries from "./SamaOfferDiscoveries";
 import CustomerOfferIdentity from "./CustomerOfferIdentity";
 import type { OfferGroup, OfferIdentity } from "./CustomerOfferIdentity";
+import {readSamaStatus,readinessProblems} from "./SamaOperationalActions";
+import type {SamaStatus} from "./SamaOperationalActions";
 
 type Offer = {
   offer_uuid: string;
@@ -22,11 +24,6 @@ type Offer = {
   execution_enabled: boolean;
   execution_available: boolean;
   execution_sim_types: string[] | null;
-};
-type Station = { station_uuid: string; status: string; computer_name: string | null; last_seen_at: string | null };
-type Hardware = {
-  sim_uuid: string | null; sim_type: string | null; imsi: string | null; has_pin: boolean;
-  sim_last_seen_at: string | null; modem_last_seen_at: string | null;
 };
 type Job = {
   job_uuid: string; status: string; result_code?: string | null; result_text?: string | null;
@@ -56,13 +53,11 @@ const normalizePhone = (value: string) => {
   return digits.startsWith("213") && digits.length === 12 ? "0" + digits.slice(3) : digits;
 };
 const validPhone = (value: string) => /^0[5-7][0-9]{8}$/.test(value);
-const fresh = (value: string | null | undefined) =>
-  Boolean(value && Number.isFinite(Date.parse(value)) && Date.now() - Date.parse(value) >= 0 && Date.now() - Date.parse(value) < 90_000);
 const titleStatus = (status: string) =>
   ({ queued: "في الطابور", claimed: "قيد المعالجة", success: "نجحت", failed: "فشلت", review: "تحتاج مراجعة", unavailable: "غير متاحة" } as Record<string, string>)[status] || status;
 const currency = (amount: number) => new Intl.NumberFormat("en-US").format(amount) + " دج";
 
-export default function FlexyServicePage({ db, isCustomer }: { db?: SupabaseClient; isCustomer: boolean }) {
+export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { db?: SupabaseClient; isCustomer: boolean; onOpenStations?: () => void }) {
   const [mode, setMode] = useState<Mode>("offers");
   const [identity, setIdentity] = useState<OfferIdentity | null>(null);
   const handleIdentity = useCallback((value: OfferIdentity | null) => {
@@ -84,6 +79,9 @@ export default function FlexyServicePage({ db, isCustomer }: { db?: SupabaseClie
   const [stationUuid, setStationUuid] = useState<string | null>(null);
   const [stationName, setStationName] = useState("");
   const [stationBusy, setStationBusy] = useState(false);
+  const [samaStatus, setSamaStatus] = useState<SamaStatus | null>(null);
+  const [executePrerequisitesReady, setExecutePrerequisitesReady] = useState(false);
+  const [stationError, setStationError] = useState("");
   const [showDiscovery, setShowDiscovery] = useState(false);
   const [sendBusy, setSendBusy] = useState(false);
   const initialRequest = useRef<PendingRequest | null>(isCustomer ? null : readPending());
@@ -113,32 +111,23 @@ export default function FlexyServicePage({ db, isCustomer }: { db?: SupabaseClie
     setStationBusy(true);
     setStationUuid(null);
     setStationName("");
-    const { data, error } = await db.rpc("flexy_mini_station_overview");
-    if (error) {
-      setStationBusy(false);
-      message.warning("لا يمكن فحص Station Connect: " + error.message);
-      return;
-    }
-    const stations = ((Array.isArray(data) ? data : []) as Station[])
-      .filter(row => row.status === "approved" && fresh(row.last_seen_at));
-    for (const station of stations) {
-      const hardware = await db.rpc("station_connect_admin_hardware", {
-        p_station_uuid: station.station_uuid
-      });
-      if (hardware.error) continue;
-      const ready = ((Array.isArray(hardware.data) ? hardware.data : []) as Hardware[])
-        .some(sim => sim.sim_type === "mobilis-sama"
-          && sim.imsi?.startsWith("60301")
-          && sim.has_pin
-          && fresh(sim.sim_last_seen_at)
-          && fresh(sim.modem_last_seen_at));
-      if (ready) {
-        setStationUuid(station.station_uuid);
-        setStationName(station.computer_name || "Station Connect");
-        break;
+    setExecutePrerequisitesReady(false);
+    try {
+      const rows=await readSamaStatus(db);
+      const status=rows.find(row=>row.discover_ready)||rows[0]||null;
+      setSamaStatus(status);
+      setStationError("");
+      if(status?.discover_ready){
+        setStationUuid(status.station_uuid);
+        setStationName(status.station_name||"Station Connect");
+        setExecutePrerequisitesReady(status.execute_prerequisites_ready);
       }
+    } catch(cause) {
+      setStationError("تعذر فحص جاهزية Sama: "+(cause instanceof Error?cause.message:String(cause)));
+      setSamaStatus(null);
+    } finally {
+      setStationBusy(false);
     }
-    setStationBusy(false);
   }, [db, isCustomer]);
 
   useEffect(() => { void loadCatalog(); void loadStation(); }, [loadCatalog, loadStation]);
@@ -209,7 +198,9 @@ export default function FlexyServicePage({ db, isCustomer }: { db?: SupabaseClie
     if (!validPhone(target)) { message.warning("اكتب رقم هاتف صحيحًا دون فراغات"); return; }
     if (!verifiedGroup || !identity || !chosen || !samaRoute) { message.warning("يجب التحقق من مجموعة عروض هذا الرقم أولًا، ثم اختيار عرض منها"); return; }
     if (isCustomer) { message.warning("شحن الزبون متوقف حتى تفعيل محفظته ومسار الطلبات"); return; }
-    if (!stationUuid) { message.warning("Sama غير جاهزة. افحص الشريحة في المحطات والشرائح."); return; }
+    if (!stationUuid || !executePrerequisitesReady) {
+      message.warning("Sama ليست جاهزة للتنفيذ المالي. جهز الشريحة واعتمادها ورصيدها أولًا."); return;
+    }
     if (!db || sendBusy || lastJob) return;
 
     const fingerprint = [target, chosen.offer_uuid, stationUuid].join(":");
@@ -248,11 +239,10 @@ export default function FlexyServicePage({ db, isCustomer }: { db?: SupabaseClie
         requestRef.current = request;
         savePending(request);
         try {
-          const { data, error } = await db.rpc("station_connect_admin_create_offer_execute_v2", {
+          const { data, error } = await db.rpc("flexy_mini_admin_create_verified_offer_execute", {
             p_phone: target,
-            p_family: chosen.family,
-            p_network_index: chosen.network_index,
-            p_amount: chosen.amount,
+            p_offer_uuid: chosen.offer_uuid,
+            p_discovery_uuid: identity.discoveryUuid,
             p_idempotency_key: request.key,
             p_station_uuid: stationUuid
           });
@@ -289,8 +279,8 @@ export default function FlexyServicePage({ db, isCustomer }: { db?: SupabaseClie
         <Space wrap>
           <Tag color="green">Mobilis</Tag>
           <Tag>Sama — عروض</Tag>
-          {!isCustomer && <Tag color={stationUuid ? "green" : "orange"}>
-            {stationBusy ? "جاري فحص المحطة" : stationUuid ? "Sama مرصودة" : "Sama غير جاهزة"}
+          {!isCustomer && <Tag color={executePrerequisitesReady ? "green" : "orange"}>
+            {stationBusy ? "جاري فحص المحطة" : executePrerequisitesReady ? "Sama مستوفية للشروط الأساسية" : stationUuid ? "Sama للاستكشاف فقط" : "Sama غير جاهزة"}
           </Tag>}
         </Space>
         <Typography.Text strong>رقم هاتف الزبون</Typography.Text>
@@ -398,10 +388,17 @@ export default function FlexyServicePage({ db, isCustomer }: { db?: SupabaseClie
           {isCustomer
             ? <Alert type="info" showIcon message="طلبات الزبائن لم تُربط بالمحفظة بعد"
                 description="نفس صفحة الفليكسي للجميع، لكن الإرسال لا يُفعّل لحساب الزبون قبل فحص الصلاحيات والرصيد من الخادم."/>
-            : !stationUuid
-              ? <Alert showIcon type="warning" message="لا توجد شريحة Sama جاهزة"
-                  description="التجهيز يتم في «المحطات والشرائح». ظهور محطة متصلة وحده لا يكفي لإرسال USSD." />
-              : <Typography.Text type="secondary">محطة التنفيذ: {stationName}. يختار السيرفر المسار المعتمد ويتحقق من PIN والرصيد قبل التنفيذ.</Typography.Text>}
+            : <Space direction="vertical" size="small" style={{width:"100%"}}>
+              {stationError && <Alert type="error" message={stationError} showIcon/>}
+              {!executePrerequisitesReady
+                ? <Alert showIcon type="warning" message="تجهيز Sama غير مكتمل"
+                    description={samaStatus ? "ما ينقص: "+readinessProblems(samaStatus).join("، ") : "لا توجد شريحة Sama مرصودة. افتح إدارة المحطات للتحقق."}/>
+                : <Typography.Text type="secondary">محطة التنفيذ: {stationName}. كل عرض يخضع لفحص مساره ورصيده على السيرفر قبل الإرسال.</Typography.Text>}
+              <Space wrap>
+                <Button size="small" loading={stationBusy} onClick={()=>void loadStation()}>تحديث حالة Sama</Button>
+                {onOpenStations&&<Button size="small" onClick={onOpenStations}>تجهيز المحطات والشرائح</Button>}
+              </Space>
+            </Space>}
           {lastJob && <Alert showIcon type={lastJob.status==="success"?"success":"info"}
             message={"العملية: "+titleStatus(lastJob.status)}
             description={<Space direction="vertical" size={4}>
@@ -418,7 +415,7 @@ export default function FlexyServicePage({ db, isCustomer }: { db?: SupabaseClie
             message="حالة الطلب غير مؤكدة"
             description="لا تغيّر الرقم أو العرض ولا تبدأ طلبًا جديدًا حتى تتأكد من العمليات. سيُستخدم نفس مفتاح العملية عند إعادة المحاولة."/>}
           <Button type="primary" size="large" block loading={sendBusy}
-            disabled={isCustomer||!db||!stationUuid||!samaRoute||!validPhone(normalizePhone(phone))||Boolean(lastJob)}
+            disabled={isCustomer||!db||!stationUuid||!executePrerequisitesReady||!samaRoute||!validPhone(normalizePhone(phone))||Boolean(lastJob)}
             onClick={submit}>إرسال العرض</Button>
           <Typography.Text type="secondary" style={{fontSize:12}}>
             لا تُرسل أي عملية بمجرد اختيار العرض. الإرسال الفعلي يتطلب تأكيدًا صريحًا، وموافقة السيرفر.
