@@ -1,7 +1,6 @@
 import {useCallback,useEffect,useState} from "react";
 import {Alert,Button,Card,Descriptions,Empty,Grid,Input,Modal,Space,Table,Tag,Typography,message} from "antd";
 import type {SupabaseClient} from "@supabase/supabase-js";
-import SamaOfferDiscoveries from "./SamaOfferDiscoveries";
 
 type Station={station_uuid:string;status:string;computer_name:string|null;last_seen_at:string|null;agent_version:string|null};
 type Hardware={modem_uuid:string;modem_ip:string|null;device_name:string|null;modem_last_seen_at:string|null;sim_uuid:string|null;msisdn:string|null;imsi:string|null;sim_type:string|null;has_pin:boolean;sim_last_seen_at:string|null};
@@ -196,9 +195,6 @@ export default function StationOverview({db}:{db:SupabaseClient}){
    </Space.Compact>
   </Space>;
  };
- const chosenStation=stations.find(station=>station.station_uuid===selected);
- const samaReady=Boolean(chosenStation?.status==="approved"&&online(chosenStation.last_seen_at)&&
-  selected&&(hardware[selected]||[]).some(sim=>sim.sim_type==="mobilis-sama"&&sim.has_pin&&online(sim.sim_last_seen_at)&&online(sim.modem_last_seen_at)));
  const openHardware=async(uuid:string)=>{
   setSelected(uuid);setHardwareLoading(true);setError("");
   const {data,error}=await db.rpc("station_connect_admin_hardware",{p_station_uuid:uuid});
@@ -271,6 +267,5 @@ export default function StationOverview({db}:{db:SupabaseClient}){
     placeholder="PIN الخدمة — لا يظهر في الشاشة"
    />
   </Modal>
-  <SamaOfferDiscoveries db={db} stationUuid={selected} samaReady={samaReady}/>
  </Space>;
 }
