@@ -11,7 +11,9 @@ const output = new URL('../node_modules/.flexy-tests/', import.meta.url);
 await mkdir(output, { recursive: true });
 const ui = `import React from 'react';
 const c = name => props => React.createElement(name, props, props.children);
-export const Alert=c('alert'), Button=c('button'), Card=c('card'), Table=c('table'), Descriptions=c('descriptions'), Col=c('col'), Empty=c('empty'), Input=c('input'), InputNumber=c('amount'), Row=c('row'), Segmented=c('segmented'), Select=c('select'), Space=c('space'), Spin=c('spin'), Tag=c('tag');
+export const Alert=c('alert'), Button=c('button'), Card=c('card'), Table=c('table'), Descriptions=c('descriptions'), Col=c('col'), Empty=c('empty'), Input=c('input'), InputNumber=c('amount'), Row=c('row'), Segmented=c('segmented'), Select=c('select'), Space=c('space'), Spin=c('spin'), Tag=c('tag'), Radio=c('radio');
+export const Collapse=props=>React.createElement('collapse',props,(props.items||[]).map(item=>React.createElement('panel',{key:item.key,label:item.label},item.children)));
+export const List=Object.assign(props=>React.createElement('list',props,(props.dataSource||[]).map(row=>props.renderItem(row))),{Item:c('list-item')});
 export const Typography={Text:c('text'),Paragraph:c('paragraph')};
 export const Modal=props=>props.open?React.createElement('modal',props,props.children):null;
 export const message={warning(){},success(){},info(){},error(){}};`;
@@ -19,7 +21,7 @@ const plugins = [{ name:'test-ui', setup(b) {
   b.onResolve({filter:/^antd$/},()=>({path:'ui',namespace:'stub'}));
   b.onResolve({filter:/^@ant-design\/icons$/},()=>({path:'icons',namespace:'stub'}));
   b.onResolve({filter:/SamaOfferDiscoveries$/},()=>({path:'history',namespace:'stub'}));
-  b.onLoad({filter:/.*/,namespace:'stub'},args=>({contents:args.path==='ui'?ui:args.path==='history'?'export default function History(){return null}':`import React from 'react'; const Icon=()=>null; export {Icon as CheckCircleOutlined,Icon as PhoneOutlined,Icon as ReloadOutlined,Icon as SearchOutlined};`,loader:'js'}));
+  b.onLoad({filter:/.*/,namespace:'stub'},args=>({contents:args.path==='ui'?ui:args.path==='history'?'export default function History(){return null}':`import React from 'react'; const Icon=()=>null; export {Icon as CheckCircleOutlined,Icon as PhoneOutlined,Icon as ReloadOutlined,Icon as SearchOutlined,Icon as InfoCircleOutlined};`,loader:'js'}));
 }}];
 for (const component of ['CustomerOfferIdentity','FlexyServicePage','FlexyOperationHistory']) {
   const result = await build({entryPoints:[`src/${component}.tsx`],bundle:true,write:false,format:'esm',platform:'node',external:['react','react/jsx-runtime'],plugins});
@@ -179,6 +181,75 @@ test('history is visible by default with raw response and all essential columns'
  await act(async()=>table.props.pagination.onChange(2));await flush();
  assert.deepEqual(db.calls.at(-1).args,{p_limit:10,p_offset:10});
  assert.ok(table.props.expandable.rowExpandable(record));await close(r);
+});
+
+
+const catalogOffer=(family,amount,enabled=true)=>({
+  offer_uuid:`${family}-${amount}`,operator:'mobilis',family,
+  group_code:family.startsWith('Sama')?'SAMA':family.toUpperCase(),
+  amount,display_name:`${family} ${amount}`,
+  network_index:enabled?'1':null,details:`Catalog details ${amount}`,
+  execution_enabled:enabled,execution_available:enabled,
+  execution_sim_types:enabled?['mobilis-sama']:[],
+});
+const flexyDb=(group,offers)=>{
+  const identity={...classified,presentation_group:group};
+  return makeDb((name)=>{
+    if(name==='flexy_get_visible_offer_catalog_v2')return Promise.resolve(ok(offers));
+    if(name==='flexy_mini_admin_sama_readiness')return Promise.resolve(ok([]));
+    if(name==='flexy_mini_admin_customer_offer_identity')return Promise.resolve(ok(identity));
+    if(name==='station_connect_admin_offer_route_preview')return Promise.resolve(ok(null));
+    throw new Error('Unexpected RPC '+name);
+  });
+};
+const setRecipientAndOffers=async(r)=>{
+  const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
+  await act(async()=>phone.props.onChange({target:{value:'0500000001'}}));
+  await act(async()=>r.root.findByType('segmented').props.onChange('offers'));await flush();
+};
+
+test('Sama catalog is one collapsible group with internal Mix/Talk/Net families, not three long cards',async()=>{
+  const db=flexyDb('SAMA',[catalogOffer('Sama Mix',100),catalogOffer('Sama Mix',500),
+    catalogOffer('Sama Talk',500),catalogOffer('Sama Net',1000)]);
+  const r=await mount(Flexy,{db,isCustomer:false});
+  await setRecipientAndOffers(r);
+  const boxes=r.root.findAllByType('card');
+  assert.equal(boxes.filter(c=>c.props.title==='عروض الزبون').length,0);
+  assert.equal(boxes.filter(c=>c.props.title==='العروض المتاحة').length,1);
+  const outer=r.root.findAllByType('collapse').find(c=>c.props.items[0]?.key==='sama');
+  assert.ok(outer); assert.equal(outer.props.items.length,1);
+  const inner=r.root.findAllByType('collapse').find(c=>c.props.accordion);
+  assert.ok(inner); assert.deepEqual(inner.props.items.map(x=>x.label),['Sama Mix','Sama Talk','Sama Net']);
+  assert.ok(r.root.findAllByType('list').some(n=>n.props.dataSource.some(o=>o.amount===100)));
+  assert.equal(db.calls.filter(x=>x.name.includes('create_offer')).length,0);
+  await close(r);
+});
+
+test('Revolution keeps role-visible 100 DZD & 500 DZD catalog rows when Sama is absent; no silent ordinary recharge',async()=>{
+  const db=flexyDb('REVOLUTION',[catalogOffer('Revolution',100,false),catalogOffer('Revolution',500,false),catalogOffer('Revolution',1000)]);
+  const r=await mount(Flexy,{db,isCustomer:false});await setRecipientAndOffers(r);
+  const list=r.root.findByType('list');
+  assert.deepEqual(list.props.dataSource.map(o=>o.amount),[100,500,1000]);
+  assert.equal(r.root.findAllByType('collapse').length,0);
+  assert.equal(r.root.findAllByType('select').length,0);
+  await click(r,'Revolution 100');
+  assert.equal(button(r,'إرسال العرض').props.disabled,true);
+  assert.equal(db.calls.filter(x=>x.name.includes('create_verified_offer_execute')).length,0);
+  await close(r);
+});
+
+test('PixX 50/100/500 display complete catalog names and details without starting USSD',async()=>{
+  const offers=[catalogOffer('PixX',50),catalogOffer('PixX',100),catalogOffer('PixX',500)];
+  offers[1].display_name='PixX 100 (1Go)';
+  const db=flexyDb('PIXX',offers);
+  const r=await mount(Flexy,{db,isCustomer:false});await setRecipientAndOffers(r);
+  const list=r.root.findByType('list');
+  assert.deepEqual(list.props.dataSource.map(o=>display_name),offers.map(o=>o.display_name));
+  const detailButton=r.root.findAllByType('button').find(x=>x.props['aria-label']==='تفاصيل PixX 100 (1Go)');
+  await act(async()=>detailButton.props.onClick());
+  assert.ok(r.root.findAllByType('modal').some(x=>x.props.title==='PixX 100 (1Go)'));
+  assert.equal(db.calls.filter(x=>x.name.includes('create_offer')).length,0);
+  await close(r);
 });
 
 after(()=>rm(output,{recursive:true,force:true}));
