@@ -4,7 +4,8 @@ import {Alert,Button,Card,ConfigProvider,Input,Select,Space,Tag,Typography,messa
 import {ExperimentOutlined,DeleteOutlined,ReloadOutlined,PhoneOutlined} from "@ant-design/icons";
 import type {SupabaseClient} from "@supabase/supabase-js";
 import FlexyServicePage from "./FlexyServicePage";
-import {demoDb,newDemoPhone,resetDemo,getDemoGroup,setDemoGroup,setDemoOutcome,currentDemoOutcome} from "./demo/mockDb";
+import {newDemoPhone,resetDemo,getDemoGroup,setDemoGroup,setDemoOutcome,currentDemoOutcome} from "./demo/mockDb";
+import {enableLabMocking,demoMswClient} from "./demo/mswBrowser";
 import type {DemoGroup,DemoOutcome} from "./demo/mockDb";
 import "antd/dist/reset.css";
 import "./style.css";
@@ -16,15 +17,16 @@ const outcomes:{label:string;value:DemoOutcome}[]=[
   {value:"success",label:"نجاح وهمي"},{value:"failed",label:"فشل وهمي"},{value:"review",label:"مراجعة / نتيجة غير مؤكدة"},
 ];
 function Lab(){
-  const [phone,setPhone]=useState("0550000001");
+  // The user never has to type a number: a fresh fake test recipient is generated at entry.
+  const [phone,setPhone]=useState(newDemoPhone);
   const [version,setVersion]=useState(0);
-  const [selectedGroup,setSelectedGroup]=useState<DemoGroup>(()=>getDemoGroup("0550000001"));
+  const [selectedGroup,setSelectedGroup]=useState<DemoGroup>(()=>getDemoGroup(phone));
   const [outcome,setOutcome]=useState<DemoOutcome>(()=>currentDemoOutcome());
   const restart=(p=phone)=>{
     setPhone(p);setSelectedGroup(getDemoGroup(p));setVersion(v=>v+1);
   };
   const generate=()=>{
-    const p=newDemoPhone();restart(p);message.info("رقم تجريبي جديد — اضغط عروض لبدء المحاكاة");
+    const p=newDemoPhone();restart(p);message.info("رقم جديد واستكشاف عروض وهمي تلقائي");
   };
   const updatePhone=(p:string)=>{
     setPhone(p);
@@ -49,10 +51,10 @@ function Lab(){
               <Input dir="ltr" inputMode="numeric" placeholder="05XXXXXXXX" value={phone}
                 maxLength={13} onChange={e=>updatePhone(e.target.value.replace(/\s/g,""))}
                 prefix={<PhoneOutlined/>}/>
-              <Button type="primary" onClick={()=>restart()}>تحميل الرقم</Button>
-              <Button onClick={generate} icon={<ReloadOutlined/>}>جديد</Button>
+              <Button type="primary" onClick={()=>restart()}>إعادة البحث</Button>
+              <Button onClick={generate} icon={<ReloadOutlined/>}>رقم جديد + عروض</Button>
             </Space.Compact>
-            <Typography.Text type="secondary" style={{fontSize:12}}>الرقم المختار يعاد تعبئته في صفحة فليكسي أسفل هذه الإعدادات، دون لمس هواتف حقيقية.</Typography.Text>
+            <Typography.Text type="secondary" style={{fontSize:12}}>الرقم يُولد تلقائيًا عند فتح المختبر أو الضغط على «رقم جديد + عروض». الكتابة اليدوية اختيارية فقط.</Typography.Text>
           </div>
           <div>
             <Typography.Text strong>نوع عروض الرقم التجريبي</Typography.Text>
@@ -78,11 +80,28 @@ function Lab(){
       </Card>
       <Typography.Title level={4} style={{marginTop:0}}>صفحة الفليكسي الأصلية — وضع المحاكاة</Typography.Title>
       <Typography.Paragraph type="secondary" style={{fontSize:13}}>
-        اختر «عروض»: إذا كانت مجموعة الرقم محفوظة ستظهر مباشرة، وإذا لم تكن محفوظة ستبدأ جلسة اكتشاف وهمية مرة واحدة وتظهر نتيجتها بعد لحظات. اختر عرضًا ووافق على عملية وهمية لتظهر في سجل العمليات.
+        عند فتح المختبر يُولد رقم وتُفتح عروضه تلقائيًا. اضغط «رقم جديد + عروض» للتجربة التالية دون كتابة. كل الاستكشاف والإرسال وهمي ومحفوظ محليًا.
       </Typography.Paragraph>
-      <FlexyServicePage key={version} db={demoDb as unknown as SupabaseClient}
-        isCustomer={false} simulation initialPhone={phone} onPhoneChange={updatePhone}/>
+      <FlexyServicePage key={version} db={demoMswClient as unknown as SupabaseClient}
+        isCustomer={false} simulation autoOpenOffers initialPhone={phone} onPhoneChange={updatePhone}/>
     </div>
   </ConfigProvider>;
 }
-createRoot(document.getElementById("root")!).render(<React.StrictMode><Lab/></React.StrictMode>);
+// Mount ONLY after the MSW worker is ready. No fail-open fallback.
+const root=createRoot(document.getElementById("root")!);
+void enableLabMocking().then(()=>{
+  const nativeFetch=window.fetch.bind(window);
+  window.fetch=((input:RequestInfo|URL,init?:RequestInit)=>{
+    const dest=new URL(input instanceof Request?input.url:String(input),window.location.href);
+    if(dest.origin!==window.location.origin) {
+      return Promise.reject(new Error("المختبر يمنع الاتصال بخوادم خارجية"));
+    }
+    return nativeFetch(input,init);
+  }) as typeof fetch;
+  root.render(<React.StrictMode><Lab/></React.StrictMode>);
+}).catch(error=>{
+  root.render(<ConfigProvider direction="rtl"><Alert type="error" showIcon
+    message="تعذر بدء محاكاة MSW بأمان"
+    description={(error instanceof Error?error.message:String(error))+
+      " — لم نفتح صفحة فليكسي ولم نتصل بالشبكة الحقيقية."}/></ConfigProvider>);
+});
