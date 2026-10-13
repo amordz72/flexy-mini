@@ -295,3 +295,12 @@ NEXT: fix stale-command queue handling in Station Connect with isolated tests, e
 نجح اختبار rollback على الـSchema الفعلية قبل وبعد التطبيق: حد 149/150، الحراسة، تجاوز رأس غير جاهز، idempotency، عدم Retry، heartbeat، legacy queue، REVIEW عند وجود إرسال سابق، وعدم طمس رد أمر claimed. CI Station `38397700314` نجح. نتيجة الإنتاج: **8 أوامر قديمة ألغيت تلقائيًا؛ صفر أمر منتهي ما زال queued**؛ استعلامات العروض الثلاثة العالقة أصبحت failed / QUEUE_EXPIRED_NOT_DISPATCHED. لم نبدأ USSD أو شحنًا حقيقيًا، ولم نغيّر Master أو الرصيد التراكمي أو المحافظ. الأوامر claimed الفعلية لا تُلغى كأنها لم ترسل؛ نحتفظ بدليلها، وطلبات المال المرتبطة تبقى محجوزة/للمراجعة عبر metadata دون تسوية أموال.
 
 خطأ الأداة: apply_migration أعاد Invalid or expired requestState مرتين؛ تحققنا من عدم التطبيق، ثم طبقنا SQL atomically بواسطة execute_sql وأثبتنا schema/history. No advisor notice names the new expiry functions. اختبار اكتشاف جديد على المودم ما زال PENDING؛ لا تعاد الطلبات المنتهية تلقائيًا.
+
+
+## 16. 2026-10-13 — واجهة مباشرة وجدول العمليات / IMPLEMENTED + LOCAL TESTED
+
+قرار عمر: كل صفحات التطبيق تعرض المعلومات الأساسية مباشرة وبأسلوب مهني؛ إزالة الشروحات المكررة وكتل التعليمات. صفحة الفليكسي تعرض آخر العمليات في **جدول ظاهر**: الرقم، الخدمة، اسم العرض، المبلغ، الحالة، التاريخ، رمز النتيجة ورد الشبكة كاملًا، وتفاصيل الردود لكل خطوة من الصف. مصدر `f687c9dc6effaa2c2d485a2f90a59865398caf0b`؛ التفاصيل في [CONCISE-UI-AND-OPERATION-TABLE.md](CONCISE-UI-AND-OPERATION-TABLE.md).
+
+12 اختبار React/RPC وبناء TypeScript/Vite نجحوا. RPC `flexy_mini_admin_recent_operations` read-only مطبقة ومسجلة migration `20261013125748`، pagination من السيرفر، admin guard قبل البيانات، لا anon، ولا قيم أوامر/PIN صادرة؛ PIN المحفوظ يحجب داخل ردود الشبكة إن ظهر. اختبارات SQL rollback أثبتت الحراسة والpagination والرد الحقيقي الأخير دون إخراج أرقام خاصة أو أسرار. إعدادات المحطات والبطاقات والمحافظ والزبائن والموردين اختصرت الشروحات مع إبقاء البيانات وحدود الخدمة والتأكيد المالي والأخطاء.
+
+الخلل التشغيلي الحالي المثبت: الاستعلام الجديد وصل المودم وأرجع `Please Enter your PIN code`؛ classifier لا يتعرف عليها (mot de passe/password فقط) فأغلق الجلسة بـDISCOVERY_TERMINAL. تحسين الجدول **لا يعني إصلاح parser**. التالي: جمع اختبارات وتجارب المشاريع السابقة ومراجعة lifecycle كامل ثم تصحيح/اختبار/نشر السيرفر، لا تكرار الطلب ولا اتهام PIN أو الاستنتاج أن المستفيد بلا عروض. CI/نسخة الهاتف الجديدة PENDING إلى حين إثباتها. لا USSD أو مال أو تغييرات بيانات MyTool في هذه الدفعة.
