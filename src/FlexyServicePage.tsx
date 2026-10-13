@@ -153,8 +153,13 @@ export default function FlexyServicePage({ db, isCustomer }: { db?: SupabaseClie
   };
   const eligibleOffers = offers.filter(row => compatibleGroup(row, verifiedGroup));
   const families = [...new Set(eligibleOffers.map(row => row.family))];
+  const familyOrder = ["Sama Mix", "Sama Talk", "Sama Net"];
   const visibleOffers = eligibleOffers.filter(row => family === "all" || row.family === family)
-    .sort((a,b) => a.amount-b.amount || a.family.localeCompare(b.family));
+    .sort((a,b) => {
+      const ia = familyOrder.indexOf(a.family), ib = familyOrder.indexOf(b.family);
+      if (ia !== ib && (ia >= 0 || ib >= 0)) return (ia < 0 ? 99 : ia)-(ib < 0 ? 99 : ib);
+      return a.family === b.family ? a.amount-b.amount : a.family.localeCompare(b.family);
+    });
   const chosen = eligibleOffers.find(row => row.offer_uuid === chosenId) || null;
   const samaRoute = Boolean(verifiedGroup && chosen?.execution_enabled && chosen?.execution_available
     && chosen?.execution_sim_types?.includes("mobilis-sama")
