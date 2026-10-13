@@ -61,13 +61,13 @@ const titleStatus = (status: string) =>
   ({ queued: "في الطابور", claimed: "قيد المعالجة", success: "نجحت", failed: "فشلت", review: "تحتاج مراجعة", unavailable: "غير متاحة" } as Record<string, string>)[status] || status;
 const currency = (amount: number) => new Intl.NumberFormat("en-US").format(amount) + " دج";
 
-export default function FlexyServicePage({ db, isCustomer, onOpenStations, simulation = false, initialPhone = "", onPhoneChange }: {
+export default function FlexyServicePage({ db, isCustomer, onOpenStations, simulation = false, initialPhone = "", autoOpenOffers = false, onPhoneChange }: {
   db?: SupabaseClient; isCustomer: boolean; onOpenStations?: () => void;
   /** Lab only: testing controls never affect live financial authorization. */
-  simulation?: boolean; initialPhone?: string; onPhoneChange?: (phone:string) => void;
+  simulation?: boolean; initialPhone?: string; autoOpenOffers?: boolean; onPhoneChange?: (phone:string) => void;
 }) {
-  const [mode, setMode] = useState<Mode>("credit");
-  const [offersRequest, setOffersRequest] = useState(0);
+  const [mode, setMode] = useState<Mode>(autoOpenOffers ? "offers" : "credit");
+  const [offersRequest, setOffersRequest] = useState(autoOpenOffers ? 1 : 0);
   const [confirmSend, setConfirmSend] = useState(false);
   const sendLock = useRef(false);
   const [identity, setIdentity] = useState<OfferIdentity | null>(null);
