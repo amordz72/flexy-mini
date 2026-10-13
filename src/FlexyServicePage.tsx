@@ -114,7 +114,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
     setExecutePrerequisitesReady(false);
     try {
       const rows=await readSamaStatus(db);
-      const status=rows.find(row=>row.discover_ready)||rows[0]||null;
+      const status=rows.find(row=>row.execute_prerequisites_ready)||rows.find(row=>row.discover_ready)||rows[0]||null;
       setSamaStatus(status);
       setStationError("");
       if(status?.discover_ready){
