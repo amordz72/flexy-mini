@@ -83,7 +83,7 @@ th{background:#f7f9fc;color:#526079}
 </section>
 <section class="card">
 <div class="row justify"><h2>سجل المحاكاة</h2><button id="reset">مسح التجارب</button></div>
-<div class="table-wrap"><table><thead><tr><th>الرقم التجريبي</th><th>العرض</th><th>القيمة</th><th>الحالة</th><th>الوقت</th></tr></thead><tbody id="history"></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>الرقم التجريبي</th><th>العرض</th><th>القيمة</th><th>الحالة</th><th>التاريخ والوقت</th></tr></thead><tbody id="history"></tbody></table></div>
 <p class="small">تُحفظ النتائج محليًا داخل هذا المتصفح فقط في مفتاح مستقل <code>flexy_public_lab_v1</code>. لا ننسخ معلومات العملاء أو مفاتيح الإنتاج.</p>
 </section>
 </main>
@@ -114,6 +114,17 @@ th{background:#f7f9fc;color:#526079}
  const save=()=>{try{localStorage.setItem(STORE,JSON.stringify(state))}catch{toast("تعذر الحفظ محليًا؛ تحقق من مساحة المتصفح")}};
  let currentPhone="",currentGroup="",selected=null,mode="offers",activeFamily="Sama Mix";
  const fmt=n=>Number(n).toLocaleString("en-US")+" دج";
+ const formatWhen=record=>{
+  if(record.createdAt){
+   const date=new Date(record.createdAt);
+   if(Number.isFinite(date.getTime()))return date.toLocaleString("en-GB",{
+    day:"2-digit",month:"2-digit",year:"numeric",
+    hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false
+   });
+  }
+  // Old localStorage records only saved a clock time. Never invent their date.
+  return record.time?record.time+" (تاريخ غير محفوظ)":"—";
+ };
  const groupOf=f=>f==="PixX"?"PIXX":f==="Revolution"?"REVOLUTION":"SAMA";
  const hash=v=>Array.from(v).reduce((a,c)=>(((a*31)+c.charCodeAt(0))>>>0),7)%3;
  const randomPhone=()=>{
@@ -185,7 +196,7 @@ th{background:#f7f9fc;color:#526079}
   if(!state.history.length){const tr=document.createElement("tr");const td=document.createElement("td");td.colSpan=5;td.textContent="لا توجد عمليات وهمية بعد";tr.append(td);$("history").append(tr);return}
   for(const record of state.history.slice(0,30)){
    const tr=document.createElement("tr");
-   for(const v of [record.phone,record.name,fmt(record.amount),record.outcome==="success"?"نجحت وهميًا":record.outcome==="failed"?"فشلت وهميًا":"مراجعة وهمية",record.time]){
+   for(const v of [record.phone,record.name,fmt(record.amount),record.outcome==="success"?"نجحت وهميًا":record.outcome==="failed"?"فشلت وهميًا":"مراجعة وهمية",formatWhen(record)]){
     const td=document.createElement("td");td.textContent=v;tr.append(td);
    }$("history").append(tr);
   }
@@ -201,7 +212,7 @@ th{background:#f7f9fc;color:#526079}
   const outcome=state.outcome,copy=selected;
   // Persist the simulated operation only after an explicit confirmation.
   dismissConfirm();
-  state.history.unshift({phone:currentPhone,name:copy[2],amount:copy[1],outcome,time:new Date().toLocaleTimeString("ar-DZ")});
+  state.history.unshift({phone:currentPhone,name:copy[2],amount:copy[1],outcome,createdAt:new Date().toISOString()});
   state.history=state.history.slice(0,100);save();render();
   const box=$("operationResult");box.className="result"+(outcome==="success"?"":(" "+outcome));
   box.textContent=outcome==="success"?"نجحت العملية الوهمية — لم يُخصم أي رصيد":outcome==="failed"?"فشلت العملية الوهمية — دون أي إرسال":"النتيجة الوهمية غير مؤكدة — لا تكرر العملية";
