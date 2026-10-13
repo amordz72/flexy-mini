@@ -29,6 +29,10 @@ type Job = {
   job_uuid: string; status: string; result_code?: string | null; result_text?: string | null;
 };
 type QueueResult = { job_uuid: string; status: string; reused: boolean };
+type EligibleRoute = {
+  route_uuid: string; sim_uuid: string; sim_type: string; source_label: string;
+  operational_balance: number; required_balance: number; priority: number;
+};
 type Mode = "offers" | "credit";
 type PendingRequest = { fingerprint: string; key: string; job?: Job };
 const pendingKey = "flexy_mini_admin_pending_sama_v1";
@@ -82,6 +86,10 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
   const [samaStatus, setSamaStatus] = useState<SamaStatus | null>(null);
   const [executePrerequisitesReady, setExecutePrerequisitesReady] = useState(false);
   const [stationError, setStationError] = useState("");
+  const [routeChoice, setRouteChoice] = useState<EligibleRoute | null>(null);
+  const [routeCheckBusy, setRouteCheckBusy] = useState(false);
+  const [routeError, setRouteError] = useState("");
+  const routeCheckSequence = useRef(0);
   const [showDiscovery, setShowDiscovery] = useState(false);
   const [sendBusy, setSendBusy] = useState(false);
   const initialRequest = useRef<PendingRequest | null>(isCustomer ? null : readPending());
@@ -154,6 +162,42 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
     && chosen?.execution_sim_types?.includes("mobilis-sama")
     && chosen?.network_index);
 
+  // The shared Router, not the page, selects the highest-priority eligible route.
+  // An Arsselli offer route is never treated as ordinary-credit execution.
+  useEffect(() => {
+    const sequence = ++routeCheckSequence.current;
+    setRouteChoice(null);
+    setRouteError("");
+    if (!db || isCustomer || !chosen || !verifiedGroup || mode !== "offers") {
+      setRouteCheckBusy(false);
+      return;
+    }
+    setRouteCheckBusy(true);
+    void db.rpc("station_connect_admin_offer_route_preview", {
+      p_family: chosen.family,
+      p_amount: chosen.amount,
+      p_station_uuid: null
+    }).then(({data,error}) => {
+      if (sequence !== routeCheckSequence.current) return;
+      setRouteCheckBusy(false);
+      if (error) {
+        setRouteError("تعذر فحص مسارات الإرسال: " + error.message);
+        return;
+      }
+      const candidate = (Array.isArray(data) ? data[0] : data) as EligibleRoute | null;
+      setRouteChoice(candidate || null);
+    }).catch(() => {
+      if (sequence !== routeCheckSequence.current) return;
+      setRouteCheckBusy(false);
+      setRouteError("تعذر الاتصال بفحص مصدر التنفيذ.");
+    });
+    return () => { routeCheckSequence.current++; };
+  }, [db, isCustomer, chosen?.offer_uuid, verifiedGroup, mode]);
+
+  const routeCanSendThroughSama = Boolean(samaRoute && stationUuid && executePrerequisitesReady
+    && !routeCheckBusy && !routeError
+    && routeChoice?.sim_type === "mobilis-sama" && routeChoice.sim_uuid === samaStatus?.sim_uuid);
+
   const chooseManual = () => {
     if (!manualFamily || !manualAmount) {
       message.warning("حدد عائلة العرض ومبلغه أولًا");
@@ -198,8 +242,8 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
     if (!validPhone(target)) { message.warning("اكتب رقم هاتف صحيحًا دون فراغات"); return; }
     if (!verifiedGroup || !identity || !chosen || !samaRoute) { message.warning("يجب التحقق من مجموعة عروض هذا الرقم أولًا، ثم اختيار عرض منها"); return; }
     if (isCustomer) { message.warning("شحن الزبون متوقف حتى تفعيل محفظته ومسار الطلبات"); return; }
-    if (!stationUuid || !executePrerequisitesReady) {
-      message.warning("Sama ليست جاهزة للتنفيذ المالي. جهز الشريحة واعتمادها ورصيدها أولًا."); return;
+    if (!routeCanSendThroughSama) {
+      message.warning("الخدمة غير متاحة حاليًا، يرجى المحاولة بعد حين."); return;
     }
     if (!db || sendBusy || lastJob) return;
 
@@ -209,7 +253,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
       return;
     }
     Modal.confirm({
-      title: "تأكيد إرسال عرض Sama",
+      title: "تأكيد إرسال العرض",
       content: "الرقم: " + target + " — العرض: " + chosen.display_name + " (" + currency(chosen.amount)
         + "). هذه عملية شبكة حقيقية وقد تُخصم من رصيد شريحة Sama. لن يُرسل الأمر إلا بعد موافقتك.",
       okText: "أؤكد الإرسال",
@@ -382,9 +426,23 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
           {chosen ? <Space wrap>
             <Tag color="blue">{chosen.display_name}</Tag>
             <Tag>{currency(chosen.amount)}</Tag>
-            {samaRoute ? <Tag color="green"><CheckCircleOutlined/> مسار Sama مسجل</Tag>
-              : <Tag color="orange">التنفيذ غير معتمد لهذا العرض</Tag>}
+            {routeCanSendThroughSama
+              ? <Tag color="green"><CheckCircleOutlined/> المصدر: Sama</Tag>
+              : routeChoice?.sim_type === "mobilis-arsselli"
+                ? <Tag color="orange">Arsselli — تنفيذ العروض يحتاج اعتماد الربط</Tag>
+                : <Tag color="orange">مصدر الإرسال غير جاهز</Tag>}
           </Space> : <Typography.Text type="secondary">اختر العرض من الأعلى.</Typography.Text>}
+          {!isCustomer && chosen && (routeCheckBusy
+            ? <Typography.Text type="secondary">جاري اختيار المصدر المتاح من السيرفر...</Typography.Text>
+            : routeError
+              ? <Alert type="warning" showIcon message="يرجى المحاولة بعد حين" description={routeError}/>
+              : !routeChoice
+                ? <Alert type="warning" showIcon message="الخدمة غير متاحة حاليًا، يرجى المحاولة بعد حين"
+                    description="لا توجد شريحة معتمدة جاهزة برصيد كافٍ لتنفيذ نفس العرض. يظهر العرض في الكتالوج حتى لو لم يوجد مصدر تنفيذ."/>
+                : routeChoice.sim_type === "mobilis-arsselli"
+                  ? <Alert type="warning" showIcon message="وجد النظام مصدر Arsselli"
+                      description="نفس العرض يحتاج مسار Arsselli معتمدًا وربط تنفيذ العروض، ولن نحوله إلى رصيد عادي تلقائيًا."/>
+                  : null)}
           {isCustomer
             ? <Alert type="info" showIcon message="طلبات الزبائن لم تُربط بالمحفظة بعد"
                 description="نفس صفحة الفليكسي للجميع، لكن الإرسال لا يُفعّل لحساب الزبون قبل فحص الصلاحيات والرصيد من الخادم."/>
@@ -399,8 +457,11 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
                 {onOpenStations&&<Button size="small" onClick={onOpenStations}>تجهيز المحطات والشرائح</Button>}
               </Space>
             </Space>}
-          {lastJob && <Alert showIcon type={lastJob.status==="success"?"success":"info"}
-            message={"العملية: "+titleStatus(lastJob.status)}
+          {lastJob && <Alert showIcon type={lastJob.status==="success"?"success":lastJob.status==="failed"?"warning":"info"}
+            message={lastJob.status==="failed"
+              ? "فشلت العملية، يرجى المحاولة بعد حين"
+              : lastJob.status==="review" ? "طلبك قيد التحقق، لا تعاود الإرسال الآن"
+                : "العملية: "+titleStatus(lastJob.status)}
             description={<Space direction="vertical" size={4}>
               <Typography.Text copyable={{text:lastJob.job_uuid}}>مرجع العملية: {lastJob.job_uuid}</Typography.Text>
               {lastJob.result_code&&<Typography.Text>رمز النتيجة: {lastJob.result_code}</Typography.Text>}
@@ -415,7 +476,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
             message="حالة الطلب غير مؤكدة"
             description="لا تغيّر الرقم أو العرض ولا تبدأ طلبًا جديدًا حتى تتأكد من العمليات. سيُستخدم نفس مفتاح العملية عند إعادة المحاولة."/>}
           <Button type="primary" size="large" block loading={sendBusy}
-            disabled={isCustomer||!db||!stationUuid||!executePrerequisitesReady||!samaRoute||!validPhone(normalizePhone(phone))||Boolean(lastJob)}
+            disabled={isCustomer||!db||!routeCanSendThroughSama||!validPhone(normalizePhone(phone))||Boolean(lastJob)}
             onClick={submit}>إرسال العرض</Button>
           <Typography.Text type="secondary" style={{fontSize:12}}>
             لا تُرسل أي عملية بمجرد اختيار العرض. الإرسال الفعلي يتطلب تأكيدًا صريحًا، وموافقة السيرفر.
