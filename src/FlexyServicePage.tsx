@@ -61,7 +61,11 @@ const titleStatus = (status: string) =>
   ({ queued: "في الطابور", claimed: "قيد المعالجة", success: "نجحت", failed: "فشلت", review: "تحتاج مراجعة", unavailable: "غير متاحة" } as Record<string, string>)[status] || status;
 const currency = (amount: number) => new Intl.NumberFormat("en-US").format(amount) + " دج";
 
-export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { db?: SupabaseClient; isCustomer: boolean; onOpenStations?: () => void }) {
+export default function FlexyServicePage({ db, isCustomer, onOpenStations, simulation = false, initialPhone = "", onPhoneChange }: {
+  db?: SupabaseClient; isCustomer: boolean; onOpenStations?: () => void;
+  /** Lab only: testing controls never affect live financial authorization. */
+  simulation?: boolean; initialPhone?: string; onPhoneChange?: (phone:string) => void;
+}) {
   const [mode, setMode] = useState<Mode>("credit");
   const [offersRequest, setOffersRequest] = useState(0);
   const [confirmSend, setConfirmSend] = useState(false);
@@ -71,7 +75,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
     setIdentity(value);
     setChosenId(null);
   }, []);
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState(initialPhone);
   const [offers, setOffers] = useState<Offer[]>([]);
   const [loading, setLoading] = useState(false);
   const [catalogError, setCatalogError] = useState("");
@@ -306,7 +310,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
         requestRef.current = { ...request, job };
         savePending(requestRef.current);
         setUnknownResult(false);
-        message.success(result.reused ? "طلب موجود مسبقًا، لم يُكرر" : "تم إرسال الطلب إلى Station Connect");
+        message.success(simulation ? "تم تسجيل طلب شحن وهمي في المحاكاة فقط" : result.reused ? "طلب موجود مسبقًا، لم يُكرر" : "تم إرسال الطلب إلى Station Connect");
       } catch {
         setUnknownResult(true);
         message.error("انقطع الاتصال. قد تكون العملية أُرسلت؛ لا تكررها.");
@@ -361,6 +365,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
               setAmount(null); setConfirmSend(false);
             }
             setPhone(next);
+            onPhoneChange?.(next);
           }}
         />
         <Segmented
@@ -507,7 +512,9 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
       onCancel={() => setConfirmSend(false)} onOk={() => submit(true)}>
       <Typography.Paragraph>الرقم: <bdi dir="ltr">{normalizePhone(phone)}</bdi></Typography.Paragraph>
       <Typography.Paragraph>{chosen?.display_name} — {currency(chosen?.amount || 0)}</Typography.Paragraph>
-      <Typography.Paragraph>المصدر: Sama. تكلفة الشريحة عند النجاح: {currency((chosen?.amount || 0) + 10)}. هذه عملية شحن حقيقية.</Typography.Paragraph>
+      <Typography.Paragraph>{simulation
+         ? "هذه تجربة وهمية معزولة، بدون شريحة أو رصيد أو اتصال Supabase."
+         : `المصدر: Sama. تكلفة الشريحة عند النجاح: ${currency((chosen?.amount || 0) + 10)}. هذه عملية شحن حقيقية.`}</Typography.Paragraph>
     </Modal>
     {!isCustomer && db && <FlexyOperationHistory db={db} refreshToken={historyRefresh}/> }
   </Space>;
