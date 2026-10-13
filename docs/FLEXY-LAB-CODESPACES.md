@@ -22,7 +22,7 @@
 - Discovery classification cache defaults to 7 days; every new generated number gets a deterministic demonstration group. Changing it in the lab panel erases only its cached classification so the next عروض click discovers it again.
 - Unknown mock RPCs error; the adapter must never delegate to a live Supabase DB. New page functions need explicitly mocked APIs and an automated test, not a silent fallback.
 - The production client may be newer or older: this lab branch starts from the current main at the date of creation. **Never merge without comparing `main` first and running all tests.**
-- GitHub Pages remains **main only**. Branch push workflow `lab-simulator-check.yml` runs source unit tests, simulator contract tests and TS/Vite build. The existence of a workflow is not proof it passed; check Actions before acceptance.
+- GitHub Pages remains **main only**. Branch push workflow `lab-simulator-check.yml` runs source unit tests, simulator contract tests and TS/Vite build. CI passed on lab branch: run [38421327940](https://github.com/amordz72/flexy-mini/actions/runs/38421327940), `npm test`, `node --test tests/lab-simulator.test.mjs`, and `npm run build` all SUCCESS. This remains **source/test/build verification only**, not live Codespaces/browser/mobile acceptance.
 - This lab retains the main UI's current offer-specific send prerequisites for selection but performs only **fake transactions**. Route eligibility is simulated, **not a proof of financial readiness**.
 
 ## Commands in the Codespace terminal
