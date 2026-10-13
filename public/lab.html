@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#2563eb">
+<meta name="robots" content="noindex,nofollow">
+<title>Flexy Mini — مختبر العروض</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif;color:#202938;background:#f6f8fc;color-scheme:light}
+*{box-sizing:border-box}body{margin:0;font-size:15px}
+main{max-width:790px;margin:0 auto;padding:15px 12px 60px}
+header{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:14px}
+h1{font-size:21px;margin:0}h2{font-size:17px;margin:0 0 13px}p{line-height:1.7}
+.small{font-size:12px;color:#667085}.alert{background:#fff8e7;border:1px solid #f5dca5;border-radius:11px;padding:11px 13px;margin:10px 0 14px;color:#69491b}
+.card{border:1px solid #e3e9f3;border-radius:13px;background:white;box-shadow:0 2px 10px #13224108;padding:15px;margin-bottom:12px}
+.pill{display:inline-block;border:1px solid #bac9ea;border-radius:20px;padding:4px 10px;background:#f1f5ff;font-size:12px;font-weight:700;color:#2855a4}
+.pill.warn{border-color:#f7d5aa;background:#fff6ea;color:#a26112}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+label{display:block;font-weight:650;font-size:13px;margin-bottom:5px}
+select,input{width:100%;border:1px solid #c8d1e2;border-radius:8px;padding:11px;font-size:15px;background:white;min-height:43px}
+input{direction:ltr;text-align:left;font-variant-numeric:tabular-nums}
+button{font:inherit;border:1px solid #ccd4e0;border-radius:9px;background:white;color:#28364a;padding:10px 13px;min-height:42px;cursor:pointer}
+button.primary{background:#2563eb;border-color:#2563eb;color:#fff;font-weight:650}
+button:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.row.justify{justify-content:space-between}
+.phone{font-weight:750;font-size:21px;direction:ltr;text-align:left;letter-spacing:1.2px;flex:1}
+.tabs{display:flex;gap:6px;background:#eef2f8;border-radius:10px;padding:4px;margin-top:12px}
+.tabs button{flex:1;background:transparent;border:none;font-weight:650}
+.tabs button.active{background:#fff;box-shadow:0 1px 4px #0001;color:#185acf}
+.offer{display:flex;gap:10px;align-items:center;padding:12px 9px;border-top:1px solid #eef1f6;background:white;cursor:pointer}
+.offer:has(input:checked){background:#eef5ff}
+.offer input{width:17px;height:17px;min-height:auto;margin:0}
+.offer strong{flex:1;font-size:14px}.offer .price{font-weight:700;white-space:nowrap}
+.offer.disabled{opacity:.55;cursor:not-allowed}
+.family{font-weight:750;color:#34445e;padding:11px 8px;background:#f4f7fb;border-radius:7px;margin-top:12px}
+.empty{color:#718096;text-align:center;padding:22px}
+.result{padding:12px;border-radius:9px;background:#eaf7f0;color:#166439}
+.result.failed{background:#fff3e9;color:#9e4b21}
+.result.review{background:#fef6dd;color:#865e11}
+.summary{display:flex;gap:10px;justify-content:space-between;align-items:center;margin:12px 0}
+.summary strong{font-size:17px}
+.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:12px;min-width:450px}
+th,td{text-align:right;padding:9px 5px;border-bottom:1px solid #edf1f7;white-space:nowrap}
+th{background:#f7f9fc;color:#526079}
+#confirmBox{border:1px solid #bed0f3;border-radius:10px;padding:12px;background:#f4f8ff;margin:13px 0}
+#confirmBox p{margin:6px 0 11px}
+#toast{position:fixed;bottom:18px;left:12px;right:12px;max-width:520px;margin:auto;background:#24344a;color:white;padding:10px;border-radius:9px;text-align:center;display:none;z-index:2}
+@media(max-width:420px){.controls{grid-template-columns:1fr}.card{padding:12px}main{padding:10px 9px 55px}h1{font-size:19px}}
+</style>
+</head>
+<body>
+<main>
+<header><h1>⚡ Flexy Mini — المختبر</h1><span class="pill">محاكاة</span></header>
+<div class="alert"><strong>تجربة فقط — لا يوجد شحن حقيقي.</strong> يولّد البرنامج رقمًا وهميًا ويعرض عروضه تلقائيًا. لا اتصال بـSupabase أو المودم أو شبكة موبيليس.</div>
+<section class="card">
+  <div class="row justify"><h2>الرقم التجريبي</h2><span id="identity" class="pill">استكشاف وهمي</span></div>
+  <div class="row"><div id="phone" class="phone" aria-label="رقم تجريبي"></div><button class="primary" id="nextPhone">رقم جديد + عروض</button></div>
+  <div class="tabs" role="tablist"><button id="creditTab" role="tab">رصيد عادي</button><button id="offerTab" role="tab" class="active">عروض</button></div>
+  <p class="small" id="discoveryText">يجري تحديد نوع عروض الرقم...</p>
+</section>
+<section class="card">
+<h2>إعدادات التجربة</h2>
+<div class="controls">
+  <div><label for="groupSelect">مجموعة عروض الرقم</label><select id="groupSelect"><option value="PIXX">PixX</option><option value="REVOLUTION">Revolution</option><option value="SAMA">Sama Mix / Talk / Net</option></select></div>
+  <div><label for="resultSelect">نتيجة الإرسال الوهمي</label><select id="resultSelect"><option value="success">نجاح وهمي</option><option value="failed">فشل وهمي</option><option value="review">مراجعة / غير مؤكدة</option></select></div>
+</div>
+</section>
+<section class="card" id="offerSection">
+ <div class="row justify"><h2>العروض المتاحة</h2><span id="offerCount" class="small"></span></div>
+ <div id="offers"></div>
+ <div id="selected"></div>
+ <div id="confirmBox" hidden>
+  <strong>تأكيد إرسال وهمي</strong><p id="confirmText"></p>
+  <div class="row"><button class="primary" id="confirmYes">تأكيد تجريبي</button><button id="confirmNo">إلغاء</button></div>
+ </div>
+ <div id="operationResult" role="status"></div>
+</section>
+<section class="card" id="creditSection" hidden>
+<h2>رصيد عادي</h2><div class="empty">قسم الرصيد معروض للمحاكاة فقط. لا تنفيذ مالي.</div>
+</section>
+<section class="card">
+<div class="row justify"><h2>سجل المحاكاة</h2><button id="reset">مسح التجارب</button></div>
+<div class="table-wrap"><table><thead><tr><th>الرقم التجريبي</th><th>العرض</th><th>القيمة</th><th>الحالة</th><th>الوقت</th></tr></thead><tbody id="history"></tbody></table></div>
+<p class="small">تُحفظ النتائج محليًا داخل هذا المتصفح فقط في مفتاح مستقل <code>flexy_public_lab_v1</code>. لا ننسخ معلومات العملاء أو مفاتيح الإنتاج.</p>
+</section>
+</main>
+<div id="toast" role="status"></div>
+<script>
+"use strict";
+(() => {
+ const STORE="flexy_public_lab_v1";
+ const groups=["PIXX","REVOLUTION","SAMA"];
+ const raw=[
+  ["PixX",50,"PixX 50",true],["PixX",100,"PixX 100 (1Go)",true],["PixX",500,"PixX 500 (5Go)",true],["PixX",1000,"PixX 1000 (13Go)",true],["PixX",2000,"PixX 2000 (30Go)",true],
+  ["Revolution",100,"Revolution 100",false],["Revolution",500,"Revolution 500",false],["Revolution",1000,"Revolution 1000",true],
+  ["Revolution",1200,"Revolution 1200",true],["Revolution",1500,"Revolution 1500",true],["Revolution",1800,"Revolution 1800",true],
+  ["Revolution",2000,"Revolution 2000",true],["Revolution",2500,"Revolution 2500",true],
+  ["Sama Mix",100,"Sama Mix 100",true],["Sama Mix",500,"Sama Mix 500",true],["Sama Mix",1000,"Sama Mix 1000",true],
+  ["Sama Mix",1500,"Sama Mix 1500",true],["Sama Mix",2000,"Sama Mix 2000",true],
+  ["Sama Talk",500,"Sama Talk 500",true],["Sama Talk",1000,"Sama Talk 1000",true],["Sama Talk",1500,"Sama Talk 1500",true],["Sama Talk",2000,"Sama Talk 2000",true],
+  ["Sama Net",500,"Sama Net 500",true],["Sama Net",1000,"Sama Net 1000",true],["Sama Net",1500,"Sama Net 1500",true],["Sama Net",2000,"Sama Net 2000",true]
+ ];
+ const $=id=>document.getElementById(id);
+ const read=()=>{try{const v=JSON.parse(localStorage.getItem(STORE)||"null");return v&&typeof v==="object"&&v.phoneGroups&&Array.isArray(v.history)?v:null}catch{return null}};
+ let state=read()||{phoneGroups:{},history:[],outcome:"success"};
+ const save=()=>{try{localStorage.setItem(STORE,JSON.stringify(state))}catch{toast("تعذر الحفظ محليًا؛ تحقق من مساحة المتصفح")}};
+ let currentPhone="",currentGroup="",selected=null,mode="offers",confirming=false;
+ const fmt=n=>Number(n).toLocaleString("en-US")+" دج";
+ const groupOf=f=>f==="PixX"?"PIXX":f==="Revolution"?"REVOLUTION":"SAMA";
+ const hash=v=>Array.from(v).reduce((a,c)=>(((a*31)+c.charCodeAt(0))>>>0),7)%3;
+ const randomPhone=()=>{
+  const values=new Uint32Array(1);crypto.getRandomValues(values);
+  return "055"+String(values[0]%10000000).padStart(7,"0")
+ };
+ function toast(msg){$("toast").textContent=msg;$("toast").style.display="block";clearTimeout(toast.timer);toast.timer=setTimeout(()=>$("toast").style.display="none",2200)}
+ function createPhone(){
+  let p;for(let i=0;i<16;i++){p=randomPhone();if(p!==currentPhone&&!Object.hasOwn(state.phoneGroups,p))break}
+  currentPhone=p;currentGroup=state.phoneGroups[p]?.group||groups[hash(p)];
+  if(!state.phoneGroups[p]||Date.now()-(state.phoneGroups[p].at||0)>7*86400000)
+     state.phoneGroups[p]={group:currentGroup,at:Date.now()};
+  mode="offers";selected=null;confirming=false;save();render();
+ }
+ function setGroup(g){if(!groups.includes(g))return;currentGroup=g;state.phoneGroups[currentPhone]={group:g,at:Date.now()};save();selected=null;confirming=false;render()}
+ function setMode(m){mode=m;selected=null;confirming=false;render()}
+ function render(){
+  $("phone").textContent=currentPhone;
+  $("groupSelect").value=currentGroup;
+  $("resultSelect").value=state.outcome;
+  $("identity").textContent=currentGroup==="SAMA"?"Sama":currentGroup==="PIXX"?"PixX":"Revolution";
+  $("discoveryText").textContent="تم تحديد العروض من سجل المحاكاة للرقم. الصلاحية التجريبية 7 أيام.";
+  $("offerTab").classList.toggle("active",mode==="offers");
+  $("creditTab").classList.toggle("active",mode==="credit");
+  $("offerSection").hidden=mode!=="offers";$("creditSection").hidden=mode!=="credit";
+  $("confirmBox").hidden=!confirming;
+  $("operationResult").textContent="";
+  const visible=raw.filter(o=>groupOf(o[0])===currentGroup);
+  $("offerCount").textContent=visible.length+" عروض";
+  const container=$("offers");container.replaceChildren();
+  let family="";
+  for(const offer of visible){
+   if(offer[0]!==family){family=offer[0];if(currentGroup==="SAMA"){const label=document.createElement("div");label.className="family";label.textContent=family;container.append(label)}}
+   const row=document.createElement("label");row.className="offer"+(offer[3]?"":" disabled");
+   const input=document.createElement("input");input.type="radio";input.name="offer";input.disabled=!offer[3];input.checked=Boolean(selected&&selected[2]===offer[2]);
+   input.onchange=()=>{selected=offer;confirming=false;render()};
+   const name=document.createElement("strong");name.textContent=offer[2]+(!offer[3]?" — التنفيذ غير متاح":"");
+   const price=document.createElement("span");price.className="price";price.textContent=fmt(offer[1]);
+   row.append(input,name,price);container.append(row);
+  }
+  const slot=$("selected");slot.replaceChildren();
+  if(selected){
+   const box=document.createElement("div");box.className="summary";
+   const label=document.createElement("strong");label.textContent=selected[2];
+   const button=document.createElement("button");button.className="primary";button.textContent="إرسال تجريبي";button.onclick=()=>{confirming=true;render()};
+   box.append(label,button);slot.append(box);
+  }
+  if(confirming&&selected)$("confirmText").textContent=currentPhone+" — "+selected[2]+" — "+fmt(selected[1])+". لا يوجد خصم أو إرسال حقيقي.";
+  drawHistory();
+ }
+ function drawHistory(){
+  $("history").replaceChildren();
+  if(!state.history.length){const tr=document.createElement("tr");const td=document.createElement("td");td.colSpan=5;td.textContent="لا توجد عمليات وهمية بعد";tr.append(td);$("history").append(tr);return}
+  for(const record of state.history.slice(0,30)){
+   const tr=document.createElement("tr");
+   for(const v of [record.phone,record.name,fmt(record.amount),record.outcome==="success"?"نجحت وهميًا":record.outcome==="failed"?"فشلت وهميًا":"مراجعة وهمية",record.time]){
+    const td=document.createElement("td");td.textContent=v;tr.append(td);
+   }$("history").append(tr);
+  }
+ }
+ $("nextPhone").onclick=createPhone;
+ $("groupSelect").onchange=e=>setGroup(e.target.value);
+ $("resultSelect").onchange=e=>{state.outcome=e.target.value;save();toast("تم حفظ نتيجة المحاكاة القادمة")};
+ $("offerTab").onclick=()=>setMode("offers");$("creditTab").onclick=()=>setMode("credit");
+ $("confirmNo").onclick=()=>{confirming=false;render()};
+ $("confirmYes").onclick=()=>{
+  if(!selected)return;
+  const outcome=state.outcome,copy=selected;
+  state.history.unshift({phone:currentPhone,name:copy[2],amount:copy[1],outcome,time:new Date().toLocaleTimeString("ar-DZ")});
+  state.history=state.history.slice(0,100);save();confirming=false;selected=null;render();
+  const box=$("operationResult");box.className="result"+(outcome==="success"?"":(" "+outcome));
+  box.textContent=outcome==="success"?"نجحت العملية الوهمية — لم يُخصم أي رصيد":outcome==="failed"?"فشلت العملية الوهمية — دون أي إرسال":"النتيجة الوهمية غير مؤكدة — لا تكرر العملية";
+ };
+ $("reset").onclick=()=>{state={phoneGroups:{},history:[],outcome:"success"};save();createPhone();toast("تم مسح التجارب المحلية")};
+ createPhone();
+})();
+</script>
+</body></html>
