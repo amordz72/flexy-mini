@@ -66,16 +66,22 @@ const fixture={
  sim_type:'mobilis-sama',has_pin:true,sim_last_seen_at:new Date().toISOString()}],
  hardware2:[{modem_uuid:'m-2',modem_ip:'192.168.70.70',device_name:'Huawei',
  modem_last_seen_at:new Date().toISOString(),sim_uuid:'sim-2',msisdn:'',imsi:'60301',
- sim_type:'mobilis-arsselli',has_pin:true,sim_last_seen_at:new Date().toISOString()}]
+ sim_type:'mobilis-arsselli',has_pin:true,sim_last_seen_at:new Date().toISOString()}],
+ usbDirectory:[
+  {modem_uuid:'m-1',station_uuid:'s-1',usb_number:1,usb_label:'001',serial_number:'AB000004255'},
+  {modem_uuid:'m-2',station_uuid:'s-2',usb_number:2,usb_label:'002',serial_number:'CD999004255'}
+ ]
 };
 const data=x=>({data:x,error:null});
 const textOf=n=>(n.children||[]).map(x=>typeof x==='string'?x:textOf(x)).join('');
-function makeDb(withLabels=true){
+function makeDb(withLabels=true,usbDirectory=fixture.usbDirectory){
  const calls=[];return {calls,auth:{getUser:async()=>({data:{user:{id:'admin-a'}},error:null})},rpc:async(name,args)=>{
   calls.push({name,args});
   if(name==='flexy_mini_station_overview')return data(fixture.stations);
   if(name==='station_connect_admin_identity_labels')return withLabels?data(fixture.labels):{data:null,error:{code:'PGRST202',message:'not deployed'}};
   if(name==='station_connect_admin_hardware')return data(args?.p_station_uuid==='s-2'?fixture.hardware2:fixture.hardware);
+  if(name==='station_connect_admin_usb_sim_center')
+   return usbDirectory===null?{data:null,error:{code:'PGRST202',message:'unavailable'}}:data(usbDirectory);
   if(name==='station_connect_admin_save_identity_label')return data({
    uuid:args.p_uuid,display_code:args.p_entity==='sim'?'sama-1':'server-1',custom_label:args.p_label.trim()||null});
   return data([]);
@@ -170,11 +176,15 @@ test('old server without names RPC keeps station list usable',async()=>{
 });
 
 test('mobile modem cards contain exactly one details Collapse per physical modem',async()=>{
+ persistent.clear();
  globalThis.__stationMobileMode=true;
  let root;
  try{
   root=await open(makeDb());
-  const modemCards=root.root.findAllByType('card').filter(node=>node.props.title==='Huawei');
+  const modemCards=root.root.findAllByType('card').filter(node=>{
+   const name=node.props.title?.props?.children?.[0]?.props?.children;
+   return typeof name==='string'&&name.startsWith('USB ');
+  });
   assert.equal(modemCards.length,2,'two modem cards for two hardware records');
   assert.equal(root.root.findAllByType('collapse').length,2);
   for(const modem of modemCards){
@@ -186,6 +196,74 @@ test('mobile modem cards contain exactly one details Collapse per physical modem
   if(root)await act(async()=>root.unmount());
   delete globalThis.__stationMobileMode;
  }
+});
+test('USB and serial suffixes come from canonical modem identities, not list order or IP',async()=>{
+ persistent.clear();
+ globalThis.__stationMobileMode=true;
+ let root;
+ try{
+  const db=makeDb();root=await open(db);
+  assert.match(textOf(root.root),/USB 001/);
+  assert.match(textOf(root.root),/USB 002/);
+  // Colliding last six digits (004255) must expand for an unambiguous serial check.
+  assert.match(textOf(root.root),/Serial: 0004255/);
+  assert.match(textOf(root.root),/Serial: 9004255/);
+  assert.equal(db.calls.filter(x=>x.name==='station_connect_admin_usb_sim_center').length,1);
+  const readNames=db.calls.map(x=>x.name);
+  assert.equal(readNames.some(x=>/create_|update_sim|queue_balance|execute|recharge|ussd/.test(x)),false);
+  const filter=root.root.findAllByType('select').find(x=>x.props['aria-label']==='فلترة حسب السيرفر');
+  await act(async()=>filter.props.onChange('s-2'));
+  assert.doesNotMatch(textOf(root.root),/USB 001/);
+  assert.match(textOf(root.root),/USB 002/);
+  assert.equal(db.calls.filter(x=>x.name==='station_connect_admin_usb_sim_center').length,1,
+   'changing the filter only changes visibility, not stable USB identity');
+ }finally{
+  if(root)await act(async()=>root.unmount());
+  delete globalThis.__stationMobileMode;
+ }
+});
+test('desktop modem table uses the same stable USB and serial identity',async()=>{
+ persistent.clear();
+ const root=await open(makeDb());
+ assert.match(textOf(root.root),/USB 001/);
+ assert.match(textOf(root.root),/USB 002/);
+ assert.match(textOf(root.root),/Serial: 0004255/);
+ await act(async()=>root.unmount());
+});
+test('unknown identity or missing serial never fabricates labels from table order',async()=>{
+ persistent.clear();
+ globalThis.__stationMobileMode=true;
+ let missing,failed;
+ try{
+  missing=await open(makeDb(true,[
+   {modem_uuid:'m-1',station_uuid:'s-1',usb_number:21,usb_label:'021',serial_number:null}
+  ]));
+  assert.match(textOf(missing.root),/USB 021/);
+  assert.match(textOf(missing.root),/Serial: غير مقروء/);
+  assert.match(textOf(missing.root),/USB غير متاح/); // second modem was not mapped
+  await act(async()=>missing.unmount());missing=null;
+  failed=await open(makeDb(true,null));
+  assert.doesNotMatch(textOf(failed.root),/USB 001|USB 002/);
+  assert.match(textOf(failed.root),/USB غير متاح/);
+  const warnings=failed.root.findAllByType('alert').map(x=>x.props.message).filter(Boolean);
+  assert.ok(warnings.some(x=>x.includes('تعذر قراءة رقم USB')));
+ }finally{
+  if(missing)await act(async()=>missing.unmount());
+  if(failed)await act(async()=>failed.unmount());
+  delete globalThis.__stationMobileMode;
+ }
+});
+test('same full Serial is explicitly flagged as ambiguous even with different USB labels',async()=>{
+ persistent.clear();
+ const rows=[
+  {modem_uuid:'m-1',station_uuid:'s-1',usb_number:1,usb_label:'001',serial_number:'SAME_SERIAL'},
+  {modem_uuid:'m-2',station_uuid:'s-2',usb_number:2,usb_label:'002',serial_number:'SAME_SERIAL'}
+ ];
+ const root=await open(makeDb(true,rows));
+ assert.match(textOf(root.root),/USB 001/);
+ assert.match(textOf(root.root),/USB 002/);
+ assert.equal((textOf(root.root).match(/\(متكرر\)/g)||[]).length,2);
+ await act(async()=>root.unmount());
 });
 test('CSS applies full-height only to grid cards, not all nested modem cards',async()=>{
  const css=await readFile(new URL('../src/style.css',import.meta.url),'utf8');
