@@ -16,21 +16,14 @@ export default function ArsselliSend696({db,phone,amount}:{db:SupabaseClient;pho
   let live=true;
   const load=async()=>{
    try{
-    const {data,error}=await db.rpc("flexy_mini_station_overview");
+    const {data,error}=await db.rpc("flexy_mini_station_fleet_summary");
     if(error)throw error;
-    const rows=Array.isArray(data)?data:[];
-    const active=rows.filter((s:any)=>s.status==="approved"&&Date.now()-Date.parse(s.last_seen_at)<90000);
-    for(const station of active){
-     const {data:hardware,error:hwError}=await db.rpc("station_connect_admin_hardware",{p_station_uuid:station.station_uuid});
-     if(hwError||!Array.isArray(hardware))continue;
-     const sim=hardware.find((h:any)=>h.sim_type==="mobilis-arsselli"&&h.sim_uuid&&h.has_pin&&Date.now()-Date.parse(h.modem_last_seen_at)<90000);
-     if(sim){if(live){setStationUuid(station.station_uuid);setReady(true);}return;}
-    }
-    if(live){setStationUuid(null);setReady(false);}
+    const route=Array.isArray(data?.arsselli_routes)?data.arsselli_routes[0]:null;
+    if(live){setStationUuid(route?.station_uuid||null);setReady(Boolean(route));}
    }catch{if(live){setStationUuid(null);setReady(false);}}
   };
   void load();
-  const interval=setInterval(()=>void load(),30000);
+  const interval=setInterval(()=>void load(),15000);
   return()=>{live=false;clearInterval(interval);};
  },[db]);
  const [confirm,setConfirm]=useState(false);
@@ -74,7 +67,7 @@ export default function ArsselliSend696({db,phone,amount}:{db:SupabaseClient;pho
   <Select aria-label="حساب الموزع" value={account} options={accounts} onChange={setAccount}/>
   <Typography.Text type="secondary">الرصيد يُراجع قبل التنفيذ خارج دالة الإرسال. لا يتم الاستعلام عنه تلقائيًا هنا.</Typography.Text>
   <Button type="primary" disabled={!experimental696Enabled||!ready||!stationUuid||!valid||busy||uncertain||Boolean(job)} onClick={()=>setConfirm(true)}>إرسال رصيد</Button>
-  {!ready&&<Alert type="warning" showIcon message="لا توجد شريحة أرسلي متصلة مع PIN ومحطة معتمدة (يتم التحقق كل 30 ثانية)"/>}
+  {!ready&&<Alert type="warning" showIcon message="لا توجد شريحة أرسلي متصلة مع PIN ومحطة معتمدة (يتم تحديث الملخص كل 15 ثانية)"/>}
   {error&&<Alert type="error" showIcon message={error}/>}
   {uncertain&&<Alert type="warning" showIcon message="لا تكرر العملية؛ راجع سجل الإرسال أولًا"/>}
   {job&&<Alert type="info" showIcon message={"حالة العملية: "+job.status} description={<Space direction="vertical"><Typography.Text copyable>{job.job_uuid}</Typography.Text><Typography.Text>{job.result_code||"بانتظار رد الشبكة"}</Typography.Text><Typography.Text>{job.result_text||""}</Typography.Text><Button loading={busy} onClick={()=>void check()}>تحديث نتيجة العملية</Button></Space>}/>}
