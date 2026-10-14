@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Authenticated, Refine, useLogin, useLogout } from "@refinedev/core";
 import type { AuthProvider } from "@refinedev/core";
@@ -12,12 +12,12 @@ import { ConfigProvider, Form, Input, Layout, Menu, Typography, Card, Row, Col, 
 import { HomeOutlined, PhoneOutlined, WifiOutlined, AppstoreOutlined, HistoryOutlined, DatabaseOutlined, PlusOutlined, UserOutlined, SafetyCertificateOutlined, DesktopOutlined, TeamOutlined, NotificationOutlined, SettingOutlined, ArrowUpOutlined } from "@ant-design/icons";
 import "antd/dist/reset.css";
 import "./style.css";
-import AdSystem from "./AdSystem";
-import AdminWallet from "./AdminWallet";
-import SupplierSites from "./SupplierSites";
-import CreditAdmin from "./CreditAdmin";
-import StationOverview from "./StationOverview";
-import FlexyServicePage from "./FlexyServicePage";
+const AdSystem = React.lazy(() => import("./AdSystem"));
+const AdminWallet = React.lazy(() => import("./AdminWallet"));
+const SupplierSites = React.lazy(() => import("./SupplierSites"));
+const CreditAdmin = React.lazy(() => import("./CreditAdmin"));
+const StationOverview = React.lazy(() => import("./StationOverview"));
+const FlexyServicePage = React.lazy(() => import("./FlexyServicePage"));
 import BuildCopyButton from "./BuildCopyButton";
 import { supportPhone, supportWhatsApp } from "./settings";
 
@@ -676,6 +676,9 @@ function MovementLedger({admin}:{admin:boolean}) {
   <div style={{overflowX:"auto"}}><Table size="small" rowKey="id" dataSource={[]} pagination={{pageSize:10,showSizeChanger:true,pageSizeOptions:["10","20","50"]}} locale={{emptyText:"لا توجد تحويلات مسجلة في هذه الواجهة"}} columns={movementFields.filter(f=>fields.includes(f.key)).map(f=>({title:f.label,dataIndex:f.key,key:f.key}))}/></div>
  </Card>;
 }
+function DeferredPanel({children}:{children:React.ReactNode}) {
+ return <Suspense fallback={<Card loading style={{minHeight:100}}/>}>{children}</Suspense>;
+}
 function Dashboard({customerToken,customerAccount,customerError,onCustomerLogout}:{customerToken?:string;customerAccount?:{username:string;phone?:string;party_id:number;wallet?:{balance:number;debt:number;profit:number}|null}|null;customerError?:string;onCustomerLogout?:()=>void} = {}) {
   const isCustomer=Boolean(customerToken);
   const { mutate: logout } = useLogout();
@@ -719,8 +722,8 @@ function Dashboard({customerToken,customerAccount,customerError,onCustomerLogout
           {isCustomer && !customerAccount && <Alert type={customerError?"warning":"info"} showIcon message={customerError||"جاري التحقق من حساب الزبون"} style={{marginBottom:16}}/>}
           {isCustomer && customerAccount && page==="home" && <Alert type="success" showIcon message={"مرحبًا "+customerAccount.username} style={{marginBottom:16}}/>}
           {page === "home" ? <>
-            {client && <div style={{marginBottom:18}}><AdSystem db={client} customer={isCustomer}/></div>}
-            {!isCustomer && client && <AdminWallet db={client}/>}
+            {client && <div style={{marginBottom:18}}><DeferredPanel><AdSystem db={client} customer={isCustomer}/></DeferredPanel></div>}
+            {!isCustomer && client && <DeferredPanel><AdminWallet db={client}/></DeferredPanel>}
             <Card style={{marginBottom:18}} title="ملخص حسابي"><Row gutter={[12,12]}>{(["الرصيد","الديون","الأرباح"] as const).map((label,i)=><Col xs={8} key={label}><div style={{textAlign:"center"}}><Text type="secondary">{label}</Text><div><Text strong>{isCustomer&&customerAccount?.wallet ? Number(customerAccount.wallet[([ "balance","debt","profit" ] as const)[i]]).toLocaleString("ar-DZ")+" دج" : "غير متاح حاليًا"}</Text></div></div></Col>)}</Row></Card>
 
             <Title level={4} style={{ marginBottom: 16 }}>الخدمات</Title>
@@ -731,7 +734,7 @@ function Dashboard({customerToken,customerAccount,customerError,onCustomerLogout
                 { title: "بطاقات رقمية", subtitle: "ألعاب، اتصالات وبرامج", color: "#625ee8", target: "store", symbol: "AppstoreOutlined" }
               ].map(service => <Col xs={24} md={8} key={service.title}><Card hoverable onClick={() => setPage(service.target)} style={{background:service.color,borderColor:service.color}}><Space direction="vertical" size="middle"><Space align="center"><span style={{color:"#fff"}}>{service.symbol==="PhoneOutlined"?<PhoneOutlined/>:service.symbol==="WifiOutlined"?<WifiOutlined/>:<AppstoreOutlined/>}</span><Typography.Text strong style={{color:"#fff"}}>{service.title}</Typography.Text></Space><Typography.Text style={{color:"#fff"}}>{service.subtitle}</Typography.Text></Space></Card></Col>)}
             </Row>
-          </> : page === "flexy" ? <FlexyServicePage db={client} isCustomer={isCustomer} onOpenStations={isCustomer ? undefined : () => setPage("stations")}/> : isCustomer ? (page==="store"||page==="cards" ? <SharedCardsStore token={customerToken!}/> : page==="operations" ? <MovementLedger admin={false}/> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز"/></Card>) : page === "store" ? <SharedCardsStore/> : page === "ads" && client ? <AdSystem db={client} admin /> : page === "supplier-sites" && client ? <SupplierSites db={client}/> : page === "stations" && client ? <StationOverview db={client}/> : page === "settings" ? <ConnectionDiagnostics /> : page === "devices" ? <TrustedDevices /> : page === "wallets" ? <MiniWalletAdmin /> : page === "customers" ? <MasterCustomerLookup /> : page === "members" ? <><MiniMembers />{client&&<CreditAdmin db={client}/>}</> : page === "cards" ? <Space direction="vertical" size="large" style={{width:"100%"}}><SharedCardsStore/><CardsCatalog /></Space> : page === "operations" ? <MovementLedger admin={!isCustomer}/> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز" /></Card>}
+          </> : page === "flexy" ? <DeferredPanel><FlexyServicePage db={client} isCustomer={isCustomer} onOpenStations={isCustomer ? undefined : () => setPage("stations")}/></DeferredPanel> : isCustomer ? (page==="store"||page==="cards" ? <SharedCardsStore token={customerToken!}/> : page==="operations" ? <MovementLedger admin={false}/> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز"/></Card>) : page === "store" ? <SharedCardsStore/> : page === "ads" && client ? <DeferredPanel><AdSystem db={client} admin /></DeferredPanel> : page === "supplier-sites" && client ? <DeferredPanel><SupplierSites db={client}/></DeferredPanel> : page === "stations" && client ? <DeferredPanel><StationOverview db={client}/></DeferredPanel> : page === "settings" ? <ConnectionDiagnostics /> : page === "devices" ? <TrustedDevices /> : page === "wallets" ? <MiniWalletAdmin /> : page === "customers" ? <MasterCustomerLookup /> : page === "members" ? <><MiniMembers />{client&&<DeferredPanel><CreditAdmin db={client}/></DeferredPanel>}</> : page === "cards" ? <Space direction="vertical" size="large" style={{width:"100%"}}><SharedCardsStore/><CardsCatalog /></Space> : page === "operations" ? <MovementLedger admin={!isCustomer}/> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز" /></Card>}
           <div className="app-footer">Flexy Mini · Refine + Ant Design · عرض تجريبي فقط</div>
         </Content>
         <nav className="bottom-service-nav" aria-label="خدمات الموقع" dir="rtl">
