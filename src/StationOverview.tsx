@@ -3,6 +3,7 @@ import {Alert,Button,Card,Collapse,Descriptions,Empty,Grid,Input,Modal,Select,Sp
 import type {SupabaseClient} from "@supabase/supabase-js";
 import SamaOperationalActions,{readSamaStatus} from "./SamaOperationalActions";
 import ArsselliBalanceActions from "./ArsselliBalanceActions";
+import AdminSmsInbox from "./AdminSmsInbox";
 import type {SamaStatus} from "./SamaOperationalActions";
 
 type Station={station_uuid:string;status:string;computer_name:string|null;last_seen_at:string|null;agent_version:string|null};
@@ -463,6 +464,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
    {row.sim_type==="mobilis-arsselli"&&<ArsselliBalanceActions db={db} simUuid={row.sim_uuid}
     canRequestBalance={Boolean(row.has_pin&&online(row.modem_last_seen_at)&&online(row.sim_last_seen_at)
      &&stations.some(st=>st.station_uuid===row.station_uuid&&st.status==="approved"&&online(st.last_seen_at)))}/>}
+   {row.sim_type==="mobilis-arsselli"&&<AdminSmsInbox db={db} simUuid={row.sim_uuid}/>}
    {row.sim_type==="mobilis-sama"&&!sama&&
     <Alert type="warning" message="بيانات جاهزية Sama غير متاحة لهذه الشريحة، حدّث الحالة" showIcon/>}
   </Space>;
