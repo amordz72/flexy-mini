@@ -25,7 +25,7 @@ export default function AdminSmsInbox({db,simUuid}:{db:SupabaseClient;simUuid:st
   const {data,error:historyError}=await db.rpc("station_connect_admin_sms_inbox_history",{p_sim_uuid:simUuid});
   if(historyError){setError(historyError.message);return;}
   const rows=(data||[]) as Array<InboxJob&{raw_response:string|null;command_status:string|null}>;
-  setJobs(rows);
+  setJobs(rows.map(row=>({...row,status:row.command_status==="success"?"success":row.status})));
   const latest=rows[0];
   setMessages(latest?.command_status==="success"?parseMessages(String(latest.raw_response||"")):[]);
  },[db,simUuid]);
