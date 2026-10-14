@@ -1,7 +1,8 @@
 import {useCallback,useEffect,useState} from "react";
-import {Alert,Button,Card,Descriptions,Empty,Grid,Input,Modal,Select,Space,Table,Tag,Typography,message} from "antd";
+import {Alert,Button,Card,Collapse,Descriptions,Empty,Grid,Input,Modal,Select,Space,Table,Tag,Typography,message} from "antd";
 import type {SupabaseClient} from "@supabase/supabase-js";
-import SamaOperationalActions from "./SamaOperationalActions";
+import SamaOperationalActions,{readSamaStatus} from "./SamaOperationalActions";
+import type {SamaStatus} from "./SamaOperationalActions";
 
 type Station={station_uuid:string;status:string;computer_name:string|null;last_seen_at:string|null;agent_version:string|null};
 type Identity={display_code:string|null;custom_label:string|null};
@@ -9,6 +10,7 @@ type IdentityRow=Identity&{station_uuid?:string;sim_uuid?:string};
 type IdentityResponse={stations:IdentityRow[];sims:IdentityRow[]};
 type SimTypeOption={sim_type:string;display_name:string;operator_key:string;enabled:boolean;sort_order:number};
 type Hardware={modem_uuid:string;modem_ip:string|null;device_name:string|null;modem_last_seen_at:string|null;sim_uuid:string|null;msisdn:string|null;imsi:string|null;sim_type:string|null;has_pin:boolean;sim_last_seen_at:string|null};
+type StationHardware=Hardware&{station_uuid:string};
 type PhoneAttempt={sim_uuid:string;status:string;result_code:string|null;discovered_msisdn:string|null;started_at:string|null};
 type PhoneQueue={queued:boolean;state:string;job_uuid:string|null};
 type OoredooGuard={sim_uuid:string;is_locked:boolean;cooldown_until:string|null;last_failed_at:string|null;last_attempt_at:string|null;last_failure_code:string|null;admin_armed:boolean};
@@ -53,6 +55,9 @@ export default function StationOverview({db}:{db:SupabaseClient}){
  const [identitySaving,setIdentitySaving]=useState(false);
  const [hardware,setHardware]=useState<Record<string,Hardware[]>>({});
  const [selected,setSelected]=useState<string|null>(null);
+ const [filterStorageKey,setFilterStorageKey]=useState<string|null>(null);
+ const [samaRows,setSamaRows]=useState<SamaStatus[]>([]);
+ const [samaError,setSamaError]=useState("");
  const [loading,setLoading]=useState(false);
  const [hardwareLoading,setHardwareLoading]=useState(false);
  const [error,setError]=useState("");
@@ -71,6 +76,14 @@ export default function StationOverview({db}:{db:SupabaseClient}){
  const [simTypesLoading,setSimTypesLoading]=useState(false);
  const [draftTypes,setDraftTypes]=useState<Record<string,string>>({});
  const [typeSaving,setTypeSaving]=useState<string|null>(null);
+ // Keep the preference separate for each authenticated administrator on this device.
+ useEffect(()=>{
+  let active=true;
+  void db.auth.getUser().then(({data})=>{
+   if(active)setFilterStorageKey(data.user?.id?"flexy-mini:station-filter:"+data.user.id:null);
+  }).catch(()=>{if(active)setFilterStorageKey(null);});
+  return ()=>{active=false;};
+ },[db]);
  const loadIdentityNames=useCallback(async()=>{
   const {data,error}=await db.rpc("station_connect_admin_identity_labels");
   if(error){
@@ -144,6 +157,10 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   }
   setPhoneAttempts(results);
  },[db]);
+ const loadSamaStatus=useCallback(async()=>{
+  try{setSamaRows(await readSamaStatus(db));setSamaError("");}
+  catch(e){setSamaError("تعذر قراءة حالة Sama: "+(e instanceof Error?e.message:String(e)));}
+ },[db]);
  const loadHardwareRows=useCallback(async(targets:Station[])=>{
   if(targets.length===0){setHardware({});setHardwareLoading(false);return;}
   setHardwareLoading(true);
@@ -178,7 +195,31 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   setCheckedAt(new Date().toISOString());
   await loadHardwareRows(rows);
  },[db,loadHardwareRows]);
- useEffect(()=>{void refresh();void loadPhoneAttempts();void loadOoredooGuards();void loadSimTypes();void loadIdentityNames();},[refresh,loadPhoneAttempts,loadOoredooGuards,loadSimTypes,loadIdentityNames]);
+ useEffect(()=>{
+  void refresh();void loadPhoneAttempts();void loadOoredooGuards();void loadSimTypes();void loadIdentityNames();void loadSamaStatus();
+ },[refresh,loadPhoneAttempts,loadOoredooGuards,loadSimTypes,loadIdentityNames,loadSamaStatus]);
+ // Both heartbeat and age-based labels must refresh even when nobody clicks "تحديث".
+ useEffect(()=>{
+  const timer=window.setInterval(()=>{void refresh();void loadSamaStatus();},30000);
+  return ()=>window.clearInterval(timer);
+ },[refresh,loadSamaStatus]);
+ useEffect(()=>{
+  if(!filterStorageKey||stations.length===0)return;
+  try{
+   const stored=window.localStorage.getItem(filterStorageKey);
+   const valid=stored&&stations.some(station=>station.station_uuid===stored);
+   if(stored&&!valid)window.localStorage.removeItem(filterStorageKey);
+   setSelected(valid?stored:null);
+  }catch{setSelected(null);}
+ },[filterStorageKey,stations]);
+ const changeServer=(uuid:string|null)=>{
+  setSelected(uuid);
+  if(filterStorageKey){
+   try{if(uuid)window.localStorage.setItem(filterStorageKey,uuid);else window.localStorage.removeItem(filterStorageKey);}
+   catch{/* Storage may be disabled; UI still works for this session. */}
+  }
+  void loadHardwareRows(uuid?stations.filter(station=>station.station_uuid===uuid):stations);
+ };
  const saveManualNumber=async(sim:Hardware)=>{
   if(!sim.sim_uuid)return;
   const phone=normalizePhone(manualNumbers[sim.sim_uuid]||"");
@@ -342,13 +383,6 @@ export default function StationOverview({db}:{db:SupabaseClient}){
    </Space.Compact>
   </Space>;
  };
- const openHardware=async(uuid:string)=>{
-  setSelected(uuid);
-  await Promise.all([
-   loadHardwareRows(stations.filter(station=>station.station_uuid===uuid)),
-   loadPhoneAttempts(),loadOoredooGuards(),loadIdentityNames()
-  ]);
- };
  const serverName=(uuid:string)=>{
   const station=stations.find(item=>item.station_uuid===uuid);
   const identity=identityNames.stations[uuid];
@@ -356,65 +390,98 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   return identity?.custom_label?code+" — "+identity.custom_label:code;
  };
  const visibleStations=selected?stations.filter(station=>station.station_uuid===selected):stations;
- const visibleHardware=visibleStations.flatMap(station=>(hardware[station.station_uuid]||[]).map(item=>({...item,station_uuid:station.station_uuid})));
-
+ const simStatus=(row:StationHardware)=>samaRows.find(sim=>
+  sim.sim_uuid===row.sim_uuid&&sim.station_uuid===row.station_uuid&&sim.sim_type==="mobilis-sama");
+ const balanceLabel=(row:StationHardware)=>{
+  const sim=simStatus(row);
+  if(!sim)return "—";
+  if(!sim.balance_initialized)return "لم يُقرأ بعد";
+  return sim.operational_balance===null?"غير معروف":Number(sim.operational_balance).toLocaleString("en-US")+" دج";
+ };
+ const simActions=(row:StationHardware)=>{
+  if(!row.sim_uuid)return <Empty description="لا توجد شريحة في هذا المودم"/>;
+  const sama=simStatus(row);
+  return <Space direction="vertical" size="small" style={{width:"100%"}}>
+   <Descriptions size="small" bordered column={1} items={[
+    {key:"type",label:"تحديد النوع",children:typeAction(row)},
+    {key:"pin",label:"PIN الخدمة",children:pinAction(row,row.station_uuid)},
+    {key:"lookup",label:"معرفة الرقم",children:phoneAction(row,row.station_uuid)},
+    {key:"seen",label:"آخر ظهور",children:dateLabel(row.sim_last_seen_at||row.modem_last_seen_at)}
+   ]}/>
+   {sama&&<SamaOperationalActions db={db} sim={sama} onRefresh={loadSamaStatus}/>}
+   {row.sim_type==="mobilis-sama"&&!sama&&
+    <Alert type="warning" message="بيانات جاهزية Sama غير متاحة لهذه الشريحة، حدّث الحالة" showIcon/>}
+  </Space>;
+ };
+ const shortSim=(r:StationHardware)=><>
+  {identityCell("sim",r.sim_uuid,r.sim_uuid?"نوع غير محدد":"بدون شريحة")}
+ </>;
+ const simDetails=(r:StationHardware)=><Descriptions size="small" bordered column={1} items={[
+  {key:"ip",label:"IP محلي",children:<span dir="ltr">{r.modem_ip||"—"}</span>},
+  {key:"sim",label:"الشريحة",children:shortSim(r)},
+  {key:"phone",label:"رقم الشريحة",children:<span dir="ltr">{r.msisdn||"غير معروف"}</span>},
+  {key:"operator",label:"المتعامل",children:operatorNames[operatorOf(r)]},
+  {key:"type",label:"النوع",children:r.sim_type||"غير محدد"},
+  {key:"pin",label:"PIN",children:r.has_pin?"محفوظ بأمان":"غير محفوظ"},
+  ...(r.sim_type==="mobilis-sama"?[
+   {key:"ready",label:"استكشاف Sama",children:simStatus(r)?.discover_ready?<Tag color="green">جاهزة للاستكشاف</Tag>:<Tag color="orange">تحتاج تجهيزًا</Tag>},
+   {key:"balance",label:"الرصيد التشغيلي المسجل",children:balanceLabel(r)}
+  ]:[])
+ ]}/>;
  return <Space direction="vertical" size="middle" style={{width:"100%"}}>
-  <SamaOperationalActions db={db}/>
-  {error&&<Alert type="error" showIcon message={error}/>}
-  {checkedAt&&<Typography.Text type="secondary">آخر تحديث: {dateLabel(checkedAt)}</Typography.Text>}
-  <Card title="المحطات" extra={<Button loading={loading} onClick={()=>void refresh()}>تحديث</Button>}>
-   {mobile?<Space direction="vertical" size="middle" style={{width:"100%"}}>
-    {loading?<Card loading size="small"/>:visibleStations.length===0?<Empty description="لا توجد محطات مرئية للحساب"/>:visibleStations.map(station=><Card key={station.station_uuid} size="small" title={identityCell("station",station.station_uuid,station.computer_name||"محطة دون اسم")} extra={<Tag color={station.status==="approved"&&online(station.last_seen_at)?"green":"orange"}>{station.status==="approved"&&online(station.last_seen_at)?"متصل":"غير متصل"}</Tag>}>
-     <Descriptions size="small" bordered column={1} items={[
-      {key:"status",label:"الاعتماد",children:station.status},
-      {key:"last",label:"آخر اتصال",children:dateLabel(station.last_seen_at)},
-      {key:"version",label:"نسخة Agent",children:station.agent_version||"—"}
-     ]}/>
-     <Button style={{marginTop:12}} block onClick={()=>void openHardware(station.station_uuid)}>عرض مودمات المحطة</Button>
-    </Card>)}
-   </Space>:<Table rowKey="station_uuid" loading={loading} dataSource={visibleStations} size="small" scroll={{x:620}} pagination={{pageSize:10}} locale={{emptyText:<Empty description="لا توجد محطات مرئية للحساب"/>}} columns={[
-    {title:"الكمبيوتر",render:(_:unknown,r:Station)=>identityCell("station",r.station_uuid,r.computer_name||"محطة دون اسم")},
-    {title:"الحالة",render:(_:unknown,r:Station)=><Space><Tag color={r.status==="approved"?"green":"default"}>{r.status}</Tag><Tag color={r.status==="approved"&&online(r.last_seen_at)?"green":"orange"}>{r.status==="approved"&&online(r.last_seen_at)?"متصل":"غير متصل"}</Tag></Space>},
-    {title:"آخر اتصال",dataIndex:"last_seen_at",render:dateLabel},
-    {title:"نسخة Agent",dataIndex:"agent_version",render:(v:string|null)=>v||"—"},
-    {title:"المودمات",render:(_:unknown,r:Station)=><Button size="small" onClick={()=>void openHardware(r.station_uuid)}>عرض</Button>}
-   ]}/>}
-  </Card>
-  {stations.length>0&&<Card title="المودمات والشرائح" extra={<Button loading={hardwareLoading} onClick={()=>void loadHardwareRows(visibleStations)}>تحديث</Button>}>
-   <Space wrap size="small" style={{width:"100%",marginBottom:12}}>
-    <Typography.Text>السيرفر</Typography.Text>
-    <Select aria-label="فلترة حسب السيرفر" value={selected??"all"} style={{minWidth:190,maxWidth:"100%"}}
+  <Card title="المحطات والشرائح" extra={<Button loading={loading||hardwareLoading} onClick={()=>{void refresh();void loadSamaStatus();}}>تحديث</Button>}>
+   <Space direction="vertical" size="small" style={{width:"100%"}}>
+    <Typography.Text strong>فلترة حسب السيرفر</Typography.Text>
+    <Select aria-label="فلترة حسب السيرفر" value={selected??"all"} style={{width:"100%",maxWidth:380}}
      options={[{value:"all",label:"كل السيرفرات"},...stations.map(station=>({value:station.station_uuid,label:serverName(station.station_uuid)}))]}
-     onChange={value=>{const uuid=value==="all"?null:value;setSelected(uuid);void loadHardwareRows(uuid?stations.filter(station=>station.station_uuid===uuid):stations);}}/>
+     onChange={value=>changeServer(value==="all"?null:value)}/>
+    <Typography.Text type="secondary">الاختيار محفوظ لهذا الحساب على هذا الجهاز.</Typography.Text>
    </Space>
-   {mobile?<Space direction="vertical" style={{width:"100%"}} size="middle">
-    {!hardwareLoading&&visibleHardware.length===0?<Empty description="لا توجد مودمات مسجلة"/>:visibleHardware.map(r=><Card key={r.station_uuid+":"+r.modem_uuid+":"+(r.sim_uuid||"none")} size="small" title={<Space wrap><span>{r.device_name||"مودم"}</span><Tag color={online(r.modem_last_seen_at)?"green":"orange"}>{online(r.modem_last_seen_at)?"رُصد حديثًا":"لا يوجد رصد حديث"}</Tag></Space>}>
-     <Descriptions size="small" column={1} bordered items={[
-      {key:"server",label:"السيرفر",children:serverName(r.station_uuid)},
-      {key:"ip",label:"IP محلي",children:<span dir="ltr">{r.modem_ip||"—"}</span>},
-      {key:"sim",label:"الشريحة",children:identityCell("sim",r.sim_uuid,r.sim_uuid?"نوع غير محدد":"بدون شريحة")},
-      {key:"simPhone",label:"رقم الشريحة",children:<span dir="ltr">{r.msisdn||"غير معروف"}</span>},
-      {key:"operator",label:"المتعامل",children:operatorNames[operatorOf(r)]},
-      {key:"lookup",label:"معرفة الرقم",children:phoneAction(r,r.station_uuid)},
-      {key:"type",label:"النوع",children:typeAction(r)},
-      {key:"pin",label:"PIN",children:pinAction(r,r.station_uuid)},
-      {key:"last",label:"آخر ظهور",children:dateLabel(r.modem_last_seen_at)}
+  </Card>
+  {error&&<Alert type="error" showIcon message={error}/>}
+  {samaError&&<Alert type="warning" showIcon message={samaError}/>}
+  {checkedAt&&<Typography.Text type="secondary">آخر تحديث: {dateLabel(checkedAt)}</Typography.Text>}
+  {visibleStations.length===0&&!loading&&<Empty description="لا توجد محطات مرئية للحساب"/>}
+  {visibleStations.map(station=>{
+   const modems=(hardware[station.station_uuid]||[]).map(r=>({...r,station_uuid:station.station_uuid}));
+   const connected=station.status==="approved"&&online(station.last_seen_at);
+   return <Card key={station.station_uuid}
+    title={identityCell("station",station.station_uuid,station.computer_name||"محطة دون اسم")}
+    extra={<Tag color={connected?"green":"orange"}>{connected?"متصل":"غير متصل"}</Tag>}>
+    <Space direction="vertical" size="middle" style={{width:"100%"}}>
+     <Descriptions size="small" bordered column={mobile?1:3} items={[
+      {key:"approval",label:"الاعتماد",children:station.status},
+      {key:"last",label:"آخر اتصال",children:dateLabel(station.last_seen_at)},
+      {key:"agent",label:"Agent",children:station.agent_version||"—"}
      ]}/>
-    </Card>)}
-   </Space>:<Table rowKey={r=>r.station_uuid+":"+r.modem_uuid+":"+(r.sim_uuid||"none")} loading={hardwareLoading} dataSource={visibleHardware} size="small" scroll={{x:820}} pagination={{pageSize:10}} columns={[
-    {title:"السيرفر",render:(_:unknown,r:Hardware&{station_uuid:string})=>serverName(r.station_uuid)},
-    {title:"المودم",render:(_:unknown,r:Hardware)=>r.device_name||r.modem_ip||"—"},
-    {title:"IP محلي",dataIndex:"modem_ip",render:(v:string|null)=><span dir="ltr">{v||"—"}</span>},
-    {title:"الشريحة",render:(_:unknown,r:Hardware)=>identityCell("sim",r.sim_uuid,r.sim_uuid?"نوع غير محدد":"بدون شريحة")},
-    {title:"رقم الشريحة",dataIndex:"msisdn",render:(v:string|null)=><span dir="ltr">{v||"غير معروف"}</span>},
-    {title:"المتعامل",render:(_:unknown,r:Hardware)=>operatorNames[operatorOf(r)]},
-    {title:"معرفة الرقم",render:(_:unknown,r:Hardware&{station_uuid:string})=>phoneAction(r,r.station_uuid)},
-    {title:"النوع",render:(_:unknown,r:Hardware)=>typeAction(r)},
-    {title:"PIN",render:(_:unknown,r:Hardware&{station_uuid:string})=>pinAction(r,r.station_uuid)},
-    {title:"آخر ظهور",dataIndex:"modem_last_seen_at",render:dateLabel},
-    {title:"الاتصال",render:(_:unknown,r:Hardware)=><Tag color={online(r.modem_last_seen_at)?"green":"orange"}>{online(r.modem_last_seen_at)?"متصل حديثًا":"غير متصل"}</Tag>}
-   ]}/>}
-  </Card>}
+     <Typography.Text strong>المودمات والشرائح ({modems.length})</Typography.Text>
+     {hardwareLoading&&<Typography.Text type="secondary">جاري تحديث المودمات...</Typography.Text>}
+     {!hardwareLoading&&modems.length===0&&<Empty description="لا توجد مودمات مسجلة لهذه المحطة"/>}
+     {mobile?<Space direction="vertical" size="middle" style={{width:"100%"}}>
+      {modems.map(r=><Card key={r.modem_uuid+":"+(r.sim_uuid||"none")} size="small"
+       title={r.device_name||"مودم"}
+       extra={<Tag color={online(r.modem_last_seen_at)?"green":"orange"}>{online(r.modem_last_seen_at)?"مرصود حديثًا":"غير متصل"}</Tag>}>
+       {simDetails(r)}
+       {r.sim_uuid&&<Collapse size="small" style={{marginTop:12}} items={[{
+        key:"actions",label:"إعدادات وعمليات الشريحة",children:simActions(r)
+       }]}/>}
+      </Card>)}
+     </Space>:<Table<StationHardware> rowKey={r=>r.modem_uuid+":"+(r.sim_uuid||"none")}
+       dataSource={modems} size="small" scroll={{x:820}} pagination={{pageSize:10}}
+       columns={[
+        {title:"المودم",render:(_,r)=>r.device_name||r.modem_ip||"—"},
+        {title:"الشريحة",render:(_,r)=>shortSim(r)},
+        {title:"رقم الشريحة",render:(_,r)=><span dir="ltr">{r.msisdn||"غير معروف"}</span>},
+        {title:"النوع",dataIndex:"sim_type",render:(v:string|null)=>v||"—"},
+        {title:"PIN",render:(_,r)=>r.has_pin?"محفوظ":"غير محفوظ"},
+        {title:"رصيد Sama المسجل",render:(_,r)=>balanceLabel(r)},
+        {title:"حالة المودم",render:(_,r)=><Tag color={online(r.modem_last_seen_at)?"green":"orange"}>{online(r.modem_last_seen_at)?"متصل حديثًا":"غير متصل"}</Tag>}
+       ]}
+       expandable={{rowExpandable:r=>Boolean(r.sim_uuid),expandedRowRender:r=>simActions(r)}}
+      />}
+    </Space>
+   </Card>;
+  })}
   <Modal title="التسمية الخاصة" open={Boolean(identityEdit)}
    onCancel={()=>{if(!identitySaving){setIdentityEdit(null);setIdentityDraft("");}}}
    onOk={()=>void saveIdentityName()} okText="حفظ" cancelText="إلغاء"
