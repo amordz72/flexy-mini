@@ -189,7 +189,7 @@ test('mobile modem cards contain exactly one details Collapse per physical modem
 });
 test('CSS applies full-height only to grid cards, not all nested modem cards',async()=>{
  const css=await readFile(new URL('../src/style.css',import.meta.url),'utf8');
- assert.doesNotMatch(css,/\\.app-content\\s+\\.ant-card\\s*\\{\\s*height\\s*:\\s*100%/);
- assert.match(css,/\\.app-content\\s+\\.ant-row\\s*>\\s*\\.ant-col\\s*>\\s*\\.ant-card\\s*\\{\\s*height\\s*:\\s*100%/);
+ assert.doesNotMatch(css,/\.app-content\s+\.ant-card\s*\{\s*height\s*:\s*100%/);
+ assert.match(css,/\.app-content\s+\.ant-row\s*>\s*\.ant-col\s*>\s*\.ant-card\s*\{\s*height\s*:\s*100%/);
 });
 after(async()=>rm(output,{recursive:true,force:true}));
