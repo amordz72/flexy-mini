@@ -19,6 +19,7 @@ const CreditAdmin = React.lazy(() => import("./CreditAdmin"));
 const StationOverview = React.lazy(() => import("./StationOverview"));
 const FlexyServicePage = React.lazy(() => import("./FlexyServicePage"));
 import BuildCopyButton from "./BuildCopyButton";
+import StartupDiagnostics from "./StartupDiagnostics";
 import { supportPhone, supportWhatsApp } from "./settings";
 
 const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined) || "https://wqyebqzbbpohbnznqdjj.supabase.co";
@@ -463,7 +464,7 @@ function ConnectionDiagnostics() {
       window.clearTimeout(timeout);
     }
   }
-  return <Card title="فحص اتصال Supabase" className="section-card">
+  return <Space direction="vertical" style={{width:"100%"}}><StartupDiagnostics/><Card title="فحص اتصال Supabase" className="section-card">
     <Descriptions column={1} size="small" bordered>
       <Descriptions.Item label="رقم دعم واتساب"><span dir="ltr">{supportPhone}</span></Descriptions.Item>
       <Descriptions.Item label="عنوان المشروع">{url ? "مضبوط" : "غير مضبوط"}</Descriptions.Item>
@@ -476,7 +477,7 @@ function ConnectionDiagnostics() {
       {status !== "idle" && status !== "loading" && <Alert showIcon type={status === "ok" ? "success" : "warning"} message={message} />}
       <Text type="secondary">الفحص لا يقرأ جداول ولا يكتب بيانات، ولا يطلب كلمة مرور.</Text>
     </Space>
-  </Card>;
+  </Card></Space>;
 }
 type TrustedDevice={id:number;customer_id:number;device_label:string;approved_at:string|null;revoked_at:string|null;expires_at:string|null;created_at:string;last_used_at:string|null;flexy_mini_customer_accounts:{username:string;phone:string;money_party_directory:{display_name:string}}};
 type MiniWalletRow={customer_id:number;username:string;phone:string;active:boolean;wallet:{balance:number;debt:number;profit:number}|null};
@@ -754,6 +755,7 @@ function Dashboard({customerToken,customerAccount,customerError,onCustomerLogout
     </Layout>
   </ConfigProvider>;
 }
+window.addEventListener("load",()=>{window.setTimeout(()=>{try{const root=document.getElementById("root");if(root?.childElementCount){const key="flexy_mini_boot_diagnostics_v1";const rows=JSON.parse(localStorage.getItem(key)||"[]");rows.push({at:new Date().toISOString(),kind:"app-mounted",ms:Math.round(performance.now())});localStorage.setItem(key,JSON.stringify(rows.slice(-30)));}}catch{}},0);});
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <HashRouter>
