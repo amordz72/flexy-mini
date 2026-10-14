@@ -1,6 +1,6 @@
 <!doctype html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><meta name="theme-color" content="#2563eb"/><meta name="application-name" content="Flexy Mini"/><meta name="mobile-web-app-capable" content="yes"/><link rel="manifest" href="/flexy-mini/manifest.webmanifest"/><link rel="icon" type="image/png" sizes="192x192" href="/flexy-mini/icons/icon-192.png"/><link rel="apple-touch-icon" href="/flexy-mini/icons/icon-192.png"/><title>Flexy Mini</title></head><body><div id="root"></div><script>
 (function(){
- var key="flexy_mini_boot_diagnostics_v1", mounted=false;
+ var key="flexy_mini_boot_diagnostics_v1", mounted=false, failed=false;
  function record(kind,detail){
   try{
    var rows=JSON.parse(localStorage.getItem(key)||"[]");
@@ -11,7 +11,7 @@
  }
  record("boot-start");
  function mountCheck(){
-  if(mounted)return;
+  if(mounted||failed)return;
   var root=document.getElementById("root");
   if(!root||!root.childElementCount)return;
   mounted=true;record("app-mounted");
@@ -22,7 +22,8 @@
  if(root)observer.observe(root,{childList:true});
  window.addEventListener("error",function(e){
   if(e.target&&e.target.tagName==="SCRIPT"){
-   record("script-load-failed");
+   failed=true;record("script-load-failed",String(e.target.src||"").split("/").pop());
+   if(observer)observer.disconnect();
    var node=document.getElementById("root");
    if(!node||node.childElementCount)return;
    var box=document.createElement("section");box.dir="rtl";
