@@ -755,7 +755,6 @@ function Dashboard({customerToken,customerAccount,customerError,onCustomerLogout
     </Layout>
   </ConfigProvider>;
 }
-window.addEventListener("load",()=>{window.setTimeout(()=>{try{const root=document.getElementById("root");if(root?.childElementCount){const key="flexy_mini_boot_diagnostics_v1";const rows=JSON.parse(localStorage.getItem(key)||"[]");rows.push({at:new Date().toISOString(),kind:"app-mounted",ms:Math.round(performance.now())});localStorage.setItem(key,JSON.stringify(rows.slice(-30)));}}catch{}},0);});
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <HashRouter>
