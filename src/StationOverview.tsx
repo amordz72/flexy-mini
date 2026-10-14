@@ -11,6 +11,25 @@ type IdentityResponse={stations:IdentityRow[];sims:IdentityRow[]};
 type SimTypeOption={sim_type:string;display_name:string;operator_key:string;enabled:boolean;sort_order:number};
 type Hardware={modem_uuid:string;modem_ip:string|null;device_name:string|null;modem_last_seen_at:string|null;sim_uuid:string|null;msisdn:string|null;imsi:string|null;sim_type:string|null;has_pin:boolean;sim_last_seen_at:string|null};
 type StationHardware=Hardware&{station_uuid:string};
+type UsbModemIdentity={
+ modem_uuid:string;station_uuid:string|null;usb_number:number|string|null;
+ usb_label:string|null;serial_number:string|null;
+};
+// USB belongs to the physical modem, never to its current SIM, IP or station display order.
+const usbDisplayLabel=(row:UsbModemIdentity|null):string=>{
+ const value=String(row?.usb_label??row?.usb_number??"").trim();
+ return /^\d+$/.test(value)?"USB "+value.padStart(3,"0"):"USB غير متاح";
+};
+const serialDisplayTail=(row:UsbModemIdentity|null,all:Record<string,UsbModemIdentity>):string=>{
+ const serial=String(row?.serial_number??"").trim();
+ if(!serial)return "غير مقروء";
+ const others=Object.values(all).filter(item=>item.modem_uuid!==row?.modem_uuid)
+  .map(item=>String(item.serial_number??"").trim()).filter(Boolean);
+ let digits=Math.min(6,serial.length);
+ while(digits<serial.length&&others.some(other=>other.endsWith(serial.slice(-digits))))digits++;
+ const tail=serial.slice(-digits);
+ return others.some(other=>other.endsWith(tail))?tail+" (متكرر)":tail;
+};
 type PhoneAttempt={sim_uuid:string;status:string;result_code:string|null;discovered_msisdn:string|null;started_at:string|null};
 type PhoneQueue={queued:boolean;state:string;job_uuid:string|null};
 type OoredooGuard={sim_uuid:string;is_locked:boolean;cooldown_until:string|null;last_failed_at:string|null;last_attempt_at:string|null;last_failure_code:string|null;admin_armed:boolean};
@@ -54,6 +73,8 @@ export default function StationOverview({db}:{db:SupabaseClient}){
  const [identityDraft,setIdentityDraft]=useState("");
  const [identitySaving,setIdentitySaving]=useState(false);
  const [hardware,setHardware]=useState<Record<string,Hardware[]>>({});
+ const [usbIdentities,setUsbIdentities]=useState<Record<string,UsbModemIdentity>>({});
+ const [usbDirectoryError,setUsbDirectoryError]=useState(false);
  const [selected,setSelected]=useState<string|null>(null);
  const [filterStorageKey,setFilterStorageKey]=useState<string|null>(null);
  const [samaRows,setSamaRows]=useState<SamaStatus[]>([]);
@@ -161,6 +182,24 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   try{setSamaRows(await readSamaStatus(db));setSamaError("");}
   catch(e){setSamaError("تعذر قراءة حالة Sama: "+(e instanceof Error?e.message:String(e)));}
  },[db]);
+ const loadUsbDirectory=useCallback(async()=>{
+  try{
+   // Existing read-only, admin-authorized Station Connect RPC. Do not create another numbering system.
+   const {data,error}=await db.rpc("station_connect_admin_usb_sim_center");
+   if(error||!Array.isArray(data))throw error??new Error("Invalid USB directory");
+   const rows:Record<string,UsbModemIdentity>={};
+   for(const entry of data as UsbModemIdentity[]){
+    if(entry.modem_uuid)rows[entry.modem_uuid]={
+     modem_uuid:entry.modem_uuid,station_uuid:entry.station_uuid,
+     usb_number:entry.usb_number,usb_label:entry.usb_label,serial_number:entry.serial_number
+    };
+   }
+   setUsbIdentities(rows);setUsbDirectoryError(false);
+  }catch{
+   // Fail visibly; no made-up USB number from a row index or from IP.
+   setUsbIdentities({});setUsbDirectoryError(true);
+  }
+ },[db]);
  const loadHardwareRows=useCallback(async(targets:Station[])=>{
   if(targets.length===0){setHardware({});setHardwareLoading(false);return;}
   setHardwareLoading(true);
@@ -193,8 +232,8 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   setStations(rows);
   setSelected(previous=>previous&&rows.some(station=>station.station_uuid===previous)?previous:null);
   setCheckedAt(new Date().toISOString());
-  await loadHardwareRows(rows);
- },[db,loadHardwareRows]);
+  await Promise.all([loadHardwareRows(rows),loadUsbDirectory()]);
+ },[db,loadHardwareRows,loadUsbDirectory]);
  useEffect(()=>{
   void refresh();void loadPhoneAttempts();void loadOoredooGuards();void loadSimTypes();void loadIdentityNames();void loadSamaStatus();
  },[refresh,loadPhoneAttempts,loadOoredooGuards,loadSimTypes,loadIdentityNames,loadSamaStatus]);
@@ -390,6 +429,17 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   return identity?.custom_label?code+" — "+identity.custom_label:code;
  };
  const visibleStations=selected?stations.filter(station=>station.station_uuid===selected):stations;
+ const usbForModem=(r:StationHardware):UsbModemIdentity|null=>{
+  const found=usbIdentities[r.modem_uuid];
+  // Only show an identity when the RPC agrees about its current owning station.
+  return found?.station_uuid===r.station_uuid?found:null;
+ };
+ const modemTitle=(r:StationHardware)=><Space direction="vertical" size={0}>
+  <Typography.Text strong>{usbDisplayLabel(usbForModem(r))}</Typography.Text>
+  <Typography.Text type="secondary" style={{fontSize:12}}>
+   <span dir="ltr">Serial: {serialDisplayTail(usbForModem(r),usbIdentities)}</span>
+  </Typography.Text>
+ </Space>;
  const simStatus=(row:StationHardware)=>samaRows.find(sim=>
   sim.sim_uuid===row.sim_uuid&&sim.station_uuid===row.station_uuid&&sim.sim_type==="mobilis-sama");
  const balanceLabel=(row:StationHardware)=>{
@@ -425,6 +475,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   ]:[])
  ]}/>;
  const modemTechnicalDetails=(r:StationHardware)=><Descriptions size="small" bordered column={1} items={[
+  {key:"model",label:"موديل المودام",children:r.device_name||"غير معروف"},
   {key:"ip",label:"IP محلي",children:<span dir="ltr">{r.modem_ip||"—"}</span>},
   {key:"operator",label:"المتعامل",children:operatorNames[operatorOf(r)]},
   {key:"pin",label:"PIN",children:r.has_pin?"محفوظ بأمان":"غير محفوظ"},
@@ -447,6 +498,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   </Card>
   {error&&<Alert type="error" showIcon message={error}/>}
   {samaError&&<Alert type="warning" showIcon message={samaError}/>}
+  {usbDirectoryError&&<Alert type="warning" showIcon message="تعذر قراءة رقم USB والسيريال من Station Connect؛ لم يتم تعيين أرقام بديلة."/>}
   {checkedAt&&<Typography.Text type="secondary">آخر تحديث: {dateLabel(checkedAt)}</Typography.Text>}
   {visibleStations.length===0&&!loading&&<Empty description="لا توجد محطات مرئية للحساب"/>}
   {visibleStations.map(station=>{
@@ -466,7 +518,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
      {!hardwareLoading&&modems.length===0&&<Empty description="لا توجد مودمات مسجلة لهذه المحطة"/>}
      {mobile?<Space direction="vertical" size="small" style={{width:"100%"}}>
       {modems.map(r=><Card key={r.modem_uuid+":"+(r.sim_uuid||"none")} size="small"
-       title={r.device_name||"مودم"}
+       title={modemTitle(r)}
        extra={<Tag color={online(r.modem_last_seen_at)?"green":"orange"}>{online(r.modem_last_seen_at)?"مرصود حديثًا":"غير متصل"}</Tag>}>
        {simSummary(r)}
        <Collapse size="small" style={{marginTop:8}} items={[{
@@ -480,7 +532,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
      </Space>:<Table<StationHardware> rowKey={r=>r.modem_uuid+":"+(r.sim_uuid||"none")}
        dataSource={modems} size="small" scroll={{x:820}} pagination={{pageSize:10}}
        columns={[
-        {title:"المودم",render:(_,r)=>r.device_name||r.modem_ip||"—"},
+        {title:"المودم",render:(_,r)=>modemTitle(r)},
         {title:"الشريحة",render:(_,r)=>shortSim(r)},
         {title:"رقم الشريحة",render:(_,r)=><span dir="ltr">{r.msisdn||"غير معروف"}</span>},
         {title:"النوع",dataIndex:"sim_type",render:(v:string|null)=>v||"—"},
