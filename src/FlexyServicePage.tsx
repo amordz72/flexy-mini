@@ -6,6 +6,7 @@ import {
 import { CheckCircleOutlined, InfoCircleOutlined, PhoneOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import FlexyOperationHistory from "./FlexyOperationHistory";
+import ArsselliSend696 from "./ArsselliSend696";
 import CustomerOfferIdentity from "./CustomerOfferIdentity";
 import type { OfferGroup, OfferIdentity } from "./CustomerOfferIdentity";
 import {readSamaStatus,readinessProblems} from "./SamaOperationalActions";
@@ -378,14 +379,13 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
 
     {mode === "credit" ? <Card>
       <Space direction="vertical" style={{ width: "100%" }} size="middle">
-        <Alert showIcon type="warning" message="إرسال الرصيد العادي غير متاح حاليًا"
-           />
+        {isCustomer&&<Alert showIcon type="warning" message="إرسال الرصيد العادي للزبائن غير متاح حاليًا"/>}
         <Space wrap>{[100, 200, 500].map(value =>
           <Button key={value} type={amount === value ? "primary" : "default"}
             onClick={() => setAmount(value)}>{currency(value)}</Button>)}</Space>
         <InputNumber<number> min={1} max={100000} precision={0} value={amount}
           onChange={setAmount} style={{ width: "100%" }} size="large" placeholder="المبلغ" addonAfter="دج" />
-        <Button block size="large" type="primary" disabled>إرسال الرصيد — غير مفعّل</Button>
+        {!isCustomer&&db&&<ArsselliSend696 db={db} phone={phone} amount={amount} />}
       </Space>
     </Card> : <>
       <Card title="العروض المتاحة" extra={<Button size="small" icon={<ReloadOutlined/>}
