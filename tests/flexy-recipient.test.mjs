@@ -240,6 +240,45 @@ const setRecipientAndOffers=async(r)=>{
   await act(async()=>r.root.findByType('segmented').props.onChange('offers'));await flush();
 };
 
+const offlineSamaReadiness={
+ station_uuid:'station',station_name:'server-2',station_online:false,agent_version:'0.4.12',
+ sim_uuid:'sim-1',sim_type:'mobilis-sama',mobilis_network:true,modem_online:false,sim_online:false,
+ has_service_pin:true,flexy_approved:true,balance_initialized:true,
+ operational_balance:10000,balance_reconciliation_due:false,
+ discover_ready:false,execute_prerequisites_ready:false
+};
+
+test('offline station shows read-only cached offers; no discovery job or financial dispatch',async()=>{
+ const db=makeDb(name=>Promise.resolve(ok(
+   name==='flexy_mini_admin_sama_readiness'?[offlineSamaReadiness]:
+   name==='flexy_get_visible_offer_catalog_v2'?[catalogOffer('PixX',500)]:
+   name==='flexy_mini_admin_customer_offer_identity'?classified:
+   name==='station_connect_admin_offer_route_preview'?[]:[]
+ )));
+ const r=await mount(Flexy,{db,isCustomer:false});
+ await setRecipientAndOffers(r);
+ assert.ok(r.root.findAllByType('alert').some(x=>String(x.props.message).includes('المحطة غير متصلة')));
+ const list=r.root.findByType('list');
+ assert.deepEqual(list.props.dataSource.map(x=>x.amount),[500]);
+ assert.equal(button(r,'إرسال العرض').props.disabled,true);
+ assert.equal(db.calls.some(x=>/station_connect_admin_create_offer_discovery|create_verified_offer_execute|station_connect_admin_queue_balance/.test(x.name)),false);
+ await close(r);
+});
+test('offline station without cached identity never queues automatic discovery',async()=>{
+ const db=makeDb(name=>Promise.resolve(ok(
+  name==='flexy_mini_admin_sama_readiness'?[offlineSamaReadiness]:
+  name==='flexy_get_visible_offer_catalog_v2'?[catalogOffer('PixX',500)]:
+  name==='flexy_mini_admin_customer_offer_identity'?missing:[]
+ )));
+ const r=await mount(Flexy,{db,isCustomer:false});
+ await setRecipientAndOffers(r);
+ assert.ok(r.root.findAllByType('alert').some(x=>String(x.props.message).includes('المحطة غير متصلة')));
+ assert.equal(db.calls.filter(x=>x.name==='flexy_mini_admin_customer_offer_identity').length,1);
+ assert.equal(db.calls.filter(x=>x.name==='station_connect_admin_create_offer_discovery').length,0);
+ assert.equal(button(r,'إرسال العرض').props.disabled,true);
+ await close(r);
+});
+
 test('Sama catalog is one collapsible group with internal Mix/Talk/Net families, not three long cards',async()=>{
   const db=flexyDb('SAMA',[catalogOffer('Sama Mix',100),catalogOffer('Sama Mix',500),
     catalogOffer('Sama Talk',500),catalogOffer('Sama Net',1000)]);
