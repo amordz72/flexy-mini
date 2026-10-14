@@ -9,7 +9,7 @@ const output=new URL('../node_modules/.arsselli-balance-tests/',import.meta.url)
 await mkdir(output,{recursive:true});
 const ui=`import React from 'react';
 const c=name=>props=>React.createElement(name,props,props.children);
-export const Alert=c('alert'),Button=c('button'),Tag=c('tag'),Space=c('space'),Typography={Text:c('text')};
+export const Alert=props=>React.createElement('alert',props,[props.message,props.description]),Button=c('button'),Tag=c('tag'),Space=c('space'),Typography={Text:c('text')};
 export const Descriptions=props=>React.createElement('descriptions',props,(props.items||[]).map(item=>React.createElement('field',{key:item.key,label:item.label},item.children)));
 export const Collapse=props=>React.createElement('collapse',props,(props.items||[]).map(item=>React.createElement('section',{key:item.key},item.children)));
 export const message={info(){},success(){},warning(){},error(){}};
@@ -46,7 +46,7 @@ const dbFor=(opts={})=>{
 test('display GTS separately from other distributor account balances, including valid zero',async()=>{
  const db=dbFor(),r=await mount({db,simUuid:'sim-1',canRequestBalance:false});
  assert.match(textOf(r.root),/GTS \(04\)/);
- assert.match(textOf(r.root),/MOBILIS/);
+ assert.ok(r.root.findAllByType('field').some(x=>x.props.label==='MOBILIS'));
  assert.match(textOf(r.root),/200 دج/);
  assert.match(textOf(r.root),/0 دج/);
  assert.equal(db.calls.filter(x=>x.name.includes('queue')).length,0);
