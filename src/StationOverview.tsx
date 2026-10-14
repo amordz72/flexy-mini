@@ -416,22 +416,29 @@ export default function StationOverview({db}:{db:SupabaseClient}){
  const shortSim=(r:StationHardware)=><>
   {identityCell("sim",r.sim_uuid,r.sim_uuid?"نوع غير محدد":"بدون شريحة")}
  </>;
- const simDetails=(r:StationHardware)=><Descriptions size="small" bordered column={1} items={[
-  {key:"ip",label:"IP محلي",children:<span dir="ltr">{r.modem_ip||"—"}</span>},
+ const simSummary=(r:StationHardware)=><Descriptions size="small" bordered column={1} items={[
   {key:"sim",label:"الشريحة",children:shortSim(r)},
   {key:"phone",label:"رقم الشريحة",children:<span dir="ltr">{r.msisdn||"غير معروف"}</span>},
-  {key:"operator",label:"المتعامل",children:operatorNames[operatorOf(r)]},
   {key:"type",label:"النوع",children:r.sim_type||"غير محدد"},
+  ...(r.sim_type==="mobilis-sama"?[
+   {key:"balance",label:"رصيد Sama المسجل",children:balanceLabel(r)}
+  ]:[])
+ ]}/>;
+ const modemTechnicalDetails=(r:StationHardware)=><Descriptions size="small" bordered column={1} items={[
+  {key:"ip",label:"IP محلي",children:<span dir="ltr">{r.modem_ip||"—"}</span>},
+  {key:"operator",label:"المتعامل",children:operatorNames[operatorOf(r)]},
   {key:"pin",label:"PIN",children:r.has_pin?"محفوظ بأمان":"غير محفوظ"},
   ...(r.sim_type==="mobilis-sama"?[
-   {key:"ready",label:"استكشاف Sama",children:simStatus(r)?.discover_ready?<Tag color="green">جاهزة للاستكشاف</Tag>:<Tag color="orange">تحتاج تجهيزًا</Tag>},
-   {key:"balance",label:"الرصيد التشغيلي المسجل",children:balanceLabel(r)}
+   {key:"ready",label:"استكشاف Sama",children:simStatus(r)?.discover_ready?<Tag color="green">جاهزة للاستكشاف</Tag>:<Tag color="orange">تحتاج تجهيزًا</Tag>}
   ]:[])
  ]}/>;
  return <Space direction="vertical" size="middle" style={{width:"100%"}}>
-  <Card title="المحطات والشرائح" extra={<Button loading={loading||hardwareLoading} onClick={()=>{void refresh();void loadSamaStatus();}}>تحديث</Button>}>
+  <Card size="small">
    <Space direction="vertical" size="small" style={{width:"100%"}}>
-    <Typography.Text strong>فلترة حسب السيرفر</Typography.Text>
+    <Space style={{width:"100%",justifyContent:"space-between"}}>
+     <Typography.Text strong>فلترة حسب السيرفر</Typography.Text>
+     <Button size="small" loading={loading||hardwareLoading} onClick={()=>{void refresh();void loadSamaStatus();}}>تحديث</Button>
+    </Space>
     <Select aria-label="فلترة حسب السيرفر" value={selected??"all"} style={{width:"100%",maxWidth:380}}
      options={[{value:"all",label:"كل السيرفرات"},...stations.map(station=>({value:station.station_uuid,label:serverName(station.station_uuid)}))]}
      onChange={value=>changeServer(value==="all"?null:value)}/>
@@ -457,14 +464,18 @@ export default function StationOverview({db}:{db:SupabaseClient}){
      <Typography.Text strong>المودمات والشرائح ({modems.length})</Typography.Text>
      {hardwareLoading&&<Typography.Text type="secondary">جاري تحديث المودمات...</Typography.Text>}
      {!hardwareLoading&&modems.length===0&&<Empty description="لا توجد مودمات مسجلة لهذه المحطة"/>}
-     {mobile?<Space direction="vertical" size="middle" style={{width:"100%"}}>
+     {mobile?<Space direction="vertical" size="small" style={{width:"100%"}}>
       {modems.map(r=><Card key={r.modem_uuid+":"+(r.sim_uuid||"none")} size="small"
        title={r.device_name||"مودم"}
        extra={<Tag color={online(r.modem_last_seen_at)?"green":"orange"}>{online(r.modem_last_seen_at)?"مرصود حديثًا":"غير متصل"}</Tag>}>
-       {simDetails(r)}
-       {r.sim_uuid&&<Collapse size="small" style={{marginTop:12}} items={[{
-        key:"actions",label:"إعدادات وعمليات الشريحة",children:simActions(r)
-       }]}/>}
+       {simSummary(r)}
+       <Collapse size="small" style={{marginTop:8}} items={[{
+        key:"details",label:r.sim_uuid?"التفاصيل وإعدادات الشريحة":"تفاصيل المودام",
+        children:<Space direction="vertical" size="small" style={{width:"100%"}}>
+         {modemTechnicalDetails(r)}
+         {r.sim_uuid&&simActions(r)}
+        </Space>
+       }]}/>
       </Card>)}
      </Space>:<Table<StationHardware> rowKey={r=>r.modem_uuid+":"+(r.sim_uuid||"none")}
        dataSource={modems} size="small" scroll={{x:820}} pagination={{pageSize:10}}

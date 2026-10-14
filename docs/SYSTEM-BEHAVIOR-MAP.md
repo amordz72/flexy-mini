@@ -374,3 +374,13 @@ Canonical design context: `amordz72/developer/projects/station-connect/CENTRAL-U
 **Scope:** Frontend only, existing RPCs read/actions; no DB migration, station Windows Agent update, PIN/USSD/recharge execution, money change, pricing/routing change or independent layout framework. Source PR: [Flexy Mini #6](https://github.com/amordz72/flexy-mini/pull/6). CI, Pages deployment and phone/PWA acceptance are distinct gates and must be updated with actual results, never inferred from source edit alone.
 
 **Phone acceptance:** Verify latest build SHA; filter `server-1`, `server-2`, `كل السيرفرات`, reload and confirm persisted choice, change accounts and verify user-isolation; verify station label/alias, connected/disconnected state after actual heartbeat timeout and that Sama/Arsselli controls appear only under their real SIM without duplicates. Do not initiate balance/USSD/financial action as part of the layout check.
+
+## 24. 2026-10-14 — Mobile station layout refinement (review branch)
+
+**Owner request:** Correct the user-accepted server-first screen's duplicated page heading, very long modem cards and the build-copy overlay obscuring content, without changing server filter behavior or modem/SIM identity.
+
+**Implementation:** In `StationOverview.tsx`, the page-level heading remains the single title; the Ant Design filter Card no longer repeats it. On mobile, each Ant Design modem Card keeps the SIM identifier, number, type and available Sama ledger balance immediately visible; the existing Ant Design Collapse reveals IP, operator, PIN safety state, Sama discovery readiness and SIM actions when needed. The server's last connection, agent version, approval and online status remain visible; desktop Ant Design Table is unchanged. `BuildCopyButton.tsx` remains an admin-only fixed Ant Design FloatButton, now a 40px icon with tooltip instead of a 105px label overlay.
+
+**Non-goals:** No server/Agent upgrade, Supabase/RPC changes, USSD, account/finance operations or new CSS/framework. Persistent per-account server filter and 30s refresh / 90s offline threshold unchanged.
+
+**Verification:** Review branch requires development-guard pass/rejection tests, npm test, build and Pages deploy status after merge. Android PWA UI confirmation remains a separate user acceptance gate.

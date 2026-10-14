@@ -42,11 +42,11 @@ export default function BuildCopyButton() {
 
   return <FloatButton
     type="primary"
-    shape="square"
+    shape="circle"
     icon={<CopyOutlined />}
-    description={buildSha ? "نسخ " + buildSha.slice(0, 7) : "نسخ النسخة"}
-    tooltip="نسخ آخر كود وصل فعليًا إلى هذه الواجهة"
+    tooltip={buildSha ? "نسخ تقرير النسخة " + buildSha.slice(0, 7) : "نسخ تقرير نسخة الواجهة"}
+    aria-label="نسخ تقرير نسخة الواجهة"
     onClick={() => void copyReport()}
-    style={{ position: "fixed", top: 74, left: 12, right: "auto", bottom: "auto", width: 105, height: 54, zIndex: 110 }}
+    style={{ position: "fixed", top: 68, left: 8, right: "auto", bottom: "auto", width: 40, height: 40, zIndex: 100 }}
   />;
 }
