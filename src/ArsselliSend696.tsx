@@ -8,10 +8,10 @@ const accounts=[{value:"03",label:"03 — DATA"},{value:"04",label:"04 — GTS"}
 export default function ArsselliSend696({db,phone,amount}:{db:SupabaseClient;phone:string;amount:number|null}){
  const [account,setAccount]=useState("03");
  // Historical Mobilis documentation classifies 696/1 as offer purchase, not ordinary credit.
- const ordinaryCreditRouteVerified=false;
+ const experimental696Enabled=true;
  const [stationUuid,setStationUuid]=useState<string|null>(null);
  const [ready,setReady]=useState(false);
- useEffect(()=>{if(typeof db.from!=="function")return;let live=true;void db.from("station_connect_stations").select("station_uuid,status,last_seen_at").eq("status","approved").order("last_seen_at",{ascending:false}).limit(1).then(({data})=>{if(!live)return;const station=data?.[0];setStationUuid(station?.station_uuid||null);setReady(Boolean(station&&Date.now()-Date.parse(station.last_seen_at)<90000));});return()=>{live=false;};},[db]);
+ useEffect(()=>{if(typeof db.rpc!=="function")return;let live=true;void db.rpc("flexy_mini_station_overview").then(({data,error})=>{if(!live||error)return;const rows=Array.isArray(data)?data:[];const station=rows.find((s:any)=>s.status==="approved"&&Date.now()-Date.parse(s.last_seen_at)<90000);setStationUuid(station?.station_uuid||null);setReady(Boolean(station));}).catch(()=>{});return()=>{live=false;};},[db]);
  const [confirm,setConfirm]=useState(false);
  const [busy,setBusy]=useState(false);
  const [uncertain,setUncertain]=useState(false);
@@ -21,7 +21,7 @@ export default function ArsselliSend696({db,phone,amount}:{db:SupabaseClient;pho
  const normalized=normalizePhone(phone);
  const valid=/^0[5-7][0-9]{8}$/.test(normalized)&&Number.isInteger(amount)&&Number(amount)>0&&Number(amount)<=50000;
  const send=async()=>{
-  if(!ordinaryCreditRouteVerified||!ready||!stationUuid||!valid||!confirm||lock.current||job||uncertain)return;
+  if(!experimental696Enabled||!ready||!stationUuid||!valid||!confirm||lock.current||job||uncertain)return;
   lock.current=true;setBusy(true);setConfirm(false);setError("");
   try{
    const {data,error:rpcError}=await db.rpc("station_connect_admin_create_arsselli_flexy_696",{
@@ -48,17 +48,17 @@ export default function ArsselliSend696({db,phone,amount}:{db:SupabaseClient;pho
   finally{setBusy(false);}
  };
  return <Space direction="vertical" style={{width:"100%"}} size="small">
-  <Typography.Text strong>إرسال رصيد عادي — ينتظر اعتماد كود 630</Typography.Text>
-  <Alert type="warning" showIcon message="إرسال الرصيد العادي متوقف مؤقتًا: 696 مخصص للعروض حسب وثيقة موبيليس القديمة؛ نحتاج مسار 630 معتمدًا قبل الإرسال." />
+  <Typography.Text strong>اختبار أرسلي 696 — عملية مالية تجريبية</Typography.Text>
+  <Alert type="warning" showIcon message="تحذير: 696*1 مذكور في الوثيقة لشراء العروض، وقد لا يكون شحن رصيد عادي. تأكد من الرقم والمبلغ، ولا تكرر الإرسال إذا لم تظهر نتيجة مؤكدة." />
   <Select aria-label="حساب الموزع" value={account} options={accounts} onChange={setAccount}/>
   <Typography.Text type="secondary">الرصيد يُراجع قبل التنفيذ خارج دالة الإرسال. لا يتم الاستعلام عنه تلقائيًا هنا.</Typography.Text>
-  <Button type="primary" disabled={!ordinaryCreditRouteVerified||!ready||!stationUuid||!valid||busy||uncertain||Boolean(job)} onClick={()=>setConfirm(true)}>إرسال رصيد</Button>
+  <Button type="primary" disabled={!experimental696Enabled||!ready||!stationUuid||!valid||busy||uncertain||Boolean(job)} onClick={()=>setConfirm(true)}>إرسال رصيد</Button>
   {!ready&&<Alert type="warning" showIcon message="الشريحة أو المحطة غير جاهزة"/>}
   {error&&<Alert type="error" showIcon message={error}/>}
   {uncertain&&<Alert type="warning" showIcon message="لا تكرر العملية؛ راجع سجل الإرسال أولًا"/>}
   {job&&<Alert type="info" showIcon message={"حالة العملية: "+job.status} description={<Space direction="vertical"><Typography.Text copyable>{job.job_uuid}</Typography.Text><Typography.Text>{job.result_code||"بانتظار رد الشبكة"}</Typography.Text><Typography.Text>{job.result_text||""}</Typography.Text><Button loading={busy} onClick={()=>void check()}>تحديث نتيجة العملية</Button></Space>}/>}
   <Modal title="تأكيد إرسال رصيد مالي" open={confirm} okText="تأكيد الإرسال مرة واحدة" okButtonProps={{loading:busy}} onOk={()=>void send()} onCancel={()=>setConfirm(false)}>
-   <Typography.Paragraph>إرسال {amount} دج إلى {normalized} عبر حساب {account}. تأكد من الرصيد قبل الموافقة. لا توجد إعادة إرسال تلقائية.</Typography.Paragraph>
+   <Typography.Paragraph>اختبار 696*1 بمبلغ {amount} دج إلى {normalized} عبر حساب {account}. قد يشتري عرضًا وليس رصيدًا عاديًا. لا توجد إعادة إرسال تلقائية.</Typography.Paragraph>
   </Modal>
  </Space>;
 }
