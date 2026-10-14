@@ -2,7 +2,7 @@ name: Development Guard
 on:
   pull_request:
   push:
-    branches: [main, governance/development-guard-001]
+    branches: [governance/development-guard-001]
 permissions:
   contents: read
 jobs:
