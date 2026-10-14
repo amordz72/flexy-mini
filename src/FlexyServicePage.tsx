@@ -6,7 +6,7 @@ import {
 import { CheckCircleOutlined, InfoCircleOutlined, PhoneOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import FlexyOperationHistory from "./FlexyOperationHistory";
-import ArsselliSend696 from "./ArsselliSend696";
+
 import CustomerOfferIdentity from "./CustomerOfferIdentity";
 import type { OfferGroup, OfferIdentity } from "./CustomerOfferIdentity";
 import {readSamaStatus,readinessProblems} from "./SamaOperationalActions";
@@ -385,7 +385,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
             onClick={() => setAmount(value)}>{currency(value)}</Button>)}</Space>
         <InputNumber<number> min={1} max={100000} precision={0} value={amount}
           onChange={setAmount} style={{ width: "100%" }} size="large" placeholder="المبلغ" addonAfter="دج" />
-        {!isCustomer&&db&&<ArsselliSend696 db={db} phone={phone} amount={amount} />}
+        {!isCustomer&&<Alert type="info" showIcon message="اختبار أرسلي 630 — رصيد عادي" description="تم فصل مسار 696 نهائيًا عن الرصيد العادي؛ 696 مخصص لشراء العروض. مسار 630 قيد التجهيز والاختبار، والإرسال المالي معطّل حتى اعتماد أمر التنفيذ في السيرفر والتحقق من Agent. لا توجد محاولة إرسال تلقائية."/>}
       </Space>
     </Card> : <>
       <Card title="العروض المتاحة" extra={<Button size="small" icon={<ReloadOutlined/>}
