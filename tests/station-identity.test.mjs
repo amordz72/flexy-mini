@@ -38,6 +38,7 @@ const plugins=[{name:'stub-station-ui',setup(b){
  b.onResolve({filter:/^antd$/},()=>({path:'ui',namespace:'stub'}));
  b.onResolve({filter:/SamaOperationalActions$/},()=>({path:'actions',namespace:'stub'}));
  b.onResolve({filter:/ArsselliBalanceActions$/},()=>({path:'arsselli',namespace:'stub'}));
+ b.onResolve({filter:/AdminSmsInbox$/},()=>({path:'sms-inbox',namespace:'stub'}));
  b.onLoad({filter:/.*/,namespace:'stub'},args=>({loader:'js',contents:args.path==='ui'?ui:'export async function readSamaStatus(){return []}; export default function Actions(){return null}'}));
 }}];
 const built=await build({entryPoints:['src/StationOverview.tsx'],bundle:true,write:false,
