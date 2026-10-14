@@ -47,7 +47,7 @@ export default function ArsselliSend696({db,stationUuid,ready}:{db:SupabaseClien
  return <Space direction="vertical" style={{width:"100%"}} size="small">
   <Typography.Text strong>إرسال رصيد عادي — أرسلي 696</Typography.Text>
   <Input placeholder="رقم الزبون" value={phone} onChange={e=>setPhone(e.target.value)} inputMode="tel" style={{direction:"ltr"}}/>
-  <Input placeholder="المبلغ بالدينار" inputMode="numeric" value={amount??""} onChange={e=>{const raw=e.target.value;setAmount(/^\\d+$/.test(raw)?Number(raw):null);}}/>
+  <Input placeholder="المبلغ بالدينار" inputMode="numeric" value={amount??""} onChange={e=>{const raw=e.target.value;setAmount(/^\d+$/.test(raw)?Number(raw):null);}}/>
   <Select aria-label="حساب الموزع" value={account} options={accounts} onChange={setAccount}/>
   <Typography.Text type="secondary">الرصيد يُراجع قبل التنفيذ خارج دالة الإرسال. لا يتم الاستعلام عنه تلقائيًا هنا.</Typography.Text>
   <Button type="primary" disabled={!ready||!valid||busy||uncertain||Boolean(job)} onClick={()=>setConfirm(true)}>إرسال رصيد</Button>
