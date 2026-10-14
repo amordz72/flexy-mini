@@ -13,7 +13,7 @@
  function mountCheck(){
   if(mounted||failed)return;
   var root=document.getElementById("root");
-  if(!root||!root.childElementCount)return;
+  if(!root||!root.childElementCount||root.querySelector("[data-startup-error]"))return;
   mounted=true;record("app-mounted");
   if(observer)observer.disconnect();
  }
@@ -26,7 +26,7 @@
    if(observer)observer.disconnect();
    var node=document.getElementById("root");
    if(!node||node.childElementCount)return;
-   var box=document.createElement("section");box.dir="rtl";
+   var box=document.createElement("section");box.dir="rtl";box.setAttribute("data-startup-error","true");
    box.style.cssText="font:16px system-ui,sans-serif;padding:24px;max-width:520px;margin:12vh auto";
    var h=document.createElement("h2");h.textContent="تعذر تشغيل فليكسي ميني";
    var p=document.createElement("p");p.textContent="تعذر تحميل ملف التشغيل. بياناتك المحلية لم تُمسح.";
