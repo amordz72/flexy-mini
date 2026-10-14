@@ -32,6 +32,25 @@ jobs:
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
           VITE_BUILD_SHA: ${{ github.sha }}
           VITE_BUILD_RUN_ID: ${{ github.run_id }}
+      - name: Restore previously deployed versioned assets
+        uses: actions/cache/restore@v4
+        with:
+          path: .pages-previous-assets
+          key: pages-assets-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            pages-assets-
+      - name: Preserve old hashed JS/CSS during deployment transitions
+        run: |
+          mkdir -p dist/assets .pages-previous-assets
+          if [ -d .pages-previous-assets ]; then
+            cp -n .pages-previous-assets/* dist/assets/ 2>/dev/null || true
+          fi
+          cp -f dist/assets/* .pages-previous-assets/
+      - name: Cache merged versioned assets for the next deployment
+        uses: actions/cache/save@v4
+        with:
+          path: .pages-previous-assets
+          key: pages-assets-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Redirect legacy deep links on GitHub Pages
         run: |
           cat > dist/404.html <<'EOF'
