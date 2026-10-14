@@ -14,7 +14,8 @@ export default function StartupDiagnostics(){
   update();const timer=setInterval(update,3000);return()=>clearInterval(timer);
  },[]);
  const latest=rows.filter(x=>x.kind==="app-mounted").slice(-1)[0];
- const report=JSON.stringify({version:1,recordedAt:new Date().toISOString(),navigation:navigation?{
+ const resources=performance.getEntriesByType("resource").filter((entry)=>/\\.(js|css)(\\?|$)/.test(entry.name)).map((entry)=>({kind:entry.name.split("/").pop()?.split("?")[0]||"asset",ms:Math.round(entry.duration),start:Math.round(entry.startTime),bytes:(entry as PerformanceResourceTiming).transferSize||0})).sort((a,b)=>b.ms-a.ms).slice(0,12);
+ const report=JSON.stringify({version:2,recordedAt:new Date().toISOString(),slowAssets:resources,navigation:navigation?{
   dns:Math.round(navigation.domainLookupEnd-navigation.domainLookupStart),
   connection:Math.round(navigation.connectEnd-navigation.connectStart),
   response:Math.round(navigation.responseEnd-navigation.requestStart),
@@ -30,6 +31,8 @@ export default function StartupDiagnostics(){
     <Descriptions.Item label="اكتمال تحميل الصفحة">{navigation?.loadEventEnd?Math.round(navigation.loadEventEnd)+" مللي ثانية":"غير متاح"}</Descriptions.Item>
     <Descriptions.Item label="عدد الأحداث">{rows.length}</Descriptions.Item>
    </Descriptions>
+   <Typography.Text strong>أبطأ ملفات JavaScript وCSS</Typography.Text>
+   <Table size="small" rowKey={(item)=>item.kind} pagination={{pageSize:6}} scroll={{x:360}} dataSource={resources} columns={[{title:"الملف",dataIndex:"kind",ellipsis:true},{title:"المدة ms",dataIndex:"ms"},{title:"البدء ms",dataIndex:"start"},{title:"بايت من الشبكة",dataIndex:"bytes"}]}/>
    <Table size="small" rowKey={(_,i)=>String(i)} pagination={{pageSize:8}} scroll={{x:400}}
     dataSource={[...rows].reverse()} columns={[
      {title:"الوقت",dataIndex:"at",render:(v:string)=>new Date(v).toLocaleTimeString("ar-DZ")},
