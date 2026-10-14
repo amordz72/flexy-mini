@@ -11,7 +11,8 @@ export default function ArsselliSend696({db,phone,amount}:{db:SupabaseClient;pho
  const [ready,setReady]=useState(false);
  useEffect(()=>{
   let live=true;
-  void db.rpc("flexy_mini_station_overview").then(({data,error})=>{
+  if(typeof db.rpc!=="function")return;
+ void db.rpc("flexy_mini_station_overview").then(({data,error})=>{
    if(!live)return;
    const stations=Array.isArray(data)?data:[];
    const station=stations.find((row:{status?:string;last_seen_at?:string})=>
