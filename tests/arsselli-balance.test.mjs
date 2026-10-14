@@ -45,7 +45,7 @@ const dbFor=(opts={})=>{
  }};};
 test('display GTS separately from other distributor account balances, including valid zero',async()=>{
  const db=dbFor(),r=await mount({db,simUuid:'sim-1',canRequestBalance:false});
- assert.match(textOf(r.root),/GTS \(04\)/);
+ assert.ok(r.root.findAllByType('field').some(x=>x.props.label==='GTS (04)'));
  assert.ok(r.root.findAllByType('field').some(x=>x.props.label==='MOBILIS'));
  assert.match(textOf(r.root),/200 دج/);
  assert.match(textOf(r.root),/0 دج/);
