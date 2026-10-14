@@ -34,3 +34,12 @@ All values must be resolved server-side into one auditable immutable job snapsho
 4. Reuse generic execution_profile instead of hardcoded 696 branching where supported.
 5. Add tests for missing variables, wrong SIM, wrong phone/amount confirmation, expired sessions, duplicate callbacks, PIN secrecy.
 6. Only then implement, test and deploy; never replay job 80d6e727-6988-4274-a475-a384d5bab0ca.
+
+## Verified against live Supabase schema (2026-10-14)
+Read-only inspection confirms `station_connect_sims.iccid`, `station_connect_sims.pin_secret_id`, `station_connect_commands.secret_key`, and discovery `route_template` fields. Existing RPC names include `station_connect_begin_command_session`, `station_connect_claim_command`, `station_connect_complete_command`, `station_connect_queue_session_command`.
+
+## Existing secret resolution path (repository SQL)
+In `station-connect/server/supabase/migrations/20260919_021_session_command_queue.sql`, `station_connect_claim_command` resolves `secret_key='service_pin'` via `vault.decrypted_secrets` using the SIM's `pin_secret_id`, then returns the command value to the authenticated station. Thus Vault is the central secret store for this path; Agent receives the decrypted PIN for immediate USSD execution. Confirm the live deployed SQL matches this migration before changing code. Never log the returned value.
+
+## Architecture decision confirmed by user
+Keep PIN centrally protected and bound to SIM ICCID; Agent uses it transiently on the correctly bound modem. Avoid any duplicate local PIN registry. Reuse existing Vault reference and command queue. No financial operation authorized by this audit.
