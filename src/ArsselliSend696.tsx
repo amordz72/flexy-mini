@@ -9,7 +9,20 @@ export default function ArsselliSend696({db,phone,amount}:{db:SupabaseClient;pho
  const [account,setAccount]=useState("03");
  const [stationUuid,setStationUuid]=useState<string|null>(null);
  const [ready,setReady]=useState(false);
- useEffect(()=>{if(typeof db.from!=="function")return;let live=true;void db.from("station_connect_stations").select("station_uuid,status,last_seen_at").eq("status","approved").order("last_seen_at",{ascending:false}).limit(1).then(({data})=>{if(!live)return;const station=data?.[0];setStationUuid(station?.station_uuid||null);setReady(Boolean(station&&Date.now()-Date.parse(station.last_seen_at)<90000));});return()=>{live=false;};},[db]);
+ useEffect(()=>{
+  let live=true;
+  if(typeof db.rpc!=="function")return;
+ void db.rpc("flexy_mini_station_overview").then(({data,error})=>{
+   if(!live)return;
+   const stations=Array.isArray(data)?data:[];
+   const station=stations.find((row:{status?:string;last_seen_at?:string})=>
+    row.status==="approved"&&Boolean(row.last_seen_at)&&
+    Date.now()-Date.parse(String(row.last_seen_at))<90000);
+   setStationUuid(!error&&station?.station_uuid?station.station_uuid:null);
+   setReady(Boolean(!error&&station));
+  }).catch(()=>{if(live){setStationUuid(null);setReady(false);}});
+  return()=>{live=false;};
+ },[db]);
  const [confirm,setConfirm]=useState(false);
  const [busy,setBusy]=useState(false);
  const [uncertain,setUncertain]=useState(false);
