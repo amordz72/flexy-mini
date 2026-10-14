@@ -10,8 +10,10 @@ const output=new URL('../node_modules/.station-names-tests/',import.meta.url);
 await mkdir(output,{recursive:true});
 const ui=`import React from 'react';
 const c=name=>props=>React.createElement(name,props,props.children);
-export const Alert=c('alert'),Button=c('button'),Card=c('card'),Descriptions=c('descriptions'),
- Empty=c('empty'),Select=c('select'),Tag=c('tag');
+export const Alert=c('alert'),Button=c('button'),
+ Card=props=>React.createElement('card',props,[props.title,props.extra,props.children]),
+ Descriptions=props=>React.createElement('descriptions',props,(props.items||[]).map(item=>React.createElement('field',{key:item.key},item.children))),
+ Empty=c('empty'),Select=c('select'),Tag=c('tag'),Collapse=props=>React.createElement('collapse',props,(props.items||[]).map(item=>React.createElement('section',{key:item.key},item.children)));
 export const Input=Object.assign(c('input'),{Password:c('input-password')});
 export const Space=Object.assign(c('space'),{Compact:c('space-compact')});
 export const Grid={useBreakpoint:()=>({sm:true})};
@@ -24,7 +26,10 @@ export const Table=props=>{
   });
   return React.createElement('row',{key:i},cells);
  });
- return React.createElement('table',props,rows);
+ const expanded=props.expandable?.expandedRowRender?(props.dataSource||[])
+  .filter(record=>props.expandable.rowExpandable?.(record)!==false)
+  .map((record,i)=>React.createElement('expanded-row',{key:'expanded-'+i},props.expandable.expandedRowRender(record))):[];
+ return React.createElement('table',props,[...rows,...expanded]);
 };
 export const Modal=props=>props.open?React.createElement('modal',props,props.children):null;
 export const message={success(){},warning(){},info(){},error(){}};
@@ -32,13 +37,18 @@ export const message={success(){},warning(){},info(){},error(){}};
 const plugins=[{name:'stub-station-ui',setup(b){
  b.onResolve({filter:/^antd$/},()=>({path:'ui',namespace:'stub'}));
  b.onResolve({filter:/SamaOperationalActions$/},()=>({path:'actions',namespace:'stub'}));
- b.onLoad({filter:/.*/,namespace:'stub'},args=>({loader:'js',contents:args.path==='ui'?ui:'export default function Actions(){return null}'}));
+ b.onLoad({filter:/.*/,namespace:'stub'},args=>({loader:'js',contents:args.path==='ui'?ui:'export async function readSamaStatus(){return []}; export default function Actions(){return null}'}));
 }}];
 const built=await build({entryPoints:['src/StationOverview.tsx'],bundle:true,write:false,
  format:'esm',platform:'node',external:['react','react/jsx-runtime'],plugins});
 await writeFile(new URL('component.mjs',output),built.outputFiles[0].text);
 const Station=(await import(new URL('component.mjs',output))).default;
 globalThis.IS_REACT_ACT_ENVIRONMENT=true;
+const persistent=new Map();
+globalThis.window={
+ setInterval:()=>1,clearInterval:()=>{},
+ localStorage:{getItem:key=>persistent.get(key)??null,setItem:(key,value)=>persistent.set(key,value),removeItem:key=>persistent.delete(key)}
+};
 const fixture={
  stations:[
   {station_uuid:'s-1',status:'approved',computer_name:'WIN-PC',last_seen_at:new Date().toISOString(),agent_version:'0.4.10'},
@@ -61,7 +71,7 @@ const fixture={
 const data=x=>({data:x,error:null});
 const textOf=n=>(n.children||[]).map(x=>typeof x==='string'?x:textOf(x)).join('');
 function makeDb(withLabels=true){
- const calls=[];return {calls,rpc:async(name,args)=>{
+ const calls=[];return {calls,auth:{getUser:async()=>({data:{user:{id:'admin-a'}},error:null})},rpc:async(name,args)=>{
   calls.push({name,args});
   if(name==='flexy_mini_station_overview')return data(fixture.stations);
   if(name==='station_connect_admin_identity_labels')return withLabels?data(fixture.labels):{data:null,error:{code:'PGRST202',message:'not deployed'}};
@@ -79,8 +89,8 @@ test('stable station code and custom alias shown; legacy Windows name not used a
  assert.equal(db.calls.some(x=>x.name.includes('execute')),false);
  await act(async()=>root.unmount());
 });
-test('SIM code and user alias shown after opening station, independent of phone',async()=>{
- const db=makeDb();const root=await open(db);await click(root,'عرض');
+test('SIM code and user alias shown beneath the owning server without an extra click',async()=>{
+ const db=makeDb();const root=await open(db);
  assert.match(textOf(root.root),/sama-1/);assert.match(textOf(root.root),/عمر سما1/);
  assert.equal(db.calls.some(x=>x.name.includes('update_sim')),false);
  await act(async()=>root.unmount());
@@ -107,7 +117,7 @@ test('server filter switches by station UUID and returns to all without reclassi
  assert.equal(db.calls.some(x=>/create_|update_sim|recharge|ussd|execute/.test(x.name)),false);
  await act(async()=>root.unmount());
 });
-test('PIN editor follows the SIM station even in all-servers mode',async()=>{
+test('PIN editor follows the SIM station from its expanded actions even in all-servers mode',async()=>{
  const db=makeDb(),root=await open(db);
  const buttons=root.root.findAllByType('button').filter(x=>textOf(x).includes('تغيير PIN'));
  assert.equal(buttons.length,2);
@@ -129,6 +139,28 @@ test('editing alias calls only admin label RPC, never changes SIM type/PIN or ex
   {p_entity:'station',p_uuid:'s-1',p_label:'PC bach'});
  assert.equal(db.calls.some(x=>/create_|update_sim|recharge|ussd|execute/.test(x.name)),false);
  assert.match(textOf(root.root),/PC bach/);
+ await act(async()=>root.unmount());
+});
+test('last chosen server persists for this signed-in administrator across reload',async()=>{
+ persistent.clear();
+ const db=makeDb(),root=await open(db);
+ const filter=()=>root.root.findAllByType('select').find(x=>x.props['aria-label']==='فلترة حسب السيرفر');
+ await act(async()=>filter().props.onChange('s-2'));
+ assert.equal(persistent.get('flexy-mini:station-filter:admin-a'),'s-2');
+ await act(async()=>root.unmount());
+ const next=await open(makeDb());
+ assert.equal(next.root.findAllByType('select').find(x=>x.props['aria-label']==='فلترة حسب السيرفر').props.value,'s-2');
+ assert.doesNotMatch(textOf(next.root),/sama-1/);
+ assert.match(textOf(next.root),/arsely-2/);
+ await act(async()=>next.unmount());
+ persistent.clear();
+});
+test('page has no separate Sama list; only SIM-scoped actions can dispatch commands',async()=>{
+ const db=makeDb(),root=await open(db);
+ const view=textOf(root.root);
+ assert.doesNotMatch(view,/شرائح Sama/);
+ assert.match(view,/المودمات والشرائح/);
+ assert.equal(db.calls.some(x=>/queue_balance|set_sim_flexy_approval|recharge|ussd|execute/.test(x.name)),false);
  await act(async()=>root.unmount());
 });
 test('old server without names RPC keeps station list usable',async()=>{
