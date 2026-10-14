@@ -1,16 +1,25 @@
 <!doctype html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><meta name="theme-color" content="#2563eb"/><meta name="application-name" content="Flexy Mini"/><meta name="mobile-web-app-capable" content="yes"/><link rel="manifest" href="/flexy-mini/manifest.webmanifest"/><link rel="icon" type="image/png" sizes="192x192" href="/flexy-mini/icons/icon-192.png"/><link rel="apple-touch-icon" href="/flexy-mini/icons/icon-192.png"/><title>Flexy Mini</title></head><body><div id="root"></div><script>
 (function(){
- var started=Date.now();
- function show(){
+ var failed=false;
+ function show(message){
+  if(failed)return;
   var root=document.getElementById("root");
   if(!root||root.childElementCount||root.textContent.trim())return;
-  root.innerHTML='<div dir="rtl" style="font:16px system-ui,sans-serif;padding:24px;max-width:520px;margin:12vh auto"><h2>تعذر تشغيل فليكسي ميني</h2><p>لم تكتمل ملفات التطبيق. تحقق من الإنترنت ثم أعد المحاولة. بياناتك المحلية لم تُمسح.</p><button id="flexy-retry" style="padding:12px 22px;background:#2563eb;color:white;border:0;border-radius:8px">إعادة المحاولة</button></div>';
-  document.getElementById("flexy-retry").addEventListener("click",function(){location.reload();});
+  failed=true;
+  var box=document.createElement("section");
+  box.dir="rtl";
+  box.style.cssText="font:16px system-ui,sans-serif;padding:24px;max-width:520px;margin:12vh auto";
+  var title=document.createElement("h2");title.textContent="تعذر تشغيل فليكسي ميني";
+  var detail=document.createElement("p");detail.textContent=message+" بياناتك المحلية لم تُمسح.";
+  var retry=document.createElement("button");retry.textContent="إعادة المحاولة";
+  retry.style.cssText="padding:12px 22px;background:#2563eb;color:white;border:0;border-radius:8px";
+  retry.onclick=function(){location.reload();};
+  box.append(title,detail,retry);root.replaceChildren(box);
  }
  window.addEventListener("error",function(e){
-  if(e.target&&e.target.tagName==="SCRIPT")show();
+  if(e.target&&e.target.tagName==="SCRIPT")show("تعذر تحميل ملف تشغيل التطبيق.");
  },true);
- window.addEventListener("load",function(){setTimeout(show,12000);});
- setTimeout(show,18000);
+ // A slow connection is not a crash. Do not replace the root after an arbitrary 12s timeout.
+ window.addEventListener("unhandledrejection",function(e){console.warn("Flexy startup promise rejected",e.reason);});
 })();
 </script><script type="module" src="/src/main.tsx"></script></body></html>
