@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {test,after} from 'node:test';
 import {build} from 'esbuild';
-import {mkdir,writeFile,rm} from 'node:fs/promises';
+import {mkdir,writeFile,rm,readFile} from 'node:fs/promises';
 import React from 'react';
 import {create,act} from 'react-test-renderer';
 
@@ -16,7 +16,7 @@ export const Alert=c('alert'),Button=c('button'),
  Empty=c('empty'),Select=c('select'),Tag=c('tag'),Collapse=props=>React.createElement('collapse',props,(props.items||[]).map(item=>React.createElement('section',{key:item.key},item.children)));
 export const Input=Object.assign(c('input'),{Password:c('input-password')});
 export const Space=Object.assign(c('space'),{Compact:c('space-compact')});
-export const Grid={useBreakpoint:()=>({sm:true})};
+export const Grid={useBreakpoint:()=>({sm:globalThis.__stationMobileMode!==true})};
 export const Typography={Text:c('text')};
 export const Table=props=>{
  const rows=(props.dataSource||[]).map((record,i)=>{
@@ -167,5 +167,29 @@ test('old server without names RPC keeps station list usable',async()=>{
  const db=makeDb(false),root=await open(db);
  assert.match(textOf(root.root),/WIN-PC/);
  await act(async()=>root.unmount());
+});
+
+test('mobile modem cards contain exactly one details Collapse per physical modem',async()=>{
+ globalThis.__stationMobileMode=true;
+ let root;
+ try{
+  root=await open(makeDb());
+  const modemCards=root.root.findAllByType('card').filter(node=>node.props.title==='Huawei');
+  assert.equal(modemCards.length,2,'two modem cards for two hardware records');
+  assert.equal(root.root.findAllByType('collapse').length,2);
+  for(const modem of modemCards){
+   assert.equal(modem.findAllByType('collapse').length,1,'one details section inside each modem');
+  }
+  assert.match(textOf(modemCards[0]),/sama-1/);
+  assert.match(textOf(modemCards[1]),/arsely-2/);
+ }finally{
+  if(root)await act(async()=>root.unmount());
+  delete globalThis.__stationMobileMode;
+ }
+});
+test('CSS applies full-height only to grid cards, not all nested modem cards',async()=>{
+ const css=await readFile(new URL('../src/style.css',import.meta.url),'utf8');
+ assert.doesNotMatch(css,/\\.app-content\\s+\\.ant-card\\s*\\{\\s*height\\s*:\\s*100%/);
+ assert.match(css,/\\.app-content\\s+\\.ant-row\\s*>\\s*\\.ant-col\\s*>\\s*\\.ant-card\\s*\\{\\s*height\\s*:\\s*100%/);
 });
 after(async()=>rm(output,{recursive:true,force:true}));
