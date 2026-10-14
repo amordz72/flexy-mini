@@ -10,7 +10,9 @@ const output=new URL('../node_modules/.station-names-tests/',import.meta.url);
 await mkdir(output,{recursive:true});
 const ui=`import React from 'react';
 const c=name=>props=>React.createElement(name,props,props.children);
-export const Alert=c('alert'),Button=c('button'),Card=c('card'),Descriptions=c('descriptions'),
+export const Alert=c('alert'),Button=c('button'),
+ Card=props=>React.createElement('card',props,[props.title,props.extra,props.children]),
+ Descriptions=props=>React.createElement('descriptions',props,(props.items||[]).map(item=>React.createElement('field',{key:item.key},item.children))),
  Empty=c('empty'),Select=c('select'),Tag=c('tag'),Collapse=props=>React.createElement('collapse',props,(props.items||[]).map(item=>React.createElement('section',{key:item.key},item.children)));
 export const Input=Object.assign(c('input'),{Password:c('input-password')});
 export const Space=Object.assign(c('space'),{Compact:c('space-compact')});
