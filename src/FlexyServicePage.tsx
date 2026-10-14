@@ -385,7 +385,12 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
             onClick={() => setAmount(value)}>{currency(value)}</Button>)}</Space>
         <InputNumber<number> min={1} max={100000} precision={0} value={amount}
           onChange={setAmount} style={{ width: "100%" }} size="large" placeholder="المبلغ" addonAfter="دج" />
-        {!isCustomer&&<Alert type="info" showIcon message="اختبار أرسلي 630 — رصيد عادي" description="تم فصل مسار 696 نهائيًا عن الرصيد العادي؛ 696 مخصص لشراء العروض. مسار 630 قيد التجهيز والاختبار، والإرسال المالي معطّل حتى اعتماد أمر التنفيذ في السيرفر والتحقق من Agent. لا توجد محاولة إرسال تلقائية."/>}
+        {!isCustomer&&<Space direction="vertical" style={{width:"100%"}}>
+          <Alert type="info" showIcon message="اختبار أرسلي 630 — رصيد عادي" description="هذا تحضير للأمر فقط، وليس إرسالًا. مسار 696 مخصص لشراء العروض. يجب اعتماد تنفيذ 630 على السيرفر والتحقق من Agent قبل فتح الإرسال المالي."/>
+          <Typography.Text strong>معاينة أمر الشحن (PIN محفوظ على Agent)</Typography.Text>
+          <Typography.Text code dir="ltr">{validPhone(normalizePhone(phone)) && Number.isInteger(amount) && Number(amount)>0 ? `*630*${normalizePhone(phone)}*${amount}*{service_pin}#` : "أدخل رقمًا صحيحًا ومبلغًا أولًا"}</Typography.Text>
+          <Button block disabled>تنفيذ تجربة 630 — ينتظر تفعيل السيرفر</Button>
+        </Space>}
       </Space>
     </Card> : <>
       <Card title="العروض المتاحة" extra={<Button size="small" icon={<ReloadOutlined/>}
