@@ -3,6 +3,7 @@ import {Alert,Button,Card,Collapse,Descriptions,Empty,Grid,Input,Modal,Select,Sp
 import type {SupabaseClient} from "@supabase/supabase-js";
 import SamaOperationalActions,{readSamaStatus} from "./SamaOperationalActions";
 import ArsselliBalanceActions from "./ArsselliBalanceActions";
+import ArsselliLabCatalog from "./ArsselliLabCatalog";
 import type {SamaStatus} from "./SamaOperationalActions";
 
 type Station={station_uuid:string;status:string;computer_name:string|null;last_seen_at:string|null;agent_version:string|null};
@@ -582,5 +583,6 @@ export default function StationOverview({db}:{db:SupabaseClient}){
     <Typography.Text type="secondary">حفظ PIN لا يغيّر نوع الشريحة ولا يعتمدها للفليكسي.</Typography.Text>
    </Space>
   </Modal>
+  <ArsselliLabCatalog db={db}/>
  </Space>;
 }
