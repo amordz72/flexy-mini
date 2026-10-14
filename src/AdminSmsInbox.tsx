@@ -22,21 +22,12 @@ export default function AdminSmsInbox({db,simUuid}:{db:SupabaseClient;simUuid:st
  const [error,setError]=useState("");
  const load=useCallback(async()=>{
   setError("");
-  const {data,error:jobError}=await db.from("station_connect_jobs")
-   .select("job_uuid,status,result_code,created_at")
-   .eq("sim_uuid",simUuid).eq("operation_key","sms.inbox.latest")
-   .order("created_at",{ascending:false}).limit(10);
-  if(jobError){setError(jobError.message);return;}
-  const rows=(data||[]) as InboxJob[];
+  const {data,error:historyError}=await db.rpc("station_connect_admin_sms_inbox_history",{p_sim_uuid:simUuid});
+  if(historyError){setError(historyError.message);return;}
+  const rows=(data||[]) as Array<InboxJob&{raw_response:string|null;command_status:string|null}>;
   setJobs(rows);
   const latest=rows[0];
-  if(!latest){setMessages([]);return;}
-  const {data:commands,error:commandError}=await db.from("station_connect_commands")
-   .select("raw_response,status").eq("job_uuid",latest.job_uuid)
-   .eq("action","sms_read").order("sequence",{ascending:false}).limit(1);
-  if(commandError){setError(commandError.message);return;}
-  const cmd=commands?.[0];
-  setMessages(cmd?.status==="success"?parseMessages(String(cmd.raw_response||"")):[]);
+  setMessages(latest?.command_status==="success"?parseMessages(String(latest.raw_response||"")):[]);
  },[db,simUuid]);
  useEffect(()=>{void load();},[load]);
  const read=async()=>{
