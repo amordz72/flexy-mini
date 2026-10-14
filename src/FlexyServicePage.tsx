@@ -391,6 +391,10 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
       <Card title="العروض المتاحة" extra={<Button size="small" icon={<ReloadOutlined/>}
         onClick={() => void loadCatalog()} loading={loading}>تحديث</Button>}>
         <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+          {!isCustomer && !stationBusy && !stationUuid && samaStatus && !samaStatus.station_online &&
+            <Alert type="info" showIcon
+              message="المحطة غير متصلة — العروض المحفوظة متاحة للقراءة"
+              description="يمكنك معرفة مجموعة عروض الرقم من البيانات المحفوظة، لكن لن يبدأ استكشاف جديد أو إرسال عرض حتى تتصل المحطة."/>}
           <CustomerOfferIdentity db={db} phone={phone} stationUuid={stationUuid}
             active={mode === "offers"} requestToken={offersRequest}
             isCustomer={isCustomer} onIdentity={handleIdentity} onJobChange={refreshHistory}/>
