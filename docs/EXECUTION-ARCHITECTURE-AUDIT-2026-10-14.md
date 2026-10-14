@@ -43,3 +43,12 @@ In `station-connect/server/supabase/migrations/20260919_021_session_command_queu
 
 ## Architecture decision confirmed by user
 Keep PIN centrally protected and bound to SIM ICCID; Agent uses it transiently on the correctly bound modem. Avoid any duplicate local PIN registry. Reuse existing Vault reference and command queue. No financial operation authorized by this audit.
+
+## Follow-up audit: profile execution mismatch
+- `station-gateway/orchestrators.ts` implements `advanceProfileDrivenMobilisOffer` when `execution_plan.mode='profile_steps_v1'`, but only through `mobilis.offer.execute` dispatch.
+- It resolves `{service_pin}` through `queueCommand(...,'ussd_reply',null,'service_pin')`, while other `value_template` placeholders are rendered from `job.payload`.
+- It has hard-coded Sama assumptions (`{network_index}` requires a numbered offer menu). The generic step runner must separate response guards by approved service template, not inherit Sama rules for Arsselli.
+- Arsselli `mobilis.flexy.arsselli.696` currently has a separate handler (commit c26ea007); keep undeployed until reviewed.
+- Safety: validate exact recipient and amount before a financial confirmation; queue each step once, preserve USSD session, do not retry uncertain transactions, and classify result as review absent explicit network success.
+- Next implementation should extract reusable profile step advancement, with typed guard/pattern definitions, and adapt both routes through tested profiles. Do not assume a database profile table exists; first locate authoritative existing tables/RPCs.
+- Live DB read-only inspection of additional job data was blocked by security checks; no claim about current live job/profile contents.
