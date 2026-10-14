@@ -14,7 +14,7 @@ export default function StartupDiagnostics(){
   update();const timer=setInterval(update,3000);return()=>clearInterval(timer);
  },[]);
  const latest=rows.filter(x=>x.kind==="app-mounted").slice(-1)[0];
- const resources=performance.getEntriesByType("resource").filter((entry)=>/\\.(js|css)(\\?|$)/.test(entry.name)).map((entry)=>({kind:entry.name.split("/").pop()?.split("?")[0]||"asset",ms:Math.round(entry.duration),start:Math.round(entry.startTime),bytes:(entry as PerformanceResourceTiming).transferSize||0})).sort((a,b)=>b.ms-a.ms).slice(0,12);
+ const resources=performance.getEntriesByType("resource").filter((entry)=>/\.(js|css)(\?|$)/.test(entry.name)).map((entry)=>({kind:entry.name.split("/").pop()?.split("?")[0]||"asset",ms:Math.round(entry.duration),start:Math.round(entry.startTime),bytes:(entry as PerformanceResourceTiming).transferSize||0})).sort((a,b)=>b.ms-a.ms).slice(0,12);
  const report=JSON.stringify({version:2,recordedAt:new Date().toISOString(),slowAssets:resources,navigation:navigation?{
   dns:Math.round(navigation.domainLookupEnd-navigation.domainLookupStart),
   connection:Math.round(navigation.connectEnd-navigation.connectStart),
