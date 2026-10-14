@@ -384,3 +384,13 @@ Canonical design context: `amordz72/developer/projects/station-connect/CENTRAL-U
 **Non-goals:** No server/Agent upgrade, Supabase/RPC changes, USSD, account/finance operations or new CSS/framework. Persistent per-account server filter and 30s refresh / 90s offline threshold unchanged.
 
 **Verification:** Review branch requires development-guard pass/rejection tests, npm test, build and Pages deploy status after merge. Android PWA UI confirmation remains a separate user acceptance gate.
+
+## 25. 2026-10-14 — Fix mobile nested modem-card overlap
+
+**User observation:** Installed Android screenshot after §24 showed a ghosted/overlapping «التفاصيل وإعدادات الشريحة» line between two modem cards on server-2, although two distinct modem cards and their own single Ant Design Collapse were rendered.
+
+**Source audit:** `src/style.css` set `.app-content .ant-card{height:100%}` globally. This also affected the nested mobile station/modem Cards inside Ant Design Space, forcing them to match a parent height instead of their contents. Each modem already had exactly one Collapse in `src/StationOverview.tsx`; no duplicate UI data or database rows are implied by the screenshot.
+
+**Fix:** Narrow the existing equal-height CSS rule to `.app-content .ant-row > .ant-col > .ant-card{height:100%}` so Ant Design grid cards can stretch but normal nested mobile modem Cards retain natural height. No new CSS file, parallel UI component or business logic change. Add automated UI fixture for mobile mode (exactly one Collapse per modem) and CSS specificity regression assertion in the existing `tests/station-identity.test.mjs`.
+
+**Boundaries:** Frontend CSS + isolated regression tests only; no SIM/station identity, Station Agent, RPC, Supabase, USSD, PIN, balance or routing changes. Source branch/PR and verification SHA to be recorded after CI. GitHub Pages deployment and Android installed-PWA visual acceptance remain independent verification gates.
