@@ -4,7 +4,7 @@ import type {SupabaseClient} from "@supabase/supabase-js";
 
 type Job={job_uuid:string;status:string;result_code?:string|null;result_text?:string|null};
 const normalizePhone=(value:string)=>value.replace(/\D/g,"").replace(/^213/,"0");
-const accounts=[{value:"03",label:"03 — DATA"},{value:"04",label:"04 — GTS"}];
+const accounts=[{value:"01",label:"01 — POSTE"},{value:"02",label:"02 — ASSILOU"},{value:"03",label:"03 — DATA"},{value:"04",label:"04 — GTS"},{value:"05",label:"05 — MOBILIS"}];
 export default function ArsselliSend696({db,stationUuid,ready}:{db:SupabaseClient;stationUuid:string;ready:boolean}){
  const [phone,setPhone]=useState("");
  const [amount,setAmount]=useState<number|null>(null);
