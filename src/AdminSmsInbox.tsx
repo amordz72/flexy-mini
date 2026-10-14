@@ -22,12 +22,13 @@ export default function AdminSmsInbox({db,simUuid}:{db:SupabaseClient;simUuid:st
  const [error,setError]=useState("");
  const load=useCallback(async()=>{
   setError("");
+  setJobs([]);setMessages([]);
   const {data,error:historyError}=await db.rpc("station_connect_admin_sms_inbox_history",{p_sim_uuid:simUuid});
   if(historyError){setError(historyError.message);return;}
   const rows=(data||[]) as Array<InboxJob&{raw_response:string|null;command_status:string|null}>;
   setJobs(rows.map(row=>({...row,status:row.command_status==="success"?"success":row.status})));
-  const latest=rows[0];
-  setMessages(latest?.command_status==="success"?parseMessages(String(latest.raw_response||"")):[]);
+  const latest=rows.find(row=>row.command_status==="success" && row.raw_response) || rows[0];
+  setMessages(latest?.raw_response?parseMessages(String(latest.raw_response)):[]);
  },[db,simUuid]);
  useEffect(()=>{void load();},[load]);
  const read=async()=>{
