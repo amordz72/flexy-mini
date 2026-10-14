@@ -176,11 +176,15 @@ test('old server without names RPC keeps station list usable',async()=>{
 });
 
 test('mobile modem cards contain exactly one details Collapse per physical modem',async()=>{
+ persistent.clear();
  globalThis.__stationMobileMode=true;
  let root;
  try{
   root=await open(makeDb());
-  const modemCards=root.root.findAllByType('card').filter(node=>node.findAllByType('collapse').length===1);
+  const modemCards=root.root.findAllByType('card').filter(node=>{
+   const name=node.props.title?.props?.children?.[0]?.props?.children;
+   return typeof name==='string'&&name.startsWith('USB ');
+  });
   assert.equal(modemCards.length,2,'two modem cards for two hardware records');
   assert.equal(root.root.findAllByType('collapse').length,2);
   for(const modem of modemCards){
@@ -194,6 +198,7 @@ test('mobile modem cards contain exactly one details Collapse per physical modem
  }
 });
 test('USB and serial suffixes come from canonical modem identities, not list order or IP',async()=>{
+ persistent.clear();
  globalThis.__stationMobileMode=true;
  let root;
  try{
@@ -218,6 +223,7 @@ test('USB and serial suffixes come from canonical modem identities, not list ord
  }
 });
 test('desktop modem table uses the same stable USB and serial identity',async()=>{
+ persistent.clear();
  const root=await open(makeDb());
  assert.match(textOf(root.root),/USB 001/);
  assert.match(textOf(root.root),/USB 002/);
@@ -225,6 +231,7 @@ test('desktop modem table uses the same stable USB and serial identity',async()=
  await act(async()=>root.unmount());
 });
 test('unknown identity or missing serial never fabricates labels from table order',async()=>{
+ persistent.clear();
  globalThis.__stationMobileMode=true;
  let missing,failed;
  try{
@@ -247,6 +254,7 @@ test('unknown identity or missing serial never fabricates labels from table orde
  }
 });
 test('same full Serial is explicitly flagged as ambiguous even with different USB labels',async()=>{
+ persistent.clear();
  const rows=[
   {modem_uuid:'m-1',station_uuid:'s-1',usb_number:1,usb_label:'001',serial_number:'SAME_SERIAL'},
   {modem_uuid:'m-2',station_uuid:'s-2',usb_number:2,usb_label:'002',serial_number:'SAME_SERIAL'}
