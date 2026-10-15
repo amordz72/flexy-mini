@@ -707,7 +707,7 @@ function SharedCardsStore({token}:{token?:string}){
   useEffect(()=>{
     let active=true;setBusy(true);
     if(!token){void (async()=>{if(!client)throw new Error("لا يوجد اتصال");const [p,v]=await Promise.all([client.from("flexy_mini_products").select("id,category_id,name,active,display_mode"),client.from("flexy_mini_variants").select("id,product_id,name,denomination,stock_quantity,sort_index,is_frozen,active,display_mode")]);if(p.error||v.error)throw new Error(p.error?.message||v.error?.message);return {categories:[],products:(p.data||[]).filter(x=>x.active&&x.display_mode==="visible"),variants:(v.data||[]).filter(x=>x.active&&x.display_mode==="visible")};})().then(data=>{if(active)setCatalog(data);}).catch(e=>{if(active)setError(e instanceof Error?e.message:"تعذر تحميل البطاقات");}).finally(()=>{if(active)setBusy(false);});return()=>{active=false;};}
-    void fetch(url+"/functions/v1/flexy-mini-customers",{method:"POST",headers:{"Content-Type":"application/json",apikey:key},body:JSON.stringify({action:"catalog",token})})
+    void fetch(url+"/functions/v1/flexy-mini-customers",{method:"POST",headers:{"Content-Type":"application/json",apikey:key},body:JSON.stringify({action:"catalog",token,device_secret:window.localStorage.getItem("flexy_mini_device_secret")||""})})
       .then(async r=>{const data=await r.json();if(!r.ok)throw new Error(data.error||"تعذر تحميل البطاقات");if(active)setCatalog(data);})
       .catch(e=>{if(active)setError(e instanceof Error?e.message:"تعذر الاتصال");})
       .finally(()=>{if(active)setBusy(false);});
