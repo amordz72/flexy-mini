@@ -112,7 +112,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
     setCreditCheck(null);
     setCreditCheckError("");
     try {
-      const result = await db.rpc("station_connect_admin_arsselli_630_preflight", {
+      const result = await db.rpc("station_connect_admin_prepare_arsselli_630", {
         p_phone: normalizePhone(phone), p_amount: amount
       });
       if (result.error) throw result.error;
