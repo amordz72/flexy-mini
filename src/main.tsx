@@ -312,6 +312,25 @@ function CardsCatalog() {
     else setProducts(old => old.map(p => p.id === id ? {...p,is_frozen:!frozen} : p));
     message.success(!frozen ? "تم التجميد" : "تم إلغاء التجميد");
   }
+  function syncCardPrices(form: ReturnType<typeof Form.useForm>[0], changed: Record<string, unknown>, values: Record<string, unknown>) {
+    const key = Object.keys(changed)[0];
+    if (!["purchase_price","sale_price","markup_percent"].includes(key)) return;
+    const buy = Number(values.purchase_price);
+    const sale = Number(values.sale_price);
+    const percent = Number(values.markup_percent);
+    if (!Number.isFinite(buy) || buy <= 0) return;
+    if (key === "sale_price" && values.sale_price !== "" && Number.isFinite(sale) && sale >= 0) {
+      form.setFieldsValue({markup_percent: Number(((sale / buy - 1) * 100).toFixed(4))});
+    } else if (key === "markup_percent" && values.markup_percent !== "" && Number.isFinite(percent)) {
+      form.setFieldsValue({sale_price: Number((buy * (1 + percent / 100)).toFixed(2))});
+    } else if (key === "purchase_price") {
+      if (values.sale_price !== undefined && values.sale_price !== "" && Number.isFinite(sale) && sale >= 0) {
+        form.setFieldsValue({markup_percent: Number(((sale / buy - 1) * 100).toFixed(4))});
+      } else if (Number.isFinite(percent)) {
+        form.setFieldsValue({sale_price: Number((buy * (1 + percent / 100)).toFixed(2))});
+      }
+    }
+  }
   async function updateVariant(values: Record<string, unknown>) {
     if (!client || !editingVariant || busy) return;
     setBusy(true);
@@ -328,11 +347,12 @@ function CardsCatalog() {
     .sort((a, b) => a.sort_index - b.sort_index || (a.denomination ?? 999999) - (b.denomination ?? 999999) || a.id - b.id);
   return <Space direction="vertical" size="large" style={{ width: "100%" }}>
     <Modal open={editingVariant !== null} title="تعديل البطاقة" okText="حفظ التعديل" confirmLoading={busy} onOk={() => editForm.submit()} onCancel={() => !busy && setEditingVariant(null)} destroyOnHidden>
-      <Form form={editForm} layout="vertical" onFinish={updateVariant}>
+      <Form form={editForm} layout="vertical" onValuesChange={(changed,all)=>syncCardPrices(editForm,changed,all)} onFinish={updateVariant}>
         <Form.Item name="name" label="اسم البطاقة" rules={[{required:true}]}><Input /></Form.Item>
         <Form.Item name="denomination" label="القيمة" rules={[{required:true}]}><Input type="number" min={0}/></Form.Item>
         <Form.Item name="purchase_price" label="سعر الشراء (دج)" rules={[{required:true}]}><Input type="number" min={0} step="0.01"/></Form.Item>
-        <Form.Item name="markup_percent" label="نسبة الربح %" rules={[{required:true}]}><Input type="number" min={0} step="0.01"/></Form.Item>
+        <Form.Item name="sale_price" label="سعر البيع (دج)"><Input type="number" min={0} step="0.01"/></Form.Item>
+        <Form.Item name="markup_percent" label="نسبة الربح %" rules={[{required:true}]}><Input type="number" step="0.01"/></Form.Item>
         <Form.Item name="sort_index" label="الترتيب"><Input type="number"/></Form.Item>
       </Form>
     </Modal>
@@ -369,15 +389,16 @@ function CardsCatalog() {
         {title:"الربح",dataIndex:"markup_percent",key:"markup_percent",width:85,responsive:["md"],render:(n:number)=>n+"%"},
         {title:"البيع",key:"sale",width:105,render:(_,v)=>(Number(v.purchase_price)*(1+Number(v.markup_percent)/100)).toFixed(2)+" دج"},
         {title:"المخزون",dataIndex:"stock_quantity",key:"stock",width:80},
-        {title:"الإجراءات",key:"actions",width:92,render:(_,v)=><Space size={4}><Button size="small" title={v.display_mode==="hidden"?"إظهار":"إخفاء"} aria-label={v.display_mode==="hidden"?"إظهار":"إخفاء"} icon={v.display_mode==="hidden"?<EyeInvisibleOutlined/>:<EyeOutlined/>} onClick={()=>toggleVisibility("flexy_mini_variants",v.id,v.display_mode)}/><Button size="small" title="تعديل" aria-label="تعديل" icon={<SettingOutlined/>} onClick={()=>{setEditingVariant(v);editForm.setFieldsValue({name:v.name,denomination:v.denomination,purchase_price:v.purchase_price,markup_percent:v.markup_percent,sort_index:v.sort_index});}}/></Space>}
+        {title:"الإجراءات",key:"actions",width:92,render:(_,v)=><Space size={4}><Button size="small" title={v.display_mode==="hidden"?"إظهار":"إخفاء"} aria-label={v.display_mode==="hidden"?"إظهار":"إخفاء"} icon={v.display_mode==="hidden"?<EyeInvisibleOutlined/>:<EyeOutlined/>} onClick={()=>toggleVisibility("flexy_mini_variants",v.id,v.display_mode)}/><Button size="small" title="تعديل" aria-label="تعديل" icon={<SettingOutlined/>} onClick={()=>{setEditingVariant(v);editForm.setFieldsValue({name:v.name,denomination:v.denomination,purchase_price:v.purchase_price,markup_percent:v.markup_percent,sort_index:v.sort_index,sale_price:Number((Number(v.purchase_price)*(1+Number(v.markup_percent)/100)).toFixed(2))});}}/></Space>}
       ]} />
-      <Form form={variantForm} layout="vertical" style={{ marginTop: 16 }} onFinish={v => save("flexy_mini_variants", { product_id: productId, name: v.name.trim(), denomination: Number(v.denomination || 0), purchase_price: Number(v.purchase_price), markup_percent: Number(v.markup_percent || 0), sort_index: Math.max(0, ...variants.filter(item => item.product_id === productId).map(item => Number(item.sort_index) || 0)) + 1 }, variantForm)}>
+      <Form form={variantForm} layout="vertical" style={{ marginTop: 16 }} onValuesChange={(changed,all)=>syncCardPrices(variantForm,changed,all)} onFinish={v => save("flexy_mini_variants", { product_id: productId, name: v.name.trim(), denomination: Number(v.denomination || 0), purchase_price: Number(v.purchase_price), markup_percent: Number(v.markup_percent || 0), sort_index: Math.max(0, ...variants.filter(item => item.product_id === productId).map(item => Number(item.sort_index) || 0)) + 1 }, variantForm)}>
         <Row gutter={8}>
           <Col xs={24} sm={12}><Form.Item name="name" label="اسم البطاقة" rules={[{ required: true }]}><Input placeholder="مثلاً 60 UC" /></Form.Item></Col>
           <Col xs={12} sm={6}><Form.Item name="denomination" label="القيمة"><Input type="number" min={0} /></Form.Item></Col>
           
           <Col xs={12}><Form.Item name="purchase_price" label="سعر الشراء (دج)" rules={[{ required: true }]}><Input type="number" min={0} step="0.01" /></Form.Item></Col>
-          <Col xs={12}><Form.Item name="markup_percent" label="نسبة الربح %" initialValue={0}><Input type="number" min={0} step="0.01" /></Form.Item></Col>
+          <Col xs={12}><Form.Item name="sale_price" label="سعر البيع (دج)"><Input type="number" min={0} step="0.01" /></Form.Item></Col>
+          <Col xs={12}><Form.Item name="markup_percent" label="نسبة الربح %" initialValue={0}><Input type="number" step="0.01" /></Form.Item></Col>
         </Row>
         <Button htmlType="submit" type="primary" disabled={busy}>إضافة بطاقة</Button>
       </Form>
