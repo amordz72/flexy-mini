@@ -86,6 +86,8 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
   const [creditCheckBusy,setCreditCheckBusy] = useState(false);
   const [creditCheck,setCreditCheck] = useState<{ready:boolean;reason:string}|null>(null);
   const [creditCheckError,setCreditCheckError] = useState("");
+  const [creditStageBusy,setCreditStageBusy] = useState(false);
+  const [creditStageResult,setCreditStageResult] = useState("");
   const [stationUuid, setStationUuid] = useState<string | null>(null);
   const [stationName, setStationName] = useState("");
   const [stationBusy, setStationBusy] = useState(false);
@@ -121,6 +123,27 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
       setCreditCheckError(error instanceof Error ? error.message : String(error));
     } finally {
       setCreditCheckBusy(false);
+    }
+  };
+
+  const stageCredit630 = async () => {
+    const recipient = normalizePhone(phone);
+    if (!db || isCustomer || !creditCheck?.ready || !validPhone(recipient) ||
+        !amount || !Number.isInteger(amount) || amount < 1 || amount > 50000) return;
+    setCreditStageBusy(true);
+    setCreditCheckError("");
+    try {
+      const key = `ordinary-630:${crypto.randomUUID()}`;
+      const {data,error} = await db.rpc("station_connect_admin_stage_arsselli_630", {
+        p_phone: recipient, p_amount: amount, p_idempotency_key: key
+      });
+      if (error) throw error;
+      const result = data as {job_uuid?:string;status?:string};
+      setCreditStageResult(`تم تسجيل طلب للمراجعة: ${result.job_uuid || "—"}. لم يُرسل أي رصيد.`);
+    } catch (error) {
+      setCreditCheckError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setCreditStageBusy(false);
     }
   };
 
@@ -411,6 +434,8 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
           <Typography.Text strong>معاينة أمر الشحن (PIN محفوظ على Agent)</Typography.Text>
           <Typography.Text code dir="ltr">{validPhone(normalizePhone(phone)) && Number.isInteger(amount) && Number(amount)>0 ? `*630*${normalizePhone(phone)}*${amount}*{service_pin}#` : "أدخل رقمًا صحيحًا ومبلغًا أولًا"}</Typography.Text>
           <Button block loading={creditCheckBusy} onClick={() => void checkCredit630()}>فحص جاهزية 630</Button>
+          {creditCheck?.ready && <Button block loading={creditStageBusy} onClick={() => void stageCredit630()}>تسجيل طلب 630 للمراجعة (دون إرسال)</Button>}
+          {creditStageResult && <Alert type="success" showIcon message={creditStageResult}/>}
           {creditCheckError && <Alert type="error" message={creditCheckError}/>}
           {creditCheck && <Alert type="info" message={creditCheck.ready ? "الشريحة متصلة، الإرسال غير مفعّل" : "لا توجد شريحة جاهزة"}/>}
         </Space>}
