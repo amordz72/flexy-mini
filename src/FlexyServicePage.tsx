@@ -106,6 +106,24 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
   const [unknownResult, setUnknownResult] = useState(Boolean(initialRequest.current && !initialRequest.current.job));
   const requestRef = useRef<PendingRequest | null>(initialRequest.current);
 
+  const checkCredit630 = async () => {
+    if (!db || !validPhone(normalizePhone(phone)) || !amount || !Number.isInteger(amount) || amount < 1 || amount > 50000) return;
+    setCreditCheckBusy(true);
+    setCreditCheck(null);
+    setCreditCheckError("");
+    try {
+      const result = await db.rpc("station_connect_admin_arsselli_630_preflight", {
+        p_phone: normalizePhone(phone), p_amount: amount
+      });
+      if (result.error) throw result.error;
+      setCreditCheck(result.data as {ready:boolean;reason:string});
+    } catch (error) {
+      setCreditCheckError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setCreditCheckBusy(false);
+    }
+  };
+
   const loadCatalog = useCallback(async () => {
     if (!db) return;
     setLoading(true);
