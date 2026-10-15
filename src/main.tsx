@@ -367,15 +367,15 @@ function CardsCatalog() {
         {title:"القيمة",dataIndex:"denomination",key:"denomination",width:85,responsive:["md"]},
         {title:"الشراء",dataIndex:"purchase_price",key:"purchase_price",width:100,responsive:["md"],render:(n:number)=>n+" دج"},
         {title:"الربح",dataIndex:"markup_percent",key:"markup_percent",width:85,responsive:["md"],render:(n:number)=>n+"%"},
-        {title:"البيع",key:"sale",width:110,responsive:["md"],render:(_,v)=>(Number(v.purchase_price)*(1+Number(v.markup_percent)/100)).toFixed(2)+" دج"},
+        {title:"البيع",key:"sale",width:105,render:(_,v)=>(Number(v.purchase_price)*(1+Number(v.markup_percent)/100)).toFixed(2)+" دج"},
         {title:"المخزون",dataIndex:"stock_quantity",key:"stock",width:80},
         {title:"الإجراءات",key:"actions",width:92,render:(_,v)=><Space size={4}><Button size="small" title={v.display_mode==="hidden"?"إظهار":"إخفاء"} aria-label={v.display_mode==="hidden"?"إظهار":"إخفاء"} icon={v.display_mode==="hidden"?<EyeInvisibleOutlined/>:<EyeOutlined/>} onClick={()=>toggleVisibility("flexy_mini_variants",v.id,v.display_mode)}/><Button size="small" title="تعديل" aria-label="تعديل" icon={<SettingOutlined/>} onClick={()=>{setEditingVariant(v);editForm.setFieldsValue({name:v.name,denomination:v.denomination,purchase_price:v.purchase_price,markup_percent:v.markup_percent,sort_index:v.sort_index});}}/></Space>}
       ]} />
-      <Form form={variantForm} layout="vertical" style={{ marginTop: 16 }} onFinish={v => save("flexy_mini_variants", { product_id: productId, name: v.name.trim(), denomination: Number(v.denomination || 0), purchase_price: Number(v.purchase_price), markup_percent: Number(v.markup_percent || 0), sort_index: Number(v.sort_index || 0) }, variantForm)}>
+      <Form form={variantForm} layout="vertical" style={{ marginTop: 16 }} onFinish={v => save("flexy_mini_variants", { product_id: productId, name: v.name.trim(), denomination: Number(v.denomination || 0), purchase_price: Number(v.purchase_price), markup_percent: Number(v.markup_percent || 0), sort_index: Math.max(0, ...variants.filter(item => item.product_id === productId).map(item => Number(item.sort_index) || 0)) + 1 }, variantForm)}>
         <Row gutter={8}>
           <Col xs={24} sm={12}><Form.Item name="name" label="اسم البطاقة" rules={[{ required: true }]}><Input placeholder="مثلاً 60 UC" /></Form.Item></Col>
           <Col xs={12} sm={6}><Form.Item name="denomination" label="القيمة"><Input type="number" min={0} /></Form.Item></Col>
-          <Col xs={12} sm={6}><Form.Item name="sort_index" label="Index" initialValue={0}><Input type="number" /></Form.Item></Col>
+          
           <Col xs={12}><Form.Item name="purchase_price" label="سعر الشراء (دج)" rules={[{ required: true }]}><Input type="number" min={0} step="0.01" /></Form.Item></Col>
           <Col xs={12}><Form.Item name="markup_percent" label="نسبة الربح %" initialValue={0}><Input type="number" min={0} step="0.01" /></Form.Item></Col>
         </Row>
