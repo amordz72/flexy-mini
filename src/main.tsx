@@ -722,7 +722,7 @@ function SharedCardsStore({token}:{token?:string}){
         if(Number.isFinite(ai)&&ai>0&&Number.isFinite(bi)&&bi>0&&ai!==bi)return ai-bi;
         if(Number.isFinite(av)&&Number.isFinite(bv)&&av!==bv)return av-bv;
         return a.id-b.id;
-      }).map(v=><Col xs={12} sm={8} key={v.id}><Card size="small" styles={{body:{textAlign:"center"}}}>
+      }).map(v=><Col xs={24} sm={12} md={8} key={v.id}><Card size="small" styles={{body:{textAlign:"center"}}}>
         <Space direction="vertical" align="center" size="small" style={{width:"100%"}}>
           <Typography.Text strong dir="ltr">{v.name||String(v.denomination||"بطاقة")}</Typography.Text>
           <Tag color={v.stock_quantity>0?"green":"default"}>{v.stock_quantity>0?"متوفر":"غير متوفر"}</Tag>
