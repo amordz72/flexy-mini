@@ -190,6 +190,7 @@ function CardsCatalog() {
   const [productId, setProductId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [confirmModal, confirmContext] = Modal.useModal();
   const [categoryForm] = Form.useForm();
   const [productForm] = Form.useForm();
   const [variantForm] = Form.useForm();
@@ -225,7 +226,7 @@ function CardsCatalog() {
       setError("لا يمكن حذف القسم «" + name + "» لأنه يحتوي على أنواع. احذف الأنواع الفارغة أولًا.");
       return;
     }
-    Modal.confirm({
+    confirmModal.confirm({
       title: "تأكيد حذف القسم",
       content: "هل تريد حذف القسم «" + name + "» نهائيًا؟ لا يمكن التراجع.",
       okText: "حذف",
@@ -234,9 +235,10 @@ function CardsCatalog() {
       onOk: async () => {
         if (!client) return;
         setBusy(true);
-        const { error } = await client.from("flexy_mini_categories").delete().eq("id", id);
+        const { data, error } = await client.from("flexy_mini_categories").delete().eq("id", id).select("id");
         setBusy(false);
-        if (error) { setError("تعذر حذف القسم: " + error.message); return; }
+        if (error) { setError("تعذر حذف القسم: " + error.message); throw error; }
+        if (!data?.some(row => row.id === id)) { setError("لم يُحذف القسم: قاعدة البيانات لم تسمح بالحذف. راجع صلاحيات الإدارة."); return; }
         if (categoryId === id) { setCategoryId(null); setProductId(null); }
         message.success("تم حذف القسم");
         await refresh();
@@ -252,6 +254,7 @@ function CardsCatalog() {
   const visibleVariants = variants.filter(v => v.product_id === productId && v.active)
     .sort((a, b) => a.sort_index - b.sort_index || (a.denomination ?? 999999) - (b.denomination ?? 999999) || a.id - b.id);
   return <Space direction="vertical" size="large" style={{ width: "100%" }}>
+    {confirmContext}
     {error && <Alert type="error" showIcon message={error} closable onClose={() => setError("")} />}
     <Card title="1 — الأقسام" loading={busy && !categories.length}>
       <Space wrap>{categories.filter(c => c.active).map(c => <Space key={c.id} size={4}><Button type={categoryId === c.id ? "primary" : "default"} onClick={() => { setCategoryId(c.id); setProductId(null); }}>{c.name} <Tag style={{marginInlineStart:6}}>{products.filter(p=>p.category_id===c.id).length} أنواع</Tag></Button><Button size="small" danger disabled={busy || products.some(p=>p.category_id===c.id)} onClick={() => void deleteCategory(c.id,c.name)}>حذف</Button></Space>)}</Space>
