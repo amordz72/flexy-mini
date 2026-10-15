@@ -58,7 +58,7 @@ const phoneStateLabel=(attempt:PhoneAttempt|undefined)=>{
  if(attempt.status==="failed")return "فشل الاستعلام";
  return attempt.status||"غير معروف";
 };
-const online=(date:string|null)=>Boolean(date&&Date.now()-new Date(date).getTime()<90000);
+const online=(date:string|null)=>Boolean(date&&Number.isFinite(Date.parse(date))&&Date.now()-Date.parse(date)>=0&&Date.now()-Date.parse(date)<90000);
 const dateLabel=(value:string|null)=>value?new Date(value).toLocaleString("ar-DZ"):"—";
 const cooldownActive=(value:string|null|undefined)=>Boolean(value&&Number.isFinite(Date.parse(value))&&Date.parse(value)>Date.now());
 const agentSupportsServiceCode=(version:string|null)=>{
@@ -512,7 +512,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
    const connected=station.status==="approved"&&online(station.last_seen_at);
    return <Card key={station.station_uuid}
     title={identityCell("station",station.station_uuid,station.computer_name||"محطة دون اسم")}
-    extra={<Tag color={connected?"green":"orange"}>{connected?"متصل":"غير متصل"}</Tag>}>
+    extra={<Tag color={connected?"green":"orange"}>{connected?"نبض حديث ≤90ث — الاتصال اللحظي غير مؤكد":"لا يوجد نبض حديث"}</Tag>}>
     <Space direction="vertical" size="middle" style={{width:"100%"}}>
      <Descriptions size="small" bordered column={mobile?1:3} items={[
       {key:"approval",label:"الاعتماد",children:station.status},
@@ -525,7 +525,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
      {mobile?<Space direction="vertical" size="small" style={{width:"100%"}}>
       {modems.map(r=><Card key={r.modem_uuid+":"+(r.sim_uuid||"none")} size="small"
        title={modemTitle(r)}
-       extra={<Tag color={online(r.modem_last_seen_at)?"green":"orange"}>{online(r.modem_last_seen_at)?"مرصود حديثًا":"غير متصل"}</Tag>}>
+       extra={<Tag color={online(r.modem_last_seen_at)?"green":"orange"}>{online(r.modem_last_seen_at)?"مرصود خلال 90ث":"لا يوجد رصد حديث"}</Tag>}>
        {simSummary(r)}
        <Collapse size="small" style={{marginTop:8}} items={[{
         key:"details",label:r.sim_uuid?"التفاصيل وإعدادات الشريحة":"تفاصيل المودام",
@@ -544,7 +544,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
         {title:"النوع",dataIndex:"sim_type",render:(v:string|null)=>v||"—"},
         {title:"PIN",render:(_,r)=>r.has_pin?"محفوظ":"غير محفوظ"},
         {title:"رصيد Sama المسجل",render:(_,r)=>balanceLabel(r)},
-        {title:"حالة المودم",render:(_,r)=><Tag color={online(r.modem_last_seen_at)?"green":"orange"}>{online(r.modem_last_seen_at)?"متصل حديثًا":"غير متصل"}</Tag>}
+        {title:"حالة المودم",render:(_,r)=><Tag color={online(r.modem_last_seen_at)?"green":"orange"}>{online(r.modem_last_seen_at)?"رصد خلال 90ث":"لا يوجد رصد حديث"}</Tag>}
        ]}
        expandable={{rowExpandable:r=>Boolean(r.sim_uuid),expandedRowRender:r=>simActions(r)}}
       />}
