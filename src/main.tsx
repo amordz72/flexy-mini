@@ -274,9 +274,28 @@ function CardsCatalog() {
     } finally {setBusy(false);}
   }
   async function toggleVisibility(table: "flexy_mini_products" | "flexy_mini_variants", id: number, mode: string) {
-    if (!client) return;
-    const { error } = await client.from(table).update({ display_mode: mode === "hidden" ? "visible" : "hidden" }).eq("id", id);
-    if (error) setError(error.message); else await refresh();
+    if (!client || busy) return;
+    setError("");
+    setBusy(true);
+    try {
+      const nextMode = mode === "hidden" ? "visible" : "hidden";
+      const { data, error } = await client.from(table)
+        .update({ display_mode: nextMode }).eq("id", id)
+        .select("id,display_mode");
+      if (error) { setError("تعذر تغيير الحالة: " + error.message); return; }
+      if (!data?.some(row => row.id === id && row.display_mode === nextMode)) {
+        setError("لم يتم حفظ تغيير الحالة. تحقق من صلاحيات الإدارة أو أعد المحاولة.");
+        return;
+      }
+      if (table === "flexy_mini_variants") {
+        setVariants(current => current.map(v => v.id === id ? { ...v, display_mode: nextMode } : v));
+      } else {
+        setProducts(current => current.map(p => p.id === id ? { ...p, display_mode: nextMode } : p));
+      }
+      message.success(nextMode === "hidden" ? "تم تجميد البطاقة" : "تم إظهار البطاقة");
+    } catch (e) {
+      setError("تعذر الاتصال لحفظ الحالة: " + String(e));
+    } finally { setBusy(false); }
   }
   const visibleProducts = products.filter(p => p.category_id === categoryId && p.active);
   const visibleVariants = variants.filter(v => v.product_id === productId && v.active)
