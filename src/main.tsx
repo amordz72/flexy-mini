@@ -214,10 +214,17 @@ function CardsCatalog() {
   useEffect(() => { void refresh(); }, []);
   async function save(table: string, payload: Record<string, unknown>, form: ReturnType<typeof Form.useForm>[0]) {
     if (!client) return;
+    if (table === "flexy_mini_products") {
+      const name = String(payload.name || "").trim();
+      if (products.some(p => p.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase())) {
+        setError("اسم النوع «" + name + "» مسجل مسبقًا. لا يمكن تكرار الاسم.");
+        return;
+      }
+    }
     setBusy(true);
     const { error } = await client.from(table).insert(payload);
     setBusy(false);
-    if (error) { setError(error.message); return; }
+    if (error) { setError(error.code === "23505" ? "هذا الاسم مسجل مسبقًا، اختر اسمًا مختلفًا." : error.message); return; }
     form.resetFields();
     await refresh();
   }
