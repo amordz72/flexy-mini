@@ -181,7 +181,7 @@ function MiniMembers() {
 
 type CatalogCategory = { id: number; name: string; sort_index: number; active: boolean };
 type CatalogProduct = { id: number; category_id: number; name: string; sort_index: number; active: boolean; display_mode: string; is_frozen: boolean };
-type CatalogVariant = { id: number; product_id: number; name: string; denomination: number | null; purchase_price: number; markup_percent: number; sort_index: number; active: boolean; display_mode: string; stock_quantity: number; is_frozen: boolean };
+type CatalogVariant = { id: number; product_id: number; name: string; denomination: number | null; purchase_price: number; sale_price: number | null; markup_percent: number; sort_index: number; active: boolean; display_mode: string; stock_quantity: number; is_frozen: boolean };
 function CardsCatalog() {
   const [categories, setCategories] = useState<CatalogCategory[]>([]);
   const [products, setProducts] = useState<CatalogProduct[]>([]);
@@ -337,7 +337,7 @@ function CardsCatalog() {
   async function updateVariant(values: Record<string, unknown>) {
     if (!client || !editingVariant || busy) return;
     setBusy(true);
-    const payload = { name: String(values.name || "").trim(), denomination: Number(values.denomination), purchase_price: Number(values.purchase_price), markup_percent: Number(values.markup_percent), sort_index: Number(values.sort_index) };
+    const payload = { name: String(values.name || "").trim(), denomination: Number(values.denomination), purchase_price: Number(values.purchase_price), sale_price: Number(values.sale_price), markup_percent: Number(values.markup_percent), sort_index: Number(values.sort_index) };
     const { data, error } = await client.from("flexy_mini_variants").update(payload).eq("id", editingVariant.id).select("id");
     setBusy(false);
     if (error || !data?.some(row => row.id === editingVariant.id)) { setError("فشل تعديل البطاقة: " + (error?.message || "لم يتم تأكيد الحفظ")); return; }
@@ -381,21 +381,23 @@ function CardsCatalog() {
     {productId !== null && <Card id="mini-variants" title="3 — البطاقات" extra={<Button type="primary" icon={<PlusOutlined/>} onClick={()=>{variantForm.resetFields();setAddingVariant(true);}}>إضافة بطاقة</Button>}>
       <Table<CatalogVariant> rowKey="id" dataSource={visibleVariants} size="small" pagination={{pageSize:10}} tableLayout="fixed" expandable={{expandedRowRender:(v)=><Descriptions size="small" column={1} bordered items={[
         {key:"value",label:"القيمة",children:v.denomination ?? "—"},
+        {key:"stock",label:"المخزون",children:v.stock_quantity},
+        {key:"order",label:"الترتيب",children:v.sort_index},
         {key:"buy",label:"سعر الشراء",children:v.purchase_price+" دج"},
         {key:"margin",label:"الربح",children:Number(v.markup_percent).toFixed(2)+"%"},
-        {key:"sale",label:"سعر البيع",children:(Number(v.purchase_price)/(1-Number(v.markup_percent)/100)).toFixed(2)+" دج"},
+        {key:"sale",label:"سعر البيع",children:Number(v.sale_price ?? (Number(v.purchase_price)/(1-Number(v.markup_percent)/100))).toFixed(2)+" دج"},
         {key:"freeze",label:"التجميد",children:<Button size="small" disabled={busy} onClick={()=>toggleFreeze("flexy_mini_variants",v.id,v.is_frozen)}>{v.is_frozen?"إلغاء التجميد":"تجميد"}</Button>}
       ]}/>,rowExpandable:()=>true}} columns={[
         {title:"البطاقة",dataIndex:"name",key:"name",render:(name:string)=><span title={name} style={{display:"block",maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",direction:"ltr",textAlign:"right"}}>{name}</span>},
         {title:"القيمة",dataIndex:"denomination",key:"denomination",width:85,responsive:["md"]},
         {title:"الشراء",dataIndex:"purchase_price",key:"purchase_price",width:100,responsive:["md"],render:(n:number)=>n+" دج"},
         {title:"الربح",dataIndex:"markup_percent",key:"markup_percent",width:85,responsive:["md"],render:(n:number)=>Number(n).toFixed(2)+"%"},
-        {title:"البيع",key:"sale",width:100,render:(_,v)=><Typography.Text style={{whiteSpace:"nowrap"}}>{(Number(v.purchase_price)/(1-Number(v.markup_percent)/100)).toFixed(2)}</Typography.Text>},
-        {title:"المخزون",dataIndex:"stock_quantity",key:"stock",width:80},
-        {title:"الإجراءات",key:"actions",width:86,render:(_,v)=><Space size={2}><Button size="small" title={v.display_mode==="hidden"?"إظهار":"إخفاء"} aria-label={v.display_mode==="hidden"?"إظهار":"إخفاء"} icon={v.display_mode==="hidden"?<EyeInvisibleOutlined/>:<EyeOutlined/>} onClick={()=>toggleVisibility("flexy_mini_variants",v.id,v.display_mode)}/><Button size="small" title="تعديل" aria-label="تعديل" icon={<SettingOutlined/>} onClick={()=>{setEditingVariant(v);editForm.setFieldsValue({name:v.name,denomination:v.denomination,purchase_price:v.purchase_price,markup_percent:v.markup_percent,sort_index:v.sort_index,sale_price:Number((Number(v.purchase_price)/(1-Number(v.markup_percent)/100)).toFixed(2))});}}/></Space>}
+        {title:"البيع",key:"sale",width:90,render:(_,v)=><Typography.Text style={{whiteSpace:"nowrap"}}>{Number(v.sale_price ?? (Number(v.purchase_price)/(1-Number(v.markup_percent)/100))).toFixed(2)}</Typography.Text>},
+        {title:"المخزون",dataIndex:"stock_quantity",key:"stock",width:80,responsive:["md"]},
+        {title:"الإجراءات",key:"actions",width:86,render:(_,v)=><Space size={2}><Button size="small" title={v.display_mode==="hidden"?"إظهار":"إخفاء"} aria-label={v.display_mode==="hidden"?"إظهار":"إخفاء"} icon={v.display_mode==="hidden"?<EyeInvisibleOutlined/>:<EyeOutlined/>} onClick={()=>toggleVisibility("flexy_mini_variants",v.id,v.display_mode)}/><Button size="small" title="تعديل" aria-label="تعديل" icon={<SettingOutlined/>} onClick={()=>{setEditingVariant(v);editForm.setFieldsValue({name:v.name,denomination:v.denomination,purchase_price:v.purchase_price,markup_percent:v.markup_percent,sort_index:v.sort_index,sale_price:Number(Number(v.sale_price ?? (Number(v.purchase_price)/(1-Number(v.markup_percent)/100))).toFixed(2))});}}/></Space>}
       ]} />
       <Modal open={addingVariant} title="إضافة بطاقة" width={520} okText="إضافة بطاقة" confirmLoading={busy} onOk={()=>variantForm.submit()} onCancel={()=>{if(!busy)setAddingVariant(false);}} destroyOnHidden>
-      <Form form={variantForm} layout="vertical" size="small" onValuesChange={(changed,all)=>syncCardPrices(variantForm,changed,all)} onFinish={v => save("flexy_mini_variants", { product_id: productId, name: v.name.trim(), denomination: Number(v.denomination || 0), purchase_price: Number(v.purchase_price), markup_percent: Number(v.markup_percent || 0), sort_index: Math.max(0, ...variants.filter(item => item.product_id === productId).map(item => Number(item.sort_index) || 0)) + 1 }, variantForm).then(saved=>{if(saved)setAddingVariant(false);})}>
+      <Form form={variantForm} layout="vertical" size="small" onValuesChange={(changed,all)=>syncCardPrices(variantForm,changed,all)} onFinish={v => save("flexy_mini_variants", { product_id: productId, name: v.name.trim(), denomination: Number(v.denomination || 0), purchase_price: Number(v.purchase_price), sale_price: Number(v.sale_price), markup_percent: Number(v.markup_percent || 0), sort_index: Math.max(0, ...variants.filter(item => item.product_id === productId).map(item => Number(item.sort_index) || 0)) + 1 }, variantForm).then(saved=>{if(saved)setAddingVariant(false);})}>
         <Row gutter={8}>
           <Col xs={24} sm={12}><Form.Item name="name" label="اسم البطاقة" rules={[{ required: true }]}><Input placeholder="مثلاً 60 UC" /></Form.Item></Col>
           <Col xs={12} sm={6}><Form.Item name="denomination" label="القيمة"><Input type="number" min={0} /></Form.Item></Col>
