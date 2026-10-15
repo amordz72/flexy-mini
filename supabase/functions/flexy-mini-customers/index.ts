@@ -44,7 +44,7 @@ Deno.serve(async(req)=>{
    }
    return respond(200,{token,username:account.username,party_id:account.party_id});
  }
- if(action==="me"||action==="logout"){
+ if(action==="me"||action==="logout"||action==="catalog"){
    const token=String(body.token||"");
    if(!/^[0-9a-f]{64}$/.test(token))return respond(401,{error:"Unauthorized"});
    const hash=await sha256(token);
@@ -55,6 +55,25 @@ Deno.serve(async(req)=>{
    if(action==="logout"){await admin.from("flexy_mini_customer_sessions").update({revoked_at:new Date().toISOString()}).eq("id",session.id);return respond(200,{ok:true});}
    const {data:account}=await admin.from("flexy_mini_customer_accounts").select("username,phone,party_id,active,credit_enabled").eq("id",session.customer_id).maybeSingle();
    if(!account?.active)return respond(401,{error:"Unauthorized"});
+   if(action==="catalog"){
+     // Fail closed: only active, publicly visible, unfrozen categories/products/variants.
+     // Account-specific hidden-product exceptions are not enabled at this stage.
+     const [categoriesResult,productsResult,variantsResult]=await Promise.all([
+       admin.from("flexy_mini_categories").select("id,name,sort_index").eq("active",true).order("sort_index",{ascending:true}).order("id",{ascending:true}),
+       admin.from("flexy_mini_products").select("id,category_id,name,sort_index").eq("active",true).eq("display_mode","visible").eq("is_frozen",false).order("sort_index",{ascending:true}).order("id",{ascending:true}),
+       admin.from("flexy_mini_variants").select("id,product_id,name,denomination,stock_quantity,sort_index,is_frozen").eq("active",true).eq("display_mode","visible").eq("is_frozen",false).order("sort_index",{ascending:true}).order("denomination",{ascending:true}).order("id",{ascending:true})
+     ]);
+     if(categoriesResult.error||productsResult.error||variantsResult.error){
+       console.error("customer_catalog_fetch_failed",{categories:categoriesResult.error?.code,products:productsResult.error?.code,variants:variantsResult.error?.code});
+       return respond(503,{error:"تعذر تحميل البطاقات حاليًا"});
+     }
+     const categories=categoriesResult.data||[];
+     const categoryIds=new Set(categories.map(c=>c.id));
+     const products=(productsResult.data||[]).filter(p=>categoryIds.has(p.category_id));
+     const productIds=new Set(products.map(p=>p.id));
+     const variants=(variantsResult.data||[]).filter(v=>productIds.has(v.product_id));
+     return respond(200,{categories,products,variants});
+   }
    await admin.from("flexy_mini_trusted_devices").update({last_used_at:new Date().toISOString()}).eq("id",device.id);
    const {data:wallet,error:walletError}=await admin.from("flexy_mini_customer_wallets").select("balance,debt,profit,updated_at").eq("customer_id",session.customer_id).maybeSingle();
    if(walletError){console.error("flexy_customer_wallet_lookup_failed",{code:walletError.code});return respond(503,{code:"WALLET_UNAVAILABLE",error:"تعذر تحميل المحفظة حاليًا"});}
