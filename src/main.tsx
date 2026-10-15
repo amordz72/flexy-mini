@@ -320,14 +320,14 @@ function CardsCatalog() {
     const percent = Number(values.markup_percent);
     if (!Number.isFinite(buy) || buy <= 0) return;
     if (key === "markup_percent" && (percent >= 100 || percent < 0)) return;
-    if (key === "sale_price" && values.sale_price !== "" && Number.isFinite(sale) && sale >= 0) {
+    if (key === "sale_price" && values.sale_price !== "" && Number.isFinite(sale) && sale >= buy) {
       form.setFieldsValue({markup_percent: Number(((sale - buy) / sale * 100).toFixed(2))});
     } else if (key === "markup_percent" && values.markup_percent !== "" && Number.isFinite(percent)) {
       form.setFieldsValue({sale_price: Number((buy / (1 - percent / 100)).toFixed(2))});
     } else if (key === "purchase_price") {
-      if (values.sale_price !== undefined && values.sale_price !== "" && Number.isFinite(sale) && sale >= 0) {
+      if (values.sale_price !== undefined && values.sale_price !== "" && Number.isFinite(sale) && sale >= buy) {
         form.setFieldsValue({markup_percent: Number(((sale - buy) / sale * 100).toFixed(2))});
-      } else if (Number.isFinite(percent)) {
+      } else if (Number.isFinite(percent) && percent >= 0 && percent < 100) {
         form.setFieldsValue({sale_price: Number((buy / (1 - percent / 100)).toFixed(2))});
       }
     }
@@ -351,9 +351,9 @@ function CardsCatalog() {
       <Form form={editForm} layout="vertical" onValuesChange={(changed,all)=>syncCardPrices(editForm,changed,all)} onFinish={updateVariant}>
         <Form.Item name="name" label="اسم البطاقة" rules={[{required:true}]}><Input /></Form.Item>
         <Form.Item name="denomination" label="القيمة" rules={[{required:true}]}><Input type="number" min={0}/></Form.Item>
-        <Form.Item name="purchase_price" label="سعر الشراء (دج)" rules={[{required:true}]}><Input type="number" min={0} step="0.01"/></Form.Item>
-        <Form.Item name="sale_price" label="سعر البيع (دج)"><Input type="number" min={0} step="0.01"/></Form.Item>
-        <Form.Item name="markup_percent" label="هامش الربح من البيع %" rules={[{required:true}]}><Input type="number" step="0.01"/></Form.Item>
+        <Form.Item name="purchase_price" label="سعر الشراء (دج)" rules={[{required:true},{validator:(_,v)=>Number.isFinite(Number(v))&&Number(v)>0?Promise.resolve():Promise.reject(new Error("سعر الشراء يجب أن يكون أكبر من صفر"))}]}><Input type="number" min={0} step="0.01"/></Form.Item>
+        <Form.Item name="sale_price" label="سعر البيع (دج)" rules={[({getFieldValue})=>({validator:(_,v)=>{const buy=Number(getFieldValue("purchase_price"));const sale=Number(v);return v!==undefined&&v!==""&&(!Number.isFinite(sale)||sale<=0||sale<buy)?Promise.reject(new Error("سعر البيع يجب أن يكون أكبر من صفر ولا يقل عن الشراء")):Promise.resolve();}})]}><Input type="number" min={0} step="0.01"/></Form.Item>
+        <Form.Item name="markup_percent" label="هامش الربح من البيع %" rules={[{required:true},{validator:(_,v)=>v!==undefined&&v!==""&&Number.isFinite(Number(v))&&Number(v)>=0&&Number(v)<100?Promise.resolve():Promise.reject(new Error("هامش الربح يجب أن يكون بين 0 وأقل من 100%"))}]}><Input type="number" step="0.01"/></Form.Item>
         <Form.Item name="sort_index" label="الترتيب"><Input type="number"/></Form.Item>
       </Form>
     </Modal>
@@ -397,9 +397,9 @@ function CardsCatalog() {
           <Col xs={24} sm={12}><Form.Item name="name" label="اسم البطاقة" rules={[{ required: true }]}><Input placeholder="مثلاً 60 UC" /></Form.Item></Col>
           <Col xs={12} sm={6}><Form.Item name="denomination" label="القيمة"><Input type="number" min={0} /></Form.Item></Col>
           
-          <Col xs={12}><Form.Item name="purchase_price" label="سعر الشراء (دج)" rules={[{ required: true }]}><Input type="number" min={0} step="0.01" /></Form.Item></Col>
-          <Col xs={12}><Form.Item name="sale_price" label="سعر البيع (دج)"><Input type="number" min={0} step="0.01" /></Form.Item></Col>
-          <Col xs={12}><Form.Item name="markup_percent" label="هامش الربح من البيع %" initialValue={0}><Input type="number" step="0.01" /></Form.Item></Col>
+          <Col xs={12}><Form.Item name="purchase_price" label="سعر الشراء (دج)" rules={[{required:true},{validator:(_,v)=>Number.isFinite(Number(v))&&Number(v)>0?Promise.resolve():Promise.reject(new Error("سعر الشراء يجب أن يكون أكبر من صفر"))}]}><Input type="number" min={0} step="0.01" /></Form.Item></Col>
+          <Col xs={12}><Form.Item name="sale_price" label="سعر البيع (دج)" rules={[({getFieldValue})=>({validator:(_,v)=>{const buy=Number(getFieldValue("purchase_price"));const sale=Number(v);return v!==undefined&&v!==""&&(!Number.isFinite(sale)||sale<=0||sale<buy)?Promise.reject(new Error("سعر البيع يجب أن يكون أكبر من صفر ولا يقل عن الشراء")):Promise.resolve();}})]}><Input type="number" min={0} step="0.01" /></Form.Item></Col>
+          <Col xs={12}><Form.Item name="markup_percent" label="هامش الربح من البيع %" initialValue={0} rules={[{required:true},{validator:(_,v)=>v!==undefined&&v!==""&&Number.isFinite(Number(v))&&Number(v)>=0&&Number(v)<100?Promise.resolve():Promise.reject(new Error("هامش الربح يجب أن يكون بين 0 وأقل من 100%"))}]}><Input type="number" step="0.01" /></Form.Item></Col>
         </Row>
         <Button htmlType="submit" type="primary" disabled={busy}>إضافة بطاقة</Button>
       </Form>
