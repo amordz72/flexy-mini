@@ -47,7 +47,7 @@ export default function CardCodeImportAdmin({ db }: { db: SupabaseClient }) {
       <Select placeholder="نوع البطاقة" value={typeKey} onChange={setTypeKey} style={{ width: "100%" }}
         options={types.map(t => ({ value: t.type_key, label: t.name }))} showSearch optionFilterProp="label" />
       <Input value={denomination} onChange={e => setDenomination(e.target.value)} placeholder="قيمة البطاقة، مثال 2000" />
-      <Input.TextArea rows={7} dir="ltr" value={codes} onChange={e => { setCodes(e.target.value); setFileName(""); }}
+      <Input.TextArea rows={7} dir="ltr" style={{fontFamily:"ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace", fontVariantNumeric:"tabular-nums", letterSpacing:0}} value={codes} onChange={e => { setCodes(e.target.value); setFileName(""); }}
         placeholder={"كود واحد أو مجموعة أكواد\nكل كود في سطر مستقل"} />
       <Upload accept=".txt,text/plain" maxCount={1} showUploadList={false} beforeUpload={async file => {
         try {
