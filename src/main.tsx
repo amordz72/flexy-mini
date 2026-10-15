@@ -716,7 +716,18 @@ function SharedCardsStore({token}:{token?:string}){
       <Row gutter={[16,20]} justify="center">{products.map(product=>{const b=brand(product.name);const logo=(()=>{const n=product.name.toLowerCase();if(n.includes("mobilis"))return "https://upload.wikimedia.org/wikipedia/commons/8/89/Mobilis_Logo.svg";if(n.includes("ooredoo"))return "https://upload.wikimedia.org/wikipedia/commons/4/43/Ooredoo_logo.svg";if(n.includes("djezzy"))return "https://upload.wikimedia.org/wikipedia/commons/5/5b/Djezzy_logo.svg";return null;})();return <Col xs={8} sm={6} md={4} key={product.id}><div role="button" tabIndex={0} onClick={()=>setSelectedProduct(product.id)} onKeyDown={e=>{if(e.key==="Enter")setSelectedProduct(product.id);}} style={{cursor:"pointer",textAlign:"center"}}><div style={{aspectRatio:"1",borderRadius:15,background:logo?"#fff":b.color,color:"white",display:"grid",placeItems:"center",fontWeight:800,fontSize:b.label.length>9?13:19,boxShadow:"0 4px 12px rgba(0,0,0,.10)",padding:6,overflow:"hidden"}}>{logo?<><img src={logo} alt={product.name} loading="lazy" onError={e=>{e.currentTarget.style.display="none";const fallback=e.currentTarget.nextElementSibling as HTMLElement|null;if(fallback)fallback.style.display="block";}} style={{width:"92%",height:"80%",objectFit:"contain"}}/><span style={{display:"none",color:b.color,fontSize:15,fontWeight:800}}>{b.label}</span></>:b.label}</div><Text style={{display:"block",marginTop:7,fontSize:12}}>{product.name}</Text></div></Col>})}</Row>
       {!products.length&&<Empty description="لا توجد بطاقات معروضة حاليًا"/>}
       {chosen&&<Card id="mini-store-products" title={<Space><Text strong>{chosen.name}</Text><Button size="small" onClick={()=>setSelectedProduct(null)}>إغلاق</Button></Space>} style={{marginTop:20}}>
-      <Row gutter={[12,12]}>{catalog.variants.filter(v=>v.product_id===chosen.id && !v.is_frozen).sort((a,b)=>{const ai=Number(a.sort_index),bi=Number(b.sort_index);const av=Number(a.denomination),bv=Number(b.denomination);if(Number.isFinite(ai)&&ai>0&&Number.isFinite(bi)&&bi>0&&ai!==bi)return ai-bi;if(Number.isFinite(av)&&Number.isFinite(bv)&&av!==bv)return av-bv;return a.id-b.id;}).map(v=><Col xs={12} sm={8} key={v.id}><Card size="small" style={{textAlign:"center"}}><Text strong><span dir="ltr" style={{display:"inline-block",unicodeBidi:"isolate"}}>{v.name||String(v.denomination||"بطاقة")}</span></Text><div><Tag color={v.stock_quantity>0?"green":"default"}>{v.stock_quantity>0?"متوفر":"غير متوفر"}</Tag></div></Card></Col>)}</Row>
+      <Row gutter={[12,12]}>{catalog.variants.filter(v=>v.product_id===chosen.id && !v.is_frozen).sort((a,b)=>{
+        const ai=Number(a.sort_index),bi=Number(b.sort_index);
+        const av=Number(a.denomination),bv=Number(b.denomination);
+        if(Number.isFinite(ai)&&ai>0&&Number.isFinite(bi)&&bi>0&&ai!==bi)return ai-bi;
+        if(Number.isFinite(av)&&Number.isFinite(bv)&&av!==bv)return av-bv;
+        return a.id-b.id;
+      }).map(v=><Col xs={12} sm={8} key={v.id}><Card size="small" styles={{body:{textAlign:"center"}}}>
+        <Space direction="vertical" align="center" size="small" style={{width:"100%"}}>
+          <Typography.Text strong dir="ltr">{v.name||String(v.denomination||"بطاقة")}</Typography.Text>
+          <Tag color={v.stock_quantity>0?"green":"default"}>{v.stock_quantity>0?"متوفر":"غير متوفر"}</Tag>
+        </Space>
+      </Card></Col>)}</Row>
       <Alert style={{marginTop:14}} type="info" showIcon message="شراء البطاقات غير مفعّل"/>
     </Card>}
     </>}
