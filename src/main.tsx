@@ -379,7 +379,7 @@ function CardsCatalog() {
       </Form>
     </Card>}
     {productId !== null && <Card id="mini-variants" title="3 — البطاقات" extra={<Button type="primary" icon={<PlusOutlined/>} onClick={()=>{variantForm.resetFields();setAddingVariant(true);}}>إضافة بطاقة</Button>}>
-      <Table<CatalogVariant> rowKey="id" dataSource={visibleVariants} size="small" pagination={{pageSize:10}} tableLayout="fixed" expandable={{expandedRowRender:(v)=><Descriptions size="small" column={1} bordered items={[
+      <Table<CatalogVariant> rowKey="id" dataSource={visibleVariants} size="small" pagination={{pageSize:10}} tableLayout="auto" scroll={{x:"max-content"}} expandable={{expandedRowRender:(v)=><Descriptions size="small" column={1} bordered items={[
         {key:"value",label:"القيمة",children:v.denomination ?? "—"},
         {key:"stock",label:"المخزون",children:v.stock_quantity},
         {key:"order",label:"الترتيب",children:v.sort_index},
@@ -388,7 +388,7 @@ function CardsCatalog() {
         {key:"sale",label:"سعر البيع",children:Number(v.sale_price ?? (Number(v.purchase_price)/(1-Number(v.markup_percent)/100))).toFixed(2)+" دج"},
         {key:"freeze",label:"التجميد",children:<Button size="small" disabled={busy} onClick={()=>toggleFreeze("flexy_mini_variants",v.id,v.is_frozen)}>{v.is_frozen?"إلغاء التجميد":"تجميد"}</Button>}
       ]}/>,rowExpandable:()=>true}} columns={[
-        {title:"البطاقة",dataIndex:"name",key:"name",render:(name:string)=><span title={name} style={{display:"block",maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",direction:"ltr",textAlign:"right"}}>{name}</span>},
+        {title:"البطاقة",dataIndex:"name",key:"name",width:135,render:(name:string)=><span title={name} style={{display:"block",maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",direction:"ltr",textAlign:"right"}}>{name}</span>},
         {title:"القيمة",dataIndex:"denomination",key:"denomination",width:85,responsive:["md"]},
         {title:"الشراء",dataIndex:"purchase_price",key:"purchase_price",width:100,responsive:["md"],render:(n:number)=>n+" دج"},
         {title:"الربح",dataIndex:"markup_percent",key:"markup_percent",width:85,responsive:["md"],render:(n:number)=>Number(n).toFixed(2)+"%"},
