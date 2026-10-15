@@ -62,7 +62,7 @@ Deno.serve(async(req)=>{
      const [categoriesResult,productsResult,variantsResult,grantsResult]=await Promise.all([
        admin.from("flexy_mini_categories").select("id,name,sort_index").eq("active",true).order("sort_index",{ascending:true}).order("id",{ascending:true}),
        admin.from("flexy_mini_products").select("id,category_id,name,sort_index,display_mode").eq("active",true).eq("is_frozen",false).order("sort_index",{ascending:true}).order("id",{ascending:true}),
-       admin.from("flexy_mini_variants").select("id,product_id,name,denomination,stock_quantity,sort_index,display_mode").eq("active",true).eq("is_frozen",false).order("sort_index",{ascending:true}).order("denomination",{ascending:true}).order("id",{ascending:true}),
+       admin.from("flexy_mini_variants").select("id,product_id,name,denomination,stock_quantity,sort_index,display_mode").eq("active",true).eq("is_frozen",false).order("product_id",{ascending:true}).order("sort_index",{ascending:true}).order("denomination",{ascending:true}).order("id",{ascending:true}),
        admin.from("flexy_mini_customer_catalog_grants").select("product_id,variant_id").eq("customer_id",session.customer_id)
      ]);
      if(categoriesResult.error||productsResult.error||variantsResult.error||grantsResult.error){
