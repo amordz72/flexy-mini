@@ -319,15 +319,16 @@ function CardsCatalog() {
     const sale = Number(values.sale_price);
     const percent = Number(values.markup_percent);
     if (!Number.isFinite(buy) || buy <= 0) return;
+    if (key === "markup_percent" && (percent >= 100 || percent < 0)) return;
     if (key === "sale_price" && values.sale_price !== "" && Number.isFinite(sale) && sale >= 0) {
-      form.setFieldsValue({markup_percent: Number(((sale / buy - 1) * 100).toFixed(4))});
+      form.setFieldsValue({markup_percent: Number(((sale - buy) / sale * 100).toFixed(2))});
     } else if (key === "markup_percent" && values.markup_percent !== "" && Number.isFinite(percent)) {
-      form.setFieldsValue({sale_price: Number((buy * (1 + percent / 100)).toFixed(2))});
+      form.setFieldsValue({sale_price: Number((buy / (1 - percent / 100)).toFixed(2))});
     } else if (key === "purchase_price") {
       if (values.sale_price !== undefined && values.sale_price !== "" && Number.isFinite(sale) && sale >= 0) {
-        form.setFieldsValue({markup_percent: Number(((sale / buy - 1) * 100).toFixed(4))});
+        form.setFieldsValue({markup_percent: Number(((sale - buy) / sale * 100).toFixed(2))});
       } else if (Number.isFinite(percent)) {
-        form.setFieldsValue({sale_price: Number((buy * (1 + percent / 100)).toFixed(2))});
+        form.setFieldsValue({sale_price: Number((buy / (1 - percent / 100)).toFixed(2))});
       }
     }
   }
@@ -352,7 +353,7 @@ function CardsCatalog() {
         <Form.Item name="denomination" label="القيمة" rules={[{required:true}]}><Input type="number" min={0}/></Form.Item>
         <Form.Item name="purchase_price" label="سعر الشراء (دج)" rules={[{required:true}]}><Input type="number" min={0} step="0.01"/></Form.Item>
         <Form.Item name="sale_price" label="سعر البيع (دج)"><Input type="number" min={0} step="0.01"/></Form.Item>
-        <Form.Item name="markup_percent" label="نسبة الربح %" rules={[{required:true}]}><Input type="number" step="0.01"/></Form.Item>
+        <Form.Item name="markup_percent" label="هامش الربح من البيع %" rules={[{required:true}]}><Input type="number" step="0.01"/></Form.Item>
         <Form.Item name="sort_index" label="الترتيب"><Input type="number"/></Form.Item>
       </Form>
     </Modal>
@@ -379,17 +380,17 @@ function CardsCatalog() {
       <Table<CatalogVariant> rowKey="id" dataSource={visibleVariants} size="small" pagination={{pageSize:10}} tableLayout="auto" expandable={{expandedRowRender:(v)=><Descriptions size="small" column={1} bordered items={[
         {key:"value",label:"القيمة",children:v.denomination ?? "—"},
         {key:"buy",label:"سعر الشراء",children:v.purchase_price+" دج"},
-        {key:"margin",label:"الربح",children:v.markup_percent+"%"},
-        {key:"sale",label:"سعر البيع",children:(Number(v.purchase_price)*(1+Number(v.markup_percent)/100)).toFixed(2)+" دج"},
+        {key:"margin",label:"الربح",children:Number(v.markup_percent).toFixed(2)+"%"},
+        {key:"sale",label:"سعر البيع",children:(Number(v.purchase_price)/(1-Number(v.markup_percent)/100)).toFixed(2)+" دج"},
         {key:"freeze",label:"التجميد",children:<Button size="small" disabled={busy} onClick={()=>toggleFreeze("flexy_mini_variants",v.id,v.is_frozen)}>{v.is_frozen?"إلغاء التجميد":"تجميد"}</Button>}
       ]}/>,rowExpandable:()=>true}} columns={[
         {title:"البطاقة",dataIndex:"name",key:"name",render:(name:string)=><span title={name} style={{display:"block",maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",direction:"ltr",textAlign:"right"}}>{name}</span>},
         {title:"القيمة",dataIndex:"denomination",key:"denomination",width:85,responsive:["md"]},
         {title:"الشراء",dataIndex:"purchase_price",key:"purchase_price",width:100,responsive:["md"],render:(n:number)=>n+" دج"},
-        {title:"الربح",dataIndex:"markup_percent",key:"markup_percent",width:85,responsive:["md"],render:(n:number)=>n+"%"},
-        {title:"البيع",key:"sale",width:105,render:(_,v)=>(Number(v.purchase_price)*(1+Number(v.markup_percent)/100)).toFixed(2)+" دج"},
+        {title:"الربح",dataIndex:"markup_percent",key:"markup_percent",width:85,responsive:["md"],render:(n:number)=>Number(n).toFixed(2)+"%"},
+        {title:"البيع",key:"sale",width:105,render:(_,v)=>(Number(v.purchase_price)/(1-Number(v.markup_percent)/100)).toFixed(2)+" دج"},
         {title:"المخزون",dataIndex:"stock_quantity",key:"stock",width:80},
-        {title:"الإجراءات",key:"actions",width:92,render:(_,v)=><Space size={4}><Button size="small" title={v.display_mode==="hidden"?"إظهار":"إخفاء"} aria-label={v.display_mode==="hidden"?"إظهار":"إخفاء"} icon={v.display_mode==="hidden"?<EyeInvisibleOutlined/>:<EyeOutlined/>} onClick={()=>toggleVisibility("flexy_mini_variants",v.id,v.display_mode)}/><Button size="small" title="تعديل" aria-label="تعديل" icon={<SettingOutlined/>} onClick={()=>{setEditingVariant(v);editForm.setFieldsValue({name:v.name,denomination:v.denomination,purchase_price:v.purchase_price,markup_percent:v.markup_percent,sort_index:v.sort_index,sale_price:Number((Number(v.purchase_price)*(1+Number(v.markup_percent)/100)).toFixed(2))});}}/></Space>}
+        {title:"الإجراءات",key:"actions",width:92,render:(_,v)=><Space size={4}><Button size="small" title={v.display_mode==="hidden"?"إظهار":"إخفاء"} aria-label={v.display_mode==="hidden"?"إظهار":"إخفاء"} icon={v.display_mode==="hidden"?<EyeInvisibleOutlined/>:<EyeOutlined/>} onClick={()=>toggleVisibility("flexy_mini_variants",v.id,v.display_mode)}/><Button size="small" title="تعديل" aria-label="تعديل" icon={<SettingOutlined/>} onClick={()=>{setEditingVariant(v);editForm.setFieldsValue({name:v.name,denomination:v.denomination,purchase_price:v.purchase_price,markup_percent:v.markup_percent,sort_index:v.sort_index,sale_price:Number((Number(v.purchase_price)/(1-Number(v.markup_percent)/100)).toFixed(2))});}}/></Space>}
       ]} />
       <Form form={variantForm} layout="vertical" style={{ marginTop: 16 }} onValuesChange={(changed,all)=>syncCardPrices(variantForm,changed,all)} onFinish={v => save("flexy_mini_variants", { product_id: productId, name: v.name.trim(), denomination: Number(v.denomination || 0), purchase_price: Number(v.purchase_price), markup_percent: Number(v.markup_percent || 0), sort_index: Math.max(0, ...variants.filter(item => item.product_id === productId).map(item => Number(item.sort_index) || 0)) + 1 }, variantForm)}>
         <Row gutter={8}>
@@ -398,7 +399,7 @@ function CardsCatalog() {
           
           <Col xs={12}><Form.Item name="purchase_price" label="سعر الشراء (دج)" rules={[{ required: true }]}><Input type="number" min={0} step="0.01" /></Form.Item></Col>
           <Col xs={12}><Form.Item name="sale_price" label="سعر البيع (دج)"><Input type="number" min={0} step="0.01" /></Form.Item></Col>
-          <Col xs={12}><Form.Item name="markup_percent" label="نسبة الربح %" initialValue={0}><Input type="number" step="0.01" /></Form.Item></Col>
+          <Col xs={12}><Form.Item name="markup_percent" label="هامش الربح من البيع %" initialValue={0}><Input type="number" step="0.01" /></Form.Item></Col>
         </Row>
         <Button htmlType="submit" type="primary" disabled={busy}>إضافة بطاقة</Button>
       </Form>
