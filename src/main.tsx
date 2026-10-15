@@ -180,8 +180,8 @@ function MiniMembers() {
 }
 
 type CatalogCategory = { id: number; name: string; sort_index: number; active: boolean };
-type CatalogProduct = { id: number; category_id: number; name: string; sort_index: number; active: boolean; display_mode: string };
-type CatalogVariant = { id: number; product_id: number; name: string; denomination: number | null; purchase_price: number; markup_percent: number; sort_index: number; active: boolean; display_mode: string; stock_quantity: number };
+type CatalogProduct = { id: number; category_id: number; name: string; sort_index: number; active: boolean; display_mode: string; is_frozen: boolean };
+type CatalogVariant = { id: number; product_id: number; name: string; denomination: number | null; purchase_price: number; markup_percent: number; sort_index: number; active: boolean; display_mode: string; stock_quantity: number; is_frozen: boolean };
 function CardsCatalog() {
   const [categories, setCategories] = useState<CatalogCategory[]>([]);
   const [products, setProducts] = useState<CatalogProduct[]>([]);
@@ -195,6 +195,8 @@ function CardsCatalog() {
   const [categoryForm] = Form.useForm();
   const [productForm] = Form.useForm();
   const [variantForm] = Form.useForm();
+  const [editForm] = Form.useForm();
+  const [editingVariant, setEditingVariant] = useState<CatalogVariant | null>(null);
   async function refresh() {
     if (!client) return;
     setBusy(true);
@@ -297,10 +299,43 @@ function CardsCatalog() {
       setError("تعذر الاتصال لحفظ الحالة: " + String(e));
     } finally { setBusy(false); }
   }
+  async function toggleFreeze(table: "flexy_mini_products" | "flexy_mini_variants", id: number, frozen: boolean) {
+    if (!client || busy) return;
+    setBusy(true);
+    const { data, error } = await client.from(table).update({ is_frozen: !frozen }).eq("id", id).select("id,is_frozen");
+    setBusy(false);
+    if (error || !data?.some(row => row.id === id && row.is_frozen === !frozen)) {
+      setError("تعذر حفظ حالة التجميد: " + (error?.message || "لم يتم تأكيد الحفظ"));
+      return;
+    }
+    if (table === "flexy_mini_variants") setVariants(old => old.map(v => v.id === id ? {...v,is_frozen:!frozen} : v));
+    else setProducts(old => old.map(p => p.id === id ? {...p,is_frozen:!frozen} : p));
+    message.success(!frozen ? "تم التجميد" : "تم إلغاء التجميد");
+  }
+  async function updateVariant(values: Record<string, unknown>) {
+    if (!client || !editingVariant || busy) return;
+    setBusy(true);
+    const payload = { name: String(values.name || "").trim(), denomination: Number(values.denomination), purchase_price: Number(values.purchase_price), markup_percent: Number(values.markup_percent), sort_index: Number(values.sort_index) };
+    const { data, error } = await client.from("flexy_mini_variants").update(payload).eq("id", editingVariant.id).select("id");
+    setBusy(false);
+    if (error || !data?.some(row => row.id === editingVariant.id)) { setError("فشل تعديل البطاقة: " + (error?.message || "لم يتم تأكيد الحفظ")); return; }
+    setEditingVariant(null);
+    message.success("تم تحديث البطاقة");
+    await refresh();
+  }
   const visibleProducts = products.filter(p => p.category_id === categoryId && p.active);
   const visibleVariants = variants.filter(v => v.product_id === productId && v.active)
     .sort((a, b) => a.sort_index - b.sort_index || (a.denomination ?? 999999) - (b.denomination ?? 999999) || a.id - b.id);
   return <Space direction="vertical" size="large" style={{ width: "100%" }}>
+    <Modal open={editingVariant !== null} title="تعديل البطاقة" okText="حفظ التعديل" confirmLoading={busy} onOk={() => editForm.submit()} onCancel={() => !busy && setEditingVariant(null)} destroyOnHidden>
+      <Form form={editForm} layout="vertical" onFinish={updateVariant}>
+        <Form.Item name="name" label="اسم البطاقة" rules={[{required:true}]}><Input /></Form.Item>
+        <Form.Item name="denomination" label="القيمة" rules={[{required:true}]}><Input type="number" min={0}/></Form.Item>
+        <Form.Item name="purchase_price" label="سعر الشراء (دج)" rules={[{required:true}]}><Input type="number" min={0} step="0.01"/></Form.Item>
+        <Form.Item name="markup_percent" label="نسبة الربح %" rules={[{required:true}]}><Input type="number" min={0} step="0.01"/></Form.Item>
+        <Form.Item name="sort_index" label="الترتيب"><Input type="number"/></Form.Item>
+      </Form>
+    </Modal>
     <Modal open={pendingProductDelete!==null} title="تأكيد حذف النوع" okText="حذف نهائي" okButtonProps={{danger:true,loading:busy}} cancelText="إلغاء" onCancel={()=>{if(!busy)setPendingProductDelete(null);}} onOk={()=>void confirmProductDelete()}><Typography.Text>هل تريد حذف النوع «{pendingProductDelete?.name}» نهائيًا؟</Typography.Text></Modal>
     <Modal open={pendingCategoryDelete!==null} title="تأكيد حذف القسم" okText="حذف نهائي" okButtonProps={{danger:true,loading:busy}} confirmLoading={busy} cancelText="إلغاء" onCancel={()=>{if(!busy)setPendingCategoryDelete(null);}} onOk={()=>void confirmCategoryDelete()}><Typography.Text>هل تريد حذف القسم «{pendingCategoryDelete?.name}» نهائيًا؟</Typography.Text>{error&&<Alert type="error" showIcon message={error} style={{marginTop:12}}/>}</Modal>
     {error && <Alert type="error" showIcon message={error} closable onClose={() => setError("")} />}
@@ -313,7 +348,7 @@ function CardsCatalog() {
       </Form>
     </Card>
     {categoryId !== null && <Card title="2 — الأنواع">
-      <Space wrap>{visibleProducts.map(p => <Space key={p.id} size={4}><Button type={productId === p.id ? "primary" : "default"} onClick={() => setProductId(current => current === p.id ? null : p.id)}>{p.name} <Tag style={{marginInlineStart:6}}>{variants.filter(v=>v.product_id===p.id).length} بطاقات</Tag></Button><Button size="small" aria-label={p.display_mode === "hidden" ? "إظهار" : "إخفاء"} title={p.display_mode === "hidden" ? "إظهار" : "إخفاء"} icon={p.display_mode === "hidden" ? <EyeInvisibleOutlined /> : <EyeOutlined />} onClick={() => toggleVisibility("flexy_mini_products", p.id, p.display_mode)} /><Button size="small" danger disabled={busy || variants.some(v=>v.product_id===p.id)} onClick={()=>setPendingProductDelete({id:p.id,name:p.name})}>حذف</Button></Space>)}</Space>
+      <Space wrap>{visibleProducts.map(p => <Space key={p.id} size={4}><Button type={productId === p.id ? "primary" : "default"} onClick={() => setProductId(current => current === p.id ? null : p.id)}>{p.name} <Tag style={{marginInlineStart:6}}>{variants.filter(v=>v.product_id===p.id).length} بطاقات</Tag></Button><Button size="small" aria-label={p.display_mode === "hidden" ? "إظهار" : "إخفاء"} title={p.display_mode === "hidden" ? "إظهار" : "إخفاء"} icon={p.display_mode === "hidden" ? <EyeInvisibleOutlined /> : <EyeOutlined />} onClick={() => toggleVisibility("flexy_mini_products", p.id, p.display_mode)} /><Button size="small" disabled={busy} onClick={() => toggleFreeze("flexy_mini_products",p.id,p.is_frozen)}>{p.is_frozen ? "إلغاء التجميد" : "تجميد"}</Button><Button size="small" danger disabled={busy || variants.some(v=>v.product_id===p.id)} onClick={()=>setPendingProductDelete({id:p.id,name:p.name})}>حذف</Button></Space>)}</Space>
       <Form form={productForm} layout="inline" style={{ marginTop: 16, gap: 8 }} onFinish={v => save("flexy_mini_products", { category_id: categoryId, name: v.name.trim(), sort_index: Number(v.sort_index || 0) }, productForm)}>
         <Form.Item name="name" rules={[{ required: true }]}><Input placeholder="اسم النوع" /></Form.Item>
         <Form.Item name="sort_index" initialValue={0}><Input type="number" placeholder="Index" style={{ width: 90 }} /></Form.Item>
@@ -321,7 +356,15 @@ function CardsCatalog() {
       </Form>
     </Card>}
     {productId !== null && <Card id="mini-variants" title="3 — البطاقات">
-      <Row gutter={[12, 12]}>{visibleVariants.map(v => <Col xs={24} sm={12} lg={8} key={v.id}><Card size="small" title={v.name}><Text>القيمة: {v.denomination ?? "—"}</Text><div>سعر الشراء: {v.purchase_price} دج</div><div>الربح: {v.markup_percent}%</div><Title level={5}>سعر البيع: {(Number(v.purchase_price) * (1 + Number(v.markup_percent) / 100)).toFixed(2)} دج</Title><Tag>Index {v.sort_index}</Tag><Tag color="blue">المخزون: {v.stock_quantity}</Tag><Tag color={v.stock_quantity > 0 ? "green" : "orange"}>{v.stock_quantity > 0 ? "متوفرة" : "غير متوفرة"}</Tag><Button size="small" aria-label={v.display_mode === "hidden" ? "إظهار" : "إخفاء"} title={v.display_mode === "hidden" ? "إظهار" : "إخفاء"} icon={v.display_mode === "hidden" ? <EyeInvisibleOutlined /> : <EyeOutlined />} onClick={() => toggleVisibility("flexy_mini_variants", v.id, v.display_mode)} /></Card></Col>)}</Row>
+      <Table<CatalogVariant> rowKey="id" dataSource={visibleVariants} size="small" pagination={{pageSize:10}} scroll={{x:760}} columns={[
+        {title:"البطاقة",dataIndex:"name",key:"name"},
+        {title:"القيمة",dataIndex:"denomination",key:"denomination",width:85},
+        {title:"الشراء",dataIndex:"purchase_price",key:"purchase_price",width:100,render:(n:number)=>n+" دج"},
+        {title:"الربح",dataIndex:"markup_percent",key:"markup_percent",width:85,render:(n:number)=>n+"%"},
+        {title:"البيع",key:"sale",width:110,render:(_,v)=>(Number(v.purchase_price)*(1+Number(v.markup_percent)/100)).toFixed(2)+" دج"},
+        {title:"المخزون",dataIndex:"stock_quantity",key:"stock",width:90},
+        {title:"الإجراءات",key:"actions",width:235,render:(_,v)=><Space size={4}><Button size="small" title={v.display_mode==="hidden"?"إظهار":"إخفاء"} aria-label={v.display_mode==="hidden"?"إظهار":"إخفاء"} icon={v.display_mode==="hidden"?<EyeInvisibleOutlined/>:<EyeOutlined/>} onClick={()=>toggleVisibility("flexy_mini_variants",v.id,v.display_mode)}/><Button size="small" onClick={()=>{setEditingVariant(v);editForm.setFieldsValue({name:v.name,denomination:v.denomination,purchase_price:v.purchase_price,markup_percent:v.markup_percent,sort_index:v.sort_index});}}>تعديل</Button><Button size="small" disabled={busy} onClick={()=>toggleFreeze("flexy_mini_variants",v.id,v.is_frozen)}>{v.is_frozen?"إلغاء التجميد":"تجميد"}</Button></Space>}
+      ]} />
       <Form form={variantForm} layout="vertical" style={{ marginTop: 16 }} onFinish={v => save("flexy_mini_variants", { product_id: productId, name: v.name.trim(), denomination: Number(v.denomination || 0), purchase_price: Number(v.purchase_price), markup_percent: Number(v.markup_percent || 0), sort_index: Number(v.sort_index || 0) }, variantForm)}>
         <Row gutter={8}>
           <Col xs={24} sm={12}><Form.Item name="name" label="اسم البطاقة" rules={[{ required: true }]}><Input placeholder="مثلاً 60 UC" /></Form.Item></Col>
