@@ -18,47 +18,32 @@ export default function CardCodeImportAdmin({ db }: { db: SupabaseClient }) {
   useEffect(() => {
     let active = true;
     void (async () => {
-      const { data, error } = await db.rpc("flexy_mini_is_admin");
-      if (!active) return;
-      setAuthorized(!error && data === true);
-      setChecked(true);
-      if (!error && data === true) {
-        const response = await db.from("card_stock_types").select("type_key,name,active").eq("active", true).order("name");
-        if (!active) return;
-        if (response.error) message.error("تعذر تحميل أنواع البطاقات");
-        else setTypes((response.data || []) as CardType[]);
-      }
-    })();
-    return () => { active = false; };
-  }, [db]);
-  const values = lines(codes);
-  const unique = [...new Set(values)];
-  const importCodes = async () => {
-    if (!authorized || !typeKey || !denomination.trim() || !unique.length) return;
-    setBusy(true);
-    // Server must own code encryption, deduplication, and authorization.
-    // Never insert plaintext codes into a browser-writable stock table.
-    const { data, error } = await db.rpc("card_stock_admin_import_plain_lines", {
+      const { data, error } = await db.rpc("card_stock_admin_import_batch_v2", {
       p_type_key: typeKey,
       p_denomination: denomination.trim(),
-      p_codes: unique,
-      p_source_label: fileName || "إدخال يدوي"
+      p_source_kind: "supplier",
+      p_source_label: "Flexy Mini",
+      p_source_reference: fileName || null,
+      p_note: null,
+      p_rows: unique.map(code => ({ code, serial: "" })),
+      p_product_label: null,
+      p_import_method: fileName ? "file" : "manual",
+      p_legacy_uncertain: false
     });
     setBusy(false);
     if (error) {
       message.error(error.code === "PGRST202" ? "خدمة الحفظ الآمن غير مفعّلة بعد على الخادم" : "تعذر الحفظ: " + error.message);
       return;
     }
-    message.success("تم إرسال الدفعة للمخزون");
+    message.success("تمت معالجة الدفعة: " + Number((Array.isArray(data) ? data[0] : data)?.inserted_count || 0) + " جديدة");
     setCodes("");
     setFileName("");
-    void data;
   };
   if (!checked) return <Card loading />;
   if (!authorized) return <Alert type="error" showIcon message="هذه الصفحة مخصصة للإدارة فقط" />;
   return <Card title="إضافة أكواد البطاقات">
     <Space direction="vertical" size="middle" style={{ width: "100%" }}>
-      <Alert type="info" showIcon message="التحقق من طول وصيغة الأكواد مؤجل. الحفظ يتطلب خدمة الخادم الآمنة." />
+      <Alert type="info" showIcon message="التحقق المحلي مؤجل؛ الخادم يطبّق قواعد المخزون الحالية." />
       <Select placeholder="نوع البطاقة" value={typeKey} onChange={setTypeKey} style={{ width: "100%" }}
         options={types.map(t => ({ value: t.type_key, label: t.name }))} showSearch optionFilterProp="label" />
       <Input value={denomination} onChange={e => setDenomination(e.target.value)} placeholder="قيمة البطاقة، مثال 2000" />
