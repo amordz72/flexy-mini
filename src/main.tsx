@@ -379,7 +379,7 @@ function CardsCatalog() {
       </Form>
     </Card>}
     {productId !== null && <Card id="mini-variants" title="3 — البطاقات" extra={<Button type="primary" icon={<PlusOutlined/>} onClick={()=>{variantForm.resetFields();setAddingVariant(true);}}>إضافة بطاقة</Button>}>
-      <Table<CatalogVariant> rowKey="id" dataSource={visibleVariants} size="small" pagination={{pageSize:10}} tableLayout="auto" scroll={{x:"max-content"}} expandable={{expandedRowRender:(v)=><Descriptions size="small" column={1} bordered items={[
+      <Table<CatalogVariant> rowKey="id" dataSource={visibleVariants} size="small" pagination={{pageSize:10}} tableLayout="auto" expandable={{showExpandColumn:false,expandRowByClick:true,expandedRowRender:(v)=><Descriptions size="small" column={1} bordered items={[
         {key:"value",label:"القيمة",children:v.denomination ?? "—"},
         {key:"stock",label:"المخزون",children:v.stock_quantity},
         {key:"order",label:"الترتيب",children:v.sort_index},
@@ -388,13 +388,13 @@ function CardsCatalog() {
         {key:"sale",label:"سعر البيع",children:Number(v.sale_price ?? (Number(v.purchase_price)/(1-Number(v.markup_percent)/100))).toFixed(2)+" دج"},
         {key:"freeze",label:"التجميد",children:<Button size="small" disabled={busy} onClick={()=>toggleFreeze("flexy_mini_variants",v.id,v.is_frozen)}>{v.is_frozen?"إلغاء التجميد":"تجميد"}</Button>}
       ]}/>,rowExpandable:()=>true}} columns={[
-        {title:"البطاقة",dataIndex:"name",key:"name",width:135,render:(name:string)=><span title={name} style={{display:"block",maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",direction:"ltr",textAlign:"right"}}>{name}</span>},
+        {title:"البطاقة",dataIndex:"name",key:"name",width:115,render:(name:string)=><span title={name} style={{display:"block",maxWidth:115,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",direction:"ltr",textAlign:"right"}}>{name}</span>},
         {title:"القيمة",dataIndex:"denomination",key:"denomination",width:85,responsive:["md"]},
         {title:"الشراء",dataIndex:"purchase_price",key:"purchase_price",width:100,responsive:["md"],render:(n:number)=>n+" دج"},
         {title:"الربح",dataIndex:"markup_percent",key:"markup_percent",width:85,responsive:["md"],render:(n:number)=>Number(n).toFixed(2)+"%"},
-        {title:"البيع",key:"sale",width:90,render:(_,v)=><Typography.Text style={{whiteSpace:"nowrap"}}>{Number(v.sale_price ?? (Number(v.purchase_price)/(1-Number(v.markup_percent)/100))).toFixed(2)}</Typography.Text>},
+        {title:"البيع",key:"sale",width:82,render:(_,v)=><Typography.Text style={{whiteSpace:"nowrap"}}>{Number(v.sale_price ?? (Number(v.purchase_price)/(1-Number(v.markup_percent)/100))).toFixed(2)}</Typography.Text>},
         {title:"المخزون",dataIndex:"stock_quantity",key:"stock",width:80,responsive:["md"]},
-        {title:"الإجراءات",key:"actions",width:86,render:(_,v)=><Space size={2}><Button size="small" title={v.display_mode==="hidden"?"إظهار":"إخفاء"} aria-label={v.display_mode==="hidden"?"إظهار":"إخفاء"} icon={v.display_mode==="hidden"?<EyeInvisibleOutlined/>:<EyeOutlined/>} onClick={()=>toggleVisibility("flexy_mini_variants",v.id,v.display_mode)}/><Button size="small" title="تعديل" aria-label="تعديل" icon={<SettingOutlined/>} onClick={()=>{setEditingVariant(v);editForm.setFieldsValue({name:v.name,denomination:v.denomination,purchase_price:v.purchase_price,markup_percent:v.markup_percent,sort_index:v.sort_index,sale_price:Number(Number(v.sale_price ?? (Number(v.purchase_price)/(1-Number(v.markup_percent)/100))).toFixed(2))});}}/></Space>}
+        {title:"الإجراءات",key:"actions",width:76,render:(_,v)=><Space size={2}><Button size="small" title={v.display_mode==="hidden"?"إظهار":"إخفاء"} aria-label={v.display_mode==="hidden"?"إظهار":"إخفاء"} icon={v.display_mode==="hidden"?<EyeInvisibleOutlined/>:<EyeOutlined/>} onClick={()=>toggleVisibility("flexy_mini_variants",v.id,v.display_mode)}/><Button size="small" title="تعديل" aria-label="تعديل" icon={<SettingOutlined/>} onClick={()=>{setEditingVariant(v);editForm.setFieldsValue({name:v.name,denomination:v.denomination,purchase_price:v.purchase_price,markup_percent:v.markup_percent,sort_index:v.sort_index,sale_price:Number(Number(v.sale_price ?? (Number(v.purchase_price)/(1-Number(v.markup_percent)/100))).toFixed(2))});}}/></Space>}
       ]} />
       <Modal open={addingVariant} title="إضافة بطاقة" width={520} okText="إضافة بطاقة" confirmLoading={busy} onOk={()=>variantForm.submit()} onCancel={()=>{if(!busy)setAddingVariant(false);}} destroyOnHidden>
       <Form form={variantForm} layout="vertical" size="small" onValuesChange={(changed,all)=>syncCardPrices(variantForm,changed,all)} onFinish={v => save("flexy_mini_variants", { product_id: productId, name: v.name.trim(), denomination: Number(v.denomination || 0), purchase_price: Number(v.purchase_price), sale_price: Number(v.sale_price), markup_percent: Number(v.markup_percent || 0), sort_index: Math.max(0, ...variants.filter(item => item.product_id === productId).map(item => Number(item.sort_index) || 0)) + 1 }, variantForm).then(saved=>{if(saved)setAddingVariant(false);})}>
