@@ -191,6 +191,7 @@ function CardsCatalog() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [pendingCategoryDelete, setPendingCategoryDelete] = useState<{id:number;name:string}|null>(null);
+  const [pendingProductDelete, setPendingProductDelete] = useState<{id:number;name:string}|null>(null);
   const [categoryForm] = Form.useForm();
   const [productForm] = Form.useForm();
   const [variantForm] = Form.useForm();
@@ -247,6 +248,24 @@ function CardsCatalog() {
       setError("تعذر حذف القسم: "+String(e));
     } finally {setBusy(false);}
   }
+  async function confirmProductDelete() {
+    if (!client || !pendingProductDelete || busy) return;
+    const {id,name}=pendingProductDelete;
+    if (variants.some(v=>v.product_id===id)) {
+      setError("لا يمكن حذف النوع «"+name+"» لأنه يحتوي على بطاقات.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const {data,error}=await client.from("flexy_mini_products").delete().eq("id",id).select("id");
+      if(error){setError("فشل حذف النوع: "+error.message);return;}
+      if(!data?.some(row=>row.id===id)){setError("لم يُحذف النوع. تحقق من صلاحيات قاعدة البيانات.");return;}
+      setPendingProductDelete(null);
+      if(productId===id)setProductId(null);
+      message.success("تم حذف النوع «"+name+"»");
+      await refresh();
+    } finally {setBusy(false);}
+  }
   async function toggleVisibility(table: "flexy_mini_products" | "flexy_mini_variants", id: number, mode: string) {
     if (!client) return;
     const { error } = await client.from(table).update({ display_mode: mode === "hidden" ? "visible" : "hidden" }).eq("id", id);
@@ -256,6 +275,7 @@ function CardsCatalog() {
   const visibleVariants = variants.filter(v => v.product_id === productId && v.active)
     .sort((a, b) => a.sort_index - b.sort_index || (a.denomination ?? 999999) - (b.denomination ?? 999999) || a.id - b.id);
   return <Space direction="vertical" size="large" style={{ width: "100%" }}>
+    <Modal open={pendingProductDelete!==null} title="تأكيد حذف النوع" okText="حذف نهائي" okButtonProps={{danger:true,loading:busy}} cancelText="إلغاء" onCancel={()=>{if(!busy)setPendingProductDelete(null);}} onOk={()=>void confirmProductDelete()}><Typography.Text>هل تريد حذف النوع «{pendingProductDelete?.name}» نهائيًا؟</Typography.Text></Modal>
     <Modal open={pendingCategoryDelete!==null} title="تأكيد حذف القسم" okText="حذف نهائي" okButtonProps={{danger:true,loading:busy}} confirmLoading={busy} cancelText="إلغاء" onCancel={()=>{if(!busy)setPendingCategoryDelete(null);}} onOk={()=>void confirmCategoryDelete()}><Typography.Text>هل تريد حذف القسم «{pendingCategoryDelete?.name}» نهائيًا؟</Typography.Text>{error&&<Alert type="error" showIcon message={error} style={{marginTop:12}}/>}</Modal>
     {error && <Alert type="error" showIcon message={error} closable onClose={() => setError("")} />}
     <Card title="1 — الأقسام" loading={busy && !categories.length}>
@@ -267,7 +287,7 @@ function CardsCatalog() {
       </Form>
     </Card>
     {categoryId !== null && <Card title="2 — الأنواع">
-      <Space wrap>{visibleProducts.map(p => <Space key={p.id} size={4}><Button type={productId === p.id ? "primary" : "default"} onClick={() => { setProductId(p.id); window.setTimeout(() => document.getElementById("mini-variants")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}>{p.name} <Tag style={{marginInlineStart:6}}>{variants.filter(v=>v.product_id===p.id).length} بطاقات</Tag></Button><Button size="small" onClick={() => toggleVisibility("flexy_mini_products", p.id, p.display_mode)}>{p.display_mode === "hidden" ? "إظهار" : "تجميد"}</Button></Space>)}</Space>
+      <Space wrap>{visibleProducts.map(p => <Space key={p.id} size={4}><Button type={productId === p.id ? "primary" : "default"} onClick={() => { setProductId(p.id); window.setTimeout(() => document.getElementById("mini-variants")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}>{p.name} <Tag style={{marginInlineStart:6}}>{variants.filter(v=>v.product_id===p.id).length} بطاقات</Tag></Button><Button size="small" onClick={() => toggleVisibility("flexy_mini_products", p.id, p.display_mode)}>{p.display_mode === "hidden" ? "إظهار" : "تجميد"}</Button><Button size="small" danger disabled={busy || variants.some(v=>v.product_id===p.id)} onClick={()=>setPendingProductDelete({id:p.id,name:p.name})}>حذف</Button></Space>)}</Space>
       <Form form={productForm} layout="inline" style={{ marginTop: 16, gap: 8 }} onFinish={v => save("flexy_mini_products", { category_id: categoryId, name: v.name.trim(), sort_index: Number(v.sort_index || 0) }, productForm)}>
         <Form.Item name="name" rules={[{ required: true }]}><Input placeholder="اسم النوع" /></Form.Item>
         <Form.Item name="sort_index" initialValue={0}><Input type="number" placeholder="Index" style={{ width: 90 }} /></Form.Item>
