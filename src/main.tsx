@@ -349,7 +349,7 @@ function CardsCatalog() {
   const visibleVariants = variants.filter(v => v.product_id === productId && v.active)
     .sort((a, b) => a.sort_index - b.sort_index || (a.denomination ?? 999999) - (b.denomination ?? 999999) || a.id - b.id);
   return <Space direction="vertical" size="large" style={{ width: "100%" }}>
-    <Modal open={editingVariant !== null} title="تعديل البطاقة" width={520} okText="حفظ التعديل" confirmLoading={busy} onOk={() => editForm.submit()} onCancel={() => !busy && setEditingVariant(null)} destroyOnHidden>
+    <Modal open={editingVariant !== null} title="تعديل البطاقة" width={520} okText="حفظ التعديل" cancelText="إلغاء" confirmLoading={busy} onOk={() => editForm.submit()} onCancel={() => !busy && setEditingVariant(null)} destroyOnHidden>
       <Form form={editForm} layout="vertical" size="small" onValuesChange={(changed,all)=>syncCardPrices(editForm,changed,all)} onFinish={updateVariant}>
         <Row gutter={[12,0]}>
           <Col span={24}><Form.Item style={{marginBottom:12}} name="name" label="اسم البطاقة" rules={[{required:true}]}><Input /></Form.Item></Col>
@@ -398,7 +398,7 @@ function CardsCatalog() {
         {title:"المخزون",dataIndex:"stock_quantity",key:"stock",width:80,responsive:["md"]},
         {title:"الإجراءات",key:"actions",width:76,render:(_,v)=><Space size={2}><Button size="small" title={v.display_mode==="hidden"?"إظهار":"إخفاء"} aria-label={v.display_mode==="hidden"?"إظهار":"إخفاء"} icon={v.display_mode==="hidden"?<EyeInvisibleOutlined/>:<EyeOutlined/>} onClick={()=>toggleVisibility("flexy_mini_variants",v.id,v.display_mode)}/><Button size="small" title="تعديل" aria-label="تعديل" icon={<SettingOutlined/>} onClick={()=>{setEditingVariant(v);editForm.setFieldsValue({name:v.name,denomination:v.denomination,purchase_price:v.purchase_price,markup_percent:v.markup_percent,sort_index:v.sort_index,sale_price:Number(Number(v.sale_price ?? (Number(v.purchase_price)/(1-Number(v.markup_percent)/100))).toFixed(2))});}}/></Space>}
       ]} />
-      <Modal open={addingVariant} title="إضافة بطاقة" width={520} okText="إضافة بطاقة" confirmLoading={busy} onOk={()=>variantForm.submit()} onCancel={()=>{if(!busy)setAddingVariant(false);}} destroyOnHidden>
+      <Modal open={addingVariant} title="إضافة بطاقة" width={520} okText="إضافة بطاقة" cancelText="إلغاء" confirmLoading={busy} onOk={()=>variantForm.submit()} onCancel={()=>{if(!busy)setAddingVariant(false);}} destroyOnHidden>
       <Form form={variantForm} layout="vertical" size="small" onValuesChange={(changed,all)=>syncCardPrices(variantForm,changed,all)} onFinish={v => save("flexy_mini_variants", { product_id: productId, name: v.name.trim(), denomination: Number(v.denomination || 0), purchase_price: Number(v.purchase_price), sale_price: Number(v.sale_price), markup_percent: Number(v.markup_percent || 0), sort_index: Math.max(0, ...variants.filter(item => item.product_id === productId).map(item => Number(item.sort_index) || 0)) + 1 }, variantForm).then(saved=>{if(saved)setAddingVariant(false);})}>
         <Row gutter={[12,0]}>
           <Col span={24}><Form.Item style={{marginBottom:12}} name="name" label="اسم البطاقة" rules={[{ required: true }]}><Input placeholder="مثلاً 60 UC" /></Form.Item></Col>
