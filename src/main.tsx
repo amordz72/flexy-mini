@@ -383,7 +383,7 @@ function CardsCatalog() {
         {key:"sale",label:"سعر البيع",children:(Number(v.purchase_price)*(1+Number(v.markup_percent)/100)).toFixed(2)+" دج"},
         {key:"freeze",label:"التجميد",children:<Button size="small" disabled={busy} onClick={()=>toggleFreeze("flexy_mini_variants",v.id,v.is_frozen)}>{v.is_frozen?"إلغاء التجميد":"تجميد"}</Button>}
       ]}/>,rowExpandable:()=>true}} columns={[
-        {title:"البطاقة",dataIndex:"name",key:"name",render:(name:string)=><span style={{overflowWrap:"anywhere"}}>{name}</span>},
+        {title:"البطاقة",dataIndex:"name",key:"name",render:(name:string)=><span title={name} style={{display:"block",maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",direction:"ltr",textAlign:"right"}}>{name}</span>},
         {title:"القيمة",dataIndex:"denomination",key:"denomination",width:85,responsive:["md"]},
         {title:"الشراء",dataIndex:"purchase_price",key:"purchase_price",width:100,responsive:["md"],render:(n:number)=>n+" دج"},
         {title:"الربح",dataIndex:"markup_percent",key:"markup_percent",width:85,responsive:["md"],render:(n:number)=>n+"%"},
