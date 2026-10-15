@@ -56,22 +56,35 @@ Deno.serve(async(req)=>{
    const {data:account}=await admin.from("flexy_mini_customer_accounts").select("username,phone,party_id,active,credit_enabled").eq("id",session.customer_id).maybeSingle();
    if(!account?.active)return respond(401,{error:"Unauthorized"});
    if(action==="catalog"){
-     // Fail closed: only active, publicly visible, unfrozen categories/products/variants.
-     // Account-specific hidden-product exceptions are not enabled at this stage.
-     const [categoriesResult,productsResult,variantsResult]=await Promise.all([
+     // Hidden visibility may be granted per customer. Frozen and inactive are NEVER overridden.
+     // A product grant exposes its visible variants; a variant grant permits that one variant
+     // and makes the parent product visible to this customer (not its other hidden variants).
+     const [categoriesResult,productsResult,variantsResult,grantsResult]=await Promise.all([
        admin.from("flexy_mini_categories").select("id,name,sort_index").eq("active",true).order("sort_index",{ascending:true}).order("id",{ascending:true}),
-       admin.from("flexy_mini_products").select("id,category_id,name,sort_index").eq("active",true).eq("display_mode","visible").eq("is_frozen",false).order("sort_index",{ascending:true}).order("id",{ascending:true}),
-       admin.from("flexy_mini_variants").select("id,product_id,name,denomination,stock_quantity,sort_index,is_frozen").eq("active",true).eq("display_mode","visible").eq("is_frozen",false).order("sort_index",{ascending:true}).order("denomination",{ascending:true}).order("id",{ascending:true})
+       admin.from("flexy_mini_products").select("id,category_id,name,sort_index,display_mode").eq("active",true).eq("is_frozen",false).order("sort_index",{ascending:true}).order("id",{ascending:true}),
+       admin.from("flexy_mini_variants").select("id,product_id,name,denomination,stock_quantity,sort_index,display_mode").eq("active",true).eq("is_frozen",false).order("product_id",{ascending:true}).order("sort_index",{ascending:true}).order("denomination",{ascending:true}).order("id",{ascending:true}),
+       admin.from("flexy_mini_customer_catalog_grants").select("product_id,variant_id").eq("customer_id",session.customer_id)
      ]);
-     if(categoriesResult.error||productsResult.error||variantsResult.error){
-       console.error("customer_catalog_fetch_failed",{categories:categoriesResult.error?.code,products:productsResult.error?.code,variants:variantsResult.error?.code});
+     if(categoriesResult.error||productsResult.error||variantsResult.error||grantsResult.error){
+       console.error("customer_catalog_fetch_failed",{categories:categoriesResult.error?.code,products:productsResult.error?.code,variants:variantsResult.error?.code,grants:grantsResult.error?.code});
        return respond(503,{error:"تعذر تحميل البطاقات حاليًا"});
      }
      const categories=categoriesResult.data||[];
      const categoryIds=new Set(categories.map(c=>c.id));
-     const products=(productsResult.data||[]).filter(p=>categoryIds.has(p.category_id));
-     const productIds=new Set(products.map(p=>p.id));
-     const variants=(variantsResult.data||[]).filter(v=>productIds.has(v.product_id));
+     const productGrants=new Set((grantsResult.data||[]).filter(g=>g.product_id!==null).map(g=>g.product_id));
+     const variantGrants=new Set((grantsResult.data||[]).filter(g=>g.variant_id!==null).map(g=>g.variant_id));
+     const eligibleParents=new Map((productsResult.data||[]).filter(p=>categoryIds.has(p.category_id)).map(p=>[p.id,p]));
+     const variants=(variantsResult.data||[]).filter(v=>{
+       const parent=eligibleParents.get(v.product_id);
+       if(!parent)return false;
+       const directGrant=variantGrants.has(v.id);
+       return (parent.display_mode==="visible"||productGrants.has(parent.id)||directGrant)
+         && (v.display_mode==="visible"||directGrant);
+     }).map(({display_mode,...v})=>v);
+     const accessibleProductIds=new Set(variants.map(v=>v.product_id));
+     const products=(productsResult.data||[]).filter(p=>categoryIds.has(p.category_id)
+       && (p.display_mode==="visible"||productGrants.has(p.id)||accessibleProductIds.has(p.id)))
+       .map(({display_mode,...p})=>p);
      return respond(200,{categories,products,variants});
    }
    await admin.from("flexy_mini_trusted_devices").update({last_used_at:new Date().toISOString()}).eq("id",device.id);
@@ -85,6 +98,36 @@ Deno.serve(async(req)=>{
  if(!user)return respond(401,{error:"Unauthorized"});
  const {data:isAdmin}=await caller.rpc("flexy_mini_is_admin");
  if(isAdmin!==true)return respond(403,{error:"Admin only"});
+ if(action==="catalog_access"||action==="catalog_grant"){
+   const customerId=Number(body.customer_id);
+   if(!Number.isSafeInteger(customerId)||customerId<1)return respond(400,{error:"حساب غير صالح"});
+   const {data:customer,error:customerError}=await admin.from("flexy_mini_customer_accounts").select("id").eq("id",customerId).maybeSingle();
+   if(customerError)return respond(503,{error:"تعذر فحص حساب الزبون"});
+   if(!customer)return respond(404,{error:"حساب الزبون غير موجود"});
+   if(action==="catalog_access"){
+     const {data,error}=await admin.from("flexy_mini_customer_catalog_grants").select("product_id,variant_id").eq("customer_id",customerId);
+     return error?respond(503,{error:"تعذر تحميل صلاحيات البطاقات"}):respond(200,{grants:data||[]});
+   }
+   const kind=String(body.kind||"");
+   const targetId=Number(body.target_id);
+   if(!["product","variant"].includes(kind)||!Number.isSafeInteger(targetId)||targetId<1||typeof body.allowed!=="boolean")return respond(400,{error:"بيانات الصلاحية غير صالحة"});
+   const column=kind==="product"?"product_id":"variant_id",targetTable=kind==="product"?"flexy_mini_products":"flexy_mini_variants";
+   const {data:target,error:targetError}=await admin.from(targetTable).select("id").eq("id",targetId).maybeSingle();
+   if(targetError)return respond(503,{error:"تعذر التحقق من البطاقة"});
+   if(!target)return respond(404,{error:"البطاقة غير موجودة"});
+   if(body.allowed){
+     const {data:existing,error:lookupError}=await admin.from("flexy_mini_customer_catalog_grants").select("id").eq("customer_id",customerId).eq(column,targetId).maybeSingle();
+     if(lookupError)return respond(503,{error:"تعذر فحص الصلاحية"});
+     if(!existing){
+       const {error}=await admin.from("flexy_mini_customer_catalog_grants").insert({customer_id:customerId,[column]:targetId,granted_by:user.id});
+       if(error&&error.code!=="23505")return respond(503,{error:"تعذر منح صلاحية البطاقة"});
+     }
+   }else{
+     const {error}=await admin.from("flexy_mini_customer_catalog_grants").delete().eq("customer_id",customerId).eq(column,targetId);
+     if(error)return respond(503,{error:"تعذر إلغاء صلاحية البطاقة"});
+   }
+   return respond(200,{ok:true});
+ }
  if(action==="devices"){
    const {data,error}=await admin.from("flexy_mini_trusted_devices").select("id,customer_id,device_label,approved_at,revoked_at,expires_at,created_at,last_used_at,flexy_mini_customer_accounts(username,phone,party_id,money_party_directory(display_name))").order("created_at",{ascending:false}).limit(500);
    return error?respond(503,{error:"تعذر تحميل الأجهزة"}):respond(200,{devices:data});

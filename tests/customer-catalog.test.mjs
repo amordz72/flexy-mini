@@ -20,6 +20,7 @@ function data(){
   flexy_mini_customer_sessions:[{id:5,customer_id:1,device_id:9,token_hash:sha256(token),expires_at:future(),revoked_at:null}],
   flexy_mini_trusted_devices:[{id:9,customer_id:1,credential_hash:sha256(deviceSecret),approved_at:past(),revoked_at:null,expires_at:future()}],
   flexy_mini_customer_accounts:[{id:1,active:true,username:"fixture_user"}],
+  flexy_mini_customer_catalog_grants:[],
   flexy_mini_categories:[{id:1,name:"Games",sort_index:1,active:true},{id:2,name:"Inactive",sort_index:2,active:false}],
   flexy_mini_products:[
    {id:10,category_id:1,name:"Visible",sort_index:1,active:true,display_mode:"visible",is_frozen:false},
@@ -40,13 +41,13 @@ function data(){
  };
 }
 
-function service(records){
+function service(records,{isAdmin=true,hasUser=true}={}){
  let handler;
  const touched=[];
  function createClient(){
-  return {from(table){
+  return {auth:{getUser:async()=>({data:{user:hasUser?{id:"fixture-admin"}:null}})},rpc:async()=>({data:isAdmin}),from(table){
    touched.push(table);
-   let fields=[],filters=[],orders=[];
+   let fields=[],filters=[],orders=[],action="select";
    const rows=()=>{
     let result=(records[table]||[]).filter(row=>filters.every(([field,value])=>row[field]===value));
     for(let i=orders.length-1;i>=0;i--){
@@ -60,9 +61,20 @@ function service(records){
     eq(field,value){filters.push([field,value]);return query;},
     order(key,{ascending=true}={}){orders.push([key,ascending]);return query;},
     async maybeSingle(){return {data:rows()[0]||null,error:null};},
-    then(resolve,reject){return Promise.resolve({data:rows(),error:null}).then(resolve,reject);},
-    update(){throw new Error("Read-only catalog must not modify state");},
-    insert(){throw new Error("Read-only catalog must not insert state");}
+    then(resolve,reject){
+     if(action==="delete"){
+      records[table]=(records[table]||[]).filter(row=>!filters.every(([field,value])=>row[field]===value));
+      return Promise.resolve({error:null}).then(resolve,reject);
+     }
+     return Promise.resolve({data:rows(),error:null}).then(resolve,reject);
+    },
+    update(){throw new Error("Catalog grants must not update accounts, cards or wallet state");},
+    delete(){action="delete";return query;},
+    insert(value){
+     records[table]??=[];
+     records[table].push({id:records[table].length+1,...value});
+     return Promise.resolve({data:null,error:null});
+    }
    };
    return query;
   }};
@@ -111,4 +123,58 @@ test("catalog rejects revoked/expired sessions, revoked/expired/unapproved devic
 test("frontend supplies same device proof as customer me action, and buying stays disabled",()=>{
  assert.match(frontend,/action:"catalog",token,device_secret:window\.localStorage\.getItem\("flexy_mini_device_secret"\)/);
  assert.match(frontend,/شراء البطاقات غير مفعّل/);
+});
+
+test("hidden products are accessible only to explicitly granted customers, not other accounts",async()=>{
+ const records=data();
+ records.flexy_mini_customer_catalog_grants=[{customer_id:2,product_id:11,variant_id:null}];
+ let result=await service(records).post({token,device_secret:deviceSecret});
+ assert.deepEqual(result.body.products.map(p=>p.id),[10]);
+ records.flexy_mini_customer_catalog_grants.push({customer_id:1,product_id:11,variant_id:null});
+ result=await service(records).post({token,device_secret:deviceSecret});
+ assert.deepEqual(result.body.products.map(p=>p.id),[10,11]);
+ assert.deepEqual(result.body.variants.map(v=>v.id),[107,101,104]);
+});
+test("individual variant grant reveals only its requested variant, including from a hidden parent",async()=>{
+ const records=data();
+ records.flexy_mini_customer_catalog_grants=[{customer_id:1,product_id:null,variant_id:103}];
+ let result=await service(records).post({token,device_secret:deviceSecret});
+ assert.deepEqual(result.body.variants.map(v=>v.id),[107,101,103]);
+ records.flexy_mini_customer_catalog_grants=[{customer_id:1,product_id:null,variant_id:104}];
+ result=await service(records).post({token,device_secret:deviceSecret});
+ assert.deepEqual(result.body.products.map(p=>p.id),[10,11]);
+ assert.deepEqual(result.body.variants.map(v=>v.id),[107,101,104]);
+});
+test("no grant overrides frozen products, frozen variants, inactive categories or inactive products",async()=>{
+ const records=data();
+ records.flexy_mini_customer_catalog_grants=[
+  {customer_id:1,product_id:12,variant_id:null},
+  {customer_id:1,product_id:null,variant_id:102},
+  {customer_id:1,product_id:null,variant_id:105},
+  {customer_id:1,product_id:14,variant_id:null},
+  {customer_id:1,product_id:13,variant_id:null}
+ ];
+ const result=await service(records).post({token,device_secret:deviceSecret});
+ assert.equal(result.status,200);
+ assert.deepEqual(result.body.products.map(p=>p.id),[10]);
+ assert.deepEqual(result.body.variants.map(v=>v.id),[107,101]);
+});
+test("only authenticated admins can view or change customer grants",async()=>{
+ const records=data();
+ assert.equal((await service(records,{hasUser:false}).post({action:"catalog_access",customer_id:1})).status,401);
+ assert.equal((await service(records,{isAdmin:false}).post({action:"catalog_grant",customer_id:1,kind:"product",target_id:11,allowed:true})).status,403);
+ assert.equal(records.flexy_mini_customer_catalog_grants.length,0);
+});
+test("admin grant and revoke target only the requested account and hidden item",async()=>{
+ const records=data(),app=service(records);
+ assert.equal((await app.post({action:"catalog_grant",customer_id:1,kind:"product",target_id:11,allowed:true})).status,200);
+ assert.deepEqual((await app.post({action:"catalog_access",customer_id:1})).body.grants.map(g=>g.product_id),[11]);
+ assert.equal((await app.post({action:"catalog_grant",customer_id:1,kind:"variant",target_id:103,allowed:true})).status,200);
+ assert.equal(records.flexy_mini_customer_catalog_grants.length,2);
+ const catalog=await app.post({token,device_secret:deviceSecret});
+ assert.deepEqual(catalog.body.variants.map(v=>v.id),[107,101,103,104]);
+ assert.equal((await app.post({action:"catalog_grant",customer_id:1,kind:"product",target_id:11,allowed:false})).status,200);
+ assert.deepEqual((await app.post({token,device_secret:deviceSecret})).body.products.map(p=>p.id),[10]);
+ assert.equal((await app.post({action:"catalog_grant",customer_id:1,kind:"product",target_id:99,allowed:true})).status,404);
+ assert.equal((await app.post({action:"catalog_grant",customer_id:1,kind:"variant",target_id:103,allowed:"yes"})).status,400);
 });

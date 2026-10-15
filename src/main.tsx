@@ -476,6 +476,42 @@ function MasterCustomerLookup() {
     setSavedMessage("تم تحديث الحساب "+editUsername.trim()+(editPassword?" وتغيير كلمة المرور وإغلاق جلساته القديمة":""));
     setEditing(null);setEditPassword("");void loadAccounts();
   };
+    type CatalogGrantOption={key:string;kind:"product"|"variant";id:number;name:string;parent:string;frozen:boolean;active:boolean};
+  const [accessCustomer,setAccessCustomer]=useState<{id:number;username:string}|null>(null);
+  const [accessOptions,setAccessOptions]=useState<CatalogGrantOption[]>([]);
+  const [accessGranted,setAccessGranted]=useState<Set<string>>(new Set());
+  const [accessBusy,setAccessBusy]=useState(false);
+  const [accessError,setAccessError] = useState("");
+  const openCatalogAccess=async(account:{id:number;username:string})=>{
+    setAccessCustomer(account);setAccessOptions([]);setAccessGranted(new Set());setAccessBusy(true);setAccessError("");
+    if(!client){setAccessError("لا يوجد اتصال بقاعدة البيانات");setAccessBusy(false);return;}
+    try{
+      const [productsResponse,variantsResponse,accessResponse]=await Promise.all([
+        client.from("flexy_mini_products").select("id,name,active,display_mode,is_frozen"),
+        client.from("flexy_mini_variants").select("id,product_id,name,active,display_mode,is_frozen"),
+        customerAdminRequest({action:"catalog_access",customer_id:account.id})
+      ]);
+      if(productsResponse.error||variantsResponse.error||accessResponse.error||!Array.isArray(accessResponse.data?.grants))
+        throw new Error(accessResponse.data?.error||productsResponse.error?.message||variantsResponse.error?.message||"تعذر تحميل صلاحيات البطاقات");
+      const products=productsResponse.data||[],variants=variantsResponse.data||[];
+      const productNames=new Map(products.map(p=>[p.id,p.name]));
+      setAccessOptions([
+        ...products.filter(p=>p.display_mode==="hidden").map(p=>({key:"product:"+p.id,kind:"product" as const,id:p.id,name:p.name,parent:"نوع",frozen:Boolean(p.is_frozen),active:Boolean(p.active)})),
+        ...variants.filter(v=>v.display_mode==="hidden").map(v=>({key:"variant:"+v.id,kind:"variant" as const,id:v.id,name:v.name,parent:productNames.get(v.product_id)||"بطاقة",frozen:Boolean(v.is_frozen),active:Boolean(v.active)}))
+      ]);
+      setAccessGranted(new Set(accessResponse.data.grants.map((g:{product_id:number|null;variant_id:number|null})=>g.product_id!=null?"product:"+g.product_id:"variant:"+g.variant_id)));
+    }catch(e){setAccessError(e instanceof Error?e.message:"تعذر تحميل الصلاحيات");}
+    finally{setAccessBusy(false);}
+  };
+  const changeCatalogGrant=async(option:CatalogGrantOption)=>{
+    if(!accessCustomer||accessBusy)return;
+    const wasGranted=accessGranted.has(option.key);
+    setAccessBusy(true);setAccessError("");
+    const {data,error}=await customerAdminRequest({action:"catalog_grant",customer_id:accessCustomer.id,kind:option.kind,target_id:option.id,allowed:!wasGranted});
+    if(error||!data?.ok)setAccessError(data?.error||error?.message||"تعذر تغيير صلاحية البطاقة");
+    else setAccessGranted(previous=>{const next=new Set(previous);if(wasGranted)next.delete(option.key);else next.add(option.key);return next;});
+    setAccessBusy(false);
+  };
   const [accounts,setAccounts]=useState<Array<{id:number;party_id:number;username:string;phone:string;active:boolean}>>([]);
   const [masterRecord,setMasterRecord]=useState<{id:number;display_name:string;primary_phone?:string|null;mytool_username?:string|null}|null>(null);
   const assignMaster=(r:{id:number;display_name:string;primary_phone?:string|null;mytool_username?:string|null},overwrite=false)=>{
@@ -553,11 +589,23 @@ function MasterCustomerLookup() {
           <Text type="secondary">عند تغيير كلمة المرور تُغلق جلسات الزبون السابقة.</Text>
         </Form>
       </Modal>
+      <Modal title={accessCustomer?"صلاحيات البطاقات — "+accessCustomer.username:"صلاحيات البطاقات"} open={accessCustomer!==null} footer={null} width={600} onCancel={()=>{if(!accessBusy)setAccessCustomer(null);}} destroyOnHidden>
+        <Space direction="vertical" size="middle" style={{width:"100%"}}>
+          <Alert type="info" showIcon message="الاستثناءات للبطاقات المخفية فقط؛ التجميد يمنع الاستعمال للجميع حتى مع السماح."/>
+          {accessError&&<Alert type="error" showIcon message={accessError}/>}
+          <Table<CatalogGrantOption> size="small" rowKey="key" loading={accessBusy&&accessOptions.length===0} dataSource={accessOptions} pagination={{pageSize:10}} columns={[
+            {title:"البطاقة / النوع",key:"name",render:(_,r)=><Space direction="vertical" size={0}><Typography.Text strong>{r.name}</Typography.Text><Typography.Text type="secondary">{r.parent}</Typography.Text></Space>},
+            {title:"حالة",key:"state",width:90,render:(_,r)=><Space direction="vertical" size={2}>{r.frozen&&<Tag color="orange">مجمّد</Tag>}{!r.active&&<Tag>معطّل</Tag>}</Space>},
+            {title:"الزبون",key:"allow",width:98,render:(_,r)=><Button size="small" type={accessGranted.has(r.key)?"primary":"default"} loading={accessBusy} onClick={()=>void changeCatalogGrant(r)}>{accessGranted.has(r.key)?"مسموح":"سماح"}</Button>}
+          ]} locale={{emptyText:"لا توجد بطاقات مخفية تحتاج استثناءات"}}/>
+          <Button block onClick={()=>{if(!accessBusy)setAccessCustomer(null);}}>إغلاق</Button>
+        </Space>
+      </Modal>
       <Table size="small" rowKey="id" style={{marginTop:12}} dataSource={accounts.map(a=>({...a,name:a.phone,master:a.party_id,status:a.active?"نشط":"معطل"}))} columns={[
         {title:"الزبون",dataIndex:"name"},
         {title:"اسم المستخدم",dataIndex:"username"},
         {title:"الماستر",dataIndex:"master"},
-        {title:"الحالة",dataIndex:"status"},{title:"إدارة",key:"edit",render:(_:unknown,record:{id:number;username:string})=><Button size="small" onClick={()=>{setEditing({id:record.id,username:record.username});setEditUsername(record.username);setEditPassword("");setEditError("");}}>تعديل</Button>}
+        {title:"الحالة",dataIndex:"status"},{title:"إدارة",key:"edit",render:(_:unknown,record:{id:number;username:string})=><Space size={4}><Button size="small" onClick={()=>{setEditing({id:record.id,username:record.username});setEditUsername(record.username);setEditPassword("");setEditError("");}}>تعديل</Button><Button size="small" onClick={()=>void openCatalogAccess(record)}>بطاقاته</Button></Space>}
       ]} locale={{emptyText:"لا توجد حسابات Flexy Mini مؤكدة بعد"}}/>
     </Card>
     {creating&&<Card title="زبون جديد — مطابقة الماستر">
