@@ -356,14 +356,20 @@ function CardsCatalog() {
       </Form>
     </Card>}
     {productId !== null && <Card id="mini-variants" title="3 — البطاقات">
-      <Table<CatalogVariant> rowKey="id" dataSource={visibleVariants} size="small" pagination={{pageSize:10}} scroll={{x:760}} columns={[
-        {title:"البطاقة",dataIndex:"name",key:"name"},
-        {title:"القيمة",dataIndex:"denomination",key:"denomination",width:85},
-        {title:"الشراء",dataIndex:"purchase_price",key:"purchase_price",width:100,render:(n:number)=>n+" دج"},
-        {title:"الربح",dataIndex:"markup_percent",key:"markup_percent",width:85,render:(n:number)=>n+"%"},
-        {title:"البيع",key:"sale",width:110,render:(_,v)=>(Number(v.purchase_price)*(1+Number(v.markup_percent)/100)).toFixed(2)+" دج"},
-        {title:"المخزون",dataIndex:"stock_quantity",key:"stock",width:90},
-        {title:"الإجراءات",key:"actions",width:235,render:(_,v)=><Space size={4}><Button size="small" title={v.display_mode==="hidden"?"إظهار":"إخفاء"} aria-label={v.display_mode==="hidden"?"إظهار":"إخفاء"} icon={v.display_mode==="hidden"?<EyeInvisibleOutlined/>:<EyeOutlined/>} onClick={()=>toggleVisibility("flexy_mini_variants",v.id,v.display_mode)}/><Button size="small" onClick={()=>{setEditingVariant(v);editForm.setFieldsValue({name:v.name,denomination:v.denomination,purchase_price:v.purchase_price,markup_percent:v.markup_percent,sort_index:v.sort_index});}}>تعديل</Button><Button size="small" disabled={busy} onClick={()=>toggleFreeze("flexy_mini_variants",v.id,v.is_frozen)}>{v.is_frozen?"إلغاء التجميد":"تجميد"}</Button></Space>}
+      <Table<CatalogVariant> rowKey="id" dataSource={visibleVariants} size="small" pagination={{pageSize:10}} tableLayout="auto" expandable={{expandedRowRender:(v)=><Descriptions size="small" column={1} bordered items={[
+        {key:"value",label:"القيمة",children:v.denomination ?? "—"},
+        {key:"buy",label:"سعر الشراء",children:v.purchase_price+" دج"},
+        {key:"margin",label:"الربح",children:v.markup_percent+"%"},
+        {key:"sale",label:"سعر البيع",children:(Number(v.purchase_price)*(1+Number(v.markup_percent)/100)).toFixed(2)+" دج"},
+        {key:"freeze",label:"التجميد",children:<Button size="small" disabled={busy} onClick={()=>toggleFreeze("flexy_mini_variants",v.id,v.is_frozen)}>{v.is_frozen?"إلغاء التجميد":"تجميد"}</Button>}
+      ]}/>,rowExpandable:()=>true}} columns={[
+        {title:"البطاقة",dataIndex:"name",key:"name",render:(name:string)=><span style={{overflowWrap:"anywhere"}}>{name}</span>},
+        {title:"القيمة",dataIndex:"denomination",key:"denomination",width:85,responsive:["md"]},
+        {title:"الشراء",dataIndex:"purchase_price",key:"purchase_price",width:100,responsive:["md"],render:(n:number)=>n+" دج"},
+        {title:"الربح",dataIndex:"markup_percent",key:"markup_percent",width:85,responsive:["md"],render:(n:number)=>n+"%"},
+        {title:"البيع",key:"sale",width:110,responsive:["md"],render:(_,v)=>(Number(v.purchase_price)*(1+Number(v.markup_percent)/100)).toFixed(2)+" دج"},
+        {title:"المخزون",dataIndex:"stock_quantity",key:"stock",width:80},
+        {title:"الإجراءات",key:"actions",width:92,render:(_,v)=><Space size={4}><Button size="small" title={v.display_mode==="hidden"?"إظهار":"إخفاء"} aria-label={v.display_mode==="hidden"?"إظهار":"إخفاء"} icon={v.display_mode==="hidden"?<EyeInvisibleOutlined/>:<EyeOutlined/>} onClick={()=>toggleVisibility("flexy_mini_variants",v.id,v.display_mode)}/><Button size="small" title="تعديل" aria-label="تعديل" icon={<SettingOutlined/>} onClick={()=>{setEditingVariant(v);editForm.setFieldsValue({name:v.name,denomination:v.denomination,purchase_price:v.purchase_price,markup_percent:v.markup_percent,sort_index:v.sort_index});}}/></Space>}
       ]} />
       <Form form={variantForm} layout="vertical" style={{ marginTop: 16 }} onFinish={v => save("flexy_mini_variants", { product_id: productId, name: v.name.trim(), denomination: Number(v.denomination || 0), purchase_price: Number(v.purchase_price), markup_percent: Number(v.markup_percent || 0), sort_index: Number(v.sort_index || 0) }, variantForm)}>
         <Row gutter={8}>
