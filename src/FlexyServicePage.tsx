@@ -83,6 +83,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
   const [manualAmount, setManualAmount] = useState<number | null>(null);
   const [manualIndex, setManualIndex] = useState("");
   const [amount, setAmount] = useState<number | null>(null);
+  const [creditDistributor,setCreditDistributor] = useState("03");
   const [creditCheckBusy,setCreditCheckBusy] = useState(false);
   const [creditCheck,setCreditCheck] = useState<{ready:boolean;reason:string}|null>(null);
   const [creditCheckError,setCreditCheckError] = useState("");
@@ -430,9 +431,10 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
         <InputNumber<number> min={1} max={100000} precision={0} value={amount}
           onChange={setAmount} style={{ width: "100%" }} size="large" placeholder="المبلغ" addonAfter="دج" />
         {!isCustomer&&<Space direction="vertical" style={{width:"100%"}}>
-          <Alert type="info" showIcon message="اختبار أرسلي 630 — رصيد عادي" description="هذا تحضير للأمر فقط، وليس إرسالًا. مسار 696 مخصص لشراء العروض. يجب اعتماد تنفيذ 630 على السيرفر والتحقق من Agent قبل فتح الإرسال المالي."/>
-          <Typography.Text strong>معاينة أمر الشحن (PIN محفوظ على Agent)</Typography.Text>
-          <Typography.Text code dir="ltr">{validPhone(normalizePhone(phone)) && Number.isInteger(amount) && Number(amount)>0 ? `*630*${normalizePhone(phone)}*${amount}*{service_pin}#` : "أدخل رقمًا صحيحًا ومبلغًا أولًا"}</Typography.Text>
+          <Alert type="info" showIcon message="اختبار أرسلي 630 — رصيد عادي" description="قالب 630 مصحح بحساب الموزع. هذا المسار ما زال تحضيرًا فقط دون إرسال مالي؛ يحتاج تفعيل التنفيذ على السيرفر بعد مطابقة مسار Agent."/>
+          <Select aria-label="حساب موزع أرسالي" value={creditDistributor} onChange={setCreditDistributor} options={[{value:"01",label:"01 — POSTE"},{value:"02",label:"02 — ASSILOU"},{value:"03",label:"03 — DATA"},{value:"04",label:"04 — GTS"},{value:"05",label:"05 — MOBILIS"}]}/>
+          <Typography.Text strong>معاينة أمر الشحن (PIN سري)</Typography.Text>
+          <Typography.Text code dir="ltr">{validPhone(normalizePhone(phone)) && Number.isInteger(amount) && Number(amount)>0 ? `*630*${normalizePhone(phone)}*${creditDistributor}*${amount}*{service_pin}#` : "أدخل رقمًا صحيحًا ومبلغًا أولًا"}</Typography.Text>
           <Button block loading={creditCheckBusy} onClick={() => void checkCredit630()}>فحص جاهزية 630</Button>
           {creditCheck?.ready && <Button block loading={creditStageBusy} onClick={() => void stageCredit630()}>تسجيل طلب 630 للمراجعة (دون إرسال)</Button>}
           {creditStageResult && <Alert type="success" showIcon message={creditStageResult}/>}
