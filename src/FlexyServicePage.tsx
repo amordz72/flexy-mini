@@ -83,6 +83,9 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
   const [manualAmount, setManualAmount] = useState<number | null>(null);
   const [manualIndex, setManualIndex] = useState("");
   const [amount, setAmount] = useState<number | null>(null);
+  const [creditCheckBusy,setCreditCheckBusy] = useState(false);
+  const [creditCheck,setCreditCheck] = useState<{ready:boolean;reason:string}|null>(null);
+  const [creditCheckError,setCreditCheckError] = useState("");
   const [stationUuid, setStationUuid] = useState<string | null>(null);
   const [stationName, setStationName] = useState("");
   const [stationBusy, setStationBusy] = useState(false);
