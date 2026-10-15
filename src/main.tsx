@@ -215,21 +215,22 @@ function CardsCatalog() {
     setVariants((v.data || []) as CatalogVariant[]);
   }
   useEffect(() => { void refresh(); }, []);
-  async function save(table: string, payload: Record<string, unknown>, form: ReturnType<typeof Form.useForm>[0]) {
-    if (!client) return;
+  async function save(table: string, payload: Record<string, unknown>, form: ReturnType<typeof Form.useForm>[0]): Promise<boolean> {
+    if (!client) return false;
     if (table === "flexy_mini_products") {
       const name = String(payload.name || "").trim();
       if (products.some(p => p.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase())) {
         setError("اسم النوع «" + name + "» مسجل مسبقًا. لا يمكن تكرار الاسم.");
-        return;
+        return false;
       }
     }
     setBusy(true);
     const { error } = await client.from(table).insert(payload);
     setBusy(false);
-    if (error) { setError(error.code === "23505" ? "هذا الاسم مسجل مسبقًا، اختر اسمًا مختلفًا." : error.message); return; }
+    if (error) { setError(error.code === "23505" ? "هذا الاسم مسجل مسبقًا، اختر اسمًا مختلفًا." : error.message); return false; }
     form.resetFields();
     await refresh();
+    return true;
   }
   function deleteCategory(id: number, name: string) {
     if (!client || busy) return;
@@ -394,7 +395,7 @@ function CardsCatalog() {
         {title:"الإجراءات",key:"actions",width:86,render:(_,v)=><Space size={2}><Button size="small" title={v.display_mode==="hidden"?"إظهار":"إخفاء"} aria-label={v.display_mode==="hidden"?"إظهار":"إخفاء"} icon={v.display_mode==="hidden"?<EyeInvisibleOutlined/>:<EyeOutlined/>} onClick={()=>toggleVisibility("flexy_mini_variants",v.id,v.display_mode)}/><Button size="small" title="تعديل" aria-label="تعديل" icon={<SettingOutlined/>} onClick={()=>{setEditingVariant(v);editForm.setFieldsValue({name:v.name,denomination:v.denomination,purchase_price:v.purchase_price,markup_percent:v.markup_percent,sort_index:v.sort_index,sale_price:Number((Number(v.purchase_price)/(1-Number(v.markup_percent)/100)).toFixed(2))});}}/></Space>}
       ]} />
       <Modal open={addingVariant} title="إضافة بطاقة" width={520} okText="إضافة بطاقة" confirmLoading={busy} onOk={()=>variantForm.submit()} onCancel={()=>{if(!busy)setAddingVariant(false);}} destroyOnHidden>
-      <Form form={variantForm} layout="vertical" size="small" onValuesChange={(changed,all)=>syncCardPrices(variantForm,changed,all)} onFinish={v => save("flexy_mini_variants", { product_id: productId, name: v.name.trim(), denomination: Number(v.denomination || 0), purchase_price: Number(v.purchase_price), markup_percent: Number(v.markup_percent || 0), sort_index: Math.max(0, ...variants.filter(item => item.product_id === productId).map(item => Number(item.sort_index) || 0)) + 1 }, variantForm).then(()=>setAddingVariant(false))}>
+      <Form form={variantForm} layout="vertical" size="small" onValuesChange={(changed,all)=>syncCardPrices(variantForm,changed,all)} onFinish={v => save("flexy_mini_variants", { product_id: productId, name: v.name.trim(), denomination: Number(v.denomination || 0), purchase_price: Number(v.purchase_price), markup_percent: Number(v.markup_percent || 0), sort_index: Math.max(0, ...variants.filter(item => item.product_id === productId).map(item => Number(item.sort_index) || 0)) + 1 }, variantForm).then(saved=>{if(saved)setAddingVariant(false);})}>
         <Row gutter={8}>
           <Col xs={24} sm={12}><Form.Item name="name" label="اسم البطاقة" rules={[{ required: true }]}><Input placeholder="مثلاً 60 UC" /></Form.Item></Col>
           <Col xs={12} sm={6}><Form.Item name="denomination" label="القيمة"><Input type="number" min={0} /></Form.Item></Col>
