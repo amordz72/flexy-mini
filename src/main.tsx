@@ -219,6 +219,30 @@ function CardsCatalog() {
     form.resetFields();
     await refresh();
   }
+  async function deleteCategory(id: number, name: string) {
+    if (!client || busy) return;
+    if (products.some(p => p.category_id === id)) {
+      setError("لا يمكن حذف القسم «" + name + "» لأنه يحتوي على أنواع. احذف الأنواع الفارغة أولًا.");
+      return;
+    }
+    Modal.confirm({
+      title: "تأكيد حذف القسم",
+      content: "هل تريد حذف القسم «" + name + "» نهائيًا؟ لا يمكن التراجع.",
+      okText: "حذف",
+      okType: "danger",
+      cancelText: "إلغاء",
+      onOk: async () => {
+        if (!client) return;
+        setBusy(true);
+        const { error } = await client.from("flexy_mini_categories").delete().eq("id", id);
+        setBusy(false);
+        if (error) { setError("تعذر حذف القسم: " + error.message); return; }
+        if (categoryId === id) { setCategoryId(null); setProductId(null); }
+        message.success("تم حذف القسم");
+        await refresh();
+      }
+    });
+  }
   async function toggleVisibility(table: "flexy_mini_products" | "flexy_mini_variants", id: number, mode: string) {
     if (!client) return;
     const { error } = await client.from(table).update({ display_mode: mode === "hidden" ? "visible" : "hidden" }).eq("id", id);
@@ -230,7 +254,7 @@ function CardsCatalog() {
   return <Space direction="vertical" size="large" style={{ width: "100%" }}>
     {error && <Alert type="error" showIcon message={error} closable onClose={() => setError("")} />}
     <Card title="1 — الأقسام" loading={busy && !categories.length}>
-      <Space wrap>{categories.filter(c => c.active).map(c => <Button key={c.id} type={categoryId === c.id ? "primary" : "default"} onClick={() => { setCategoryId(c.id); setProductId(null); }}>{c.name} <Tag style={{marginInlineStart:6}}>{products.filter(p=>p.category_id===c.id).length} أنواع</Tag></Button>)}</Space>
+      <Space wrap>{categories.filter(c => c.active).map(c => <Space key={c.id} size={4}><Button type={categoryId === c.id ? "primary" : "default"} onClick={() => { setCategoryId(c.id); setProductId(null); }}>{c.name} <Tag style={{marginInlineStart:6}}>{products.filter(p=>p.category_id===c.id).length} أنواع</Tag></Button><Button size="small" danger disabled={busy || products.some(p=>p.category_id===c.id)} onClick={() => void deleteCategory(c.id,c.name)}>حذف</Button></Space>)}</Space>
       <Form form={categoryForm} layout="inline" style={{ marginTop: 16, gap: 8 }} onFinish={v => save("flexy_mini_categories", { name: v.name.trim(), sort_index: Number(v.sort_index || 0) }, categoryForm)}>
         <Form.Item name="name" rules={[{ required: true }]}><Input placeholder="اسم القسم" /></Form.Item>
         <Form.Item name="sort_index" initialValue={0}><Input type="number" placeholder="Index" style={{ width: 90 }} /></Form.Item>
