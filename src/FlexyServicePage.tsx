@@ -389,7 +389,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
           <Alert type="info" showIcon message="اختبار أرسلي 630 — رصيد عادي" description="هذا تحضير للأمر فقط، وليس إرسالًا. مسار 696 مخصص لشراء العروض. يجب اعتماد تنفيذ 630 على السيرفر والتحقق من Agent قبل فتح الإرسال المالي."/>
           <Typography.Text strong>معاينة أمر الشحن (PIN محفوظ على Agent)</Typography.Text>
           <Typography.Text code dir="ltr">{validPhone(normalizePhone(phone)) && Number.isInteger(amount) && Number(amount)>0 ? `*630*${normalizePhone(phone)}*${amount}*{service_pin}#` : "أدخل رقمًا صحيحًا ومبلغًا أولًا"}</Typography.Text>
-          <Button block disabled>تنفيذ تجربة 630 — ينتظر تفعيل السيرفر</Button>
+          <Button block disabled>فحص جاهزية 630 — ربط السيرفر قيد التطوير</Button>
         </Space>}
       </Space>
     </Card> : <>
