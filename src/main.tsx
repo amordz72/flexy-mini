@@ -197,6 +197,7 @@ function CardsCatalog() {
   const [variantForm] = Form.useForm();
   const [editForm] = Form.useForm();
   const [editingVariant, setEditingVariant] = useState<CatalogVariant | null>(null);
+  const [addingVariant, setAddingVariant] = useState(false);
   async function refresh() {
     if (!client) return;
     setBusy(true);
@@ -347,8 +348,8 @@ function CardsCatalog() {
   const visibleVariants = variants.filter(v => v.product_id === productId && v.active)
     .sort((a, b) => a.sort_index - b.sort_index || (a.denomination ?? 999999) - (b.denomination ?? 999999) || a.id - b.id);
   return <Space direction="vertical" size="large" style={{ width: "100%" }}>
-    <Modal open={editingVariant !== null} title="تعديل البطاقة" okText="حفظ التعديل" confirmLoading={busy} onOk={() => editForm.submit()} onCancel={() => !busy && setEditingVariant(null)} destroyOnHidden>
-      <Form form={editForm} layout="vertical" onValuesChange={(changed,all)=>syncCardPrices(editForm,changed,all)} onFinish={updateVariant}>
+    <Modal open={editingVariant !== null} title="تعديل البطاقة" width={520} okText="حفظ التعديل" confirmLoading={busy} onOk={() => editForm.submit()} onCancel={() => !busy && setEditingVariant(null)} destroyOnHidden>
+      <Form form={editForm} layout="vertical" size="small" onValuesChange={(changed,all)=>syncCardPrices(editForm,changed,all)} onFinish={updateVariant}>
         <Form.Item name="name" label="اسم البطاقة" rules={[{required:true}]}><Input /></Form.Item>
         <Form.Item name="denomination" label="القيمة" rules={[{required:true}]}><Input type="number" min={0}/></Form.Item>
         <Form.Item name="purchase_price" label="سعر الشراء (دج)" rules={[{required:true},{validator:(_,v)=>Number.isFinite(Number(v))&&Number(v)>0?Promise.resolve():Promise.reject(new Error("سعر الشراء يجب أن يكون أكبر من صفر"))}]}><Input type="number" min={0} step="0.01"/></Form.Item>
@@ -376,8 +377,8 @@ function CardsCatalog() {
         <Button htmlType="submit" type="primary" disabled={busy}>إضافة نوع</Button>
       </Form>
     </Card>}
-    {productId !== null && <Card id="mini-variants" title="3 — البطاقات">
-      <Table<CatalogVariant> rowKey="id" dataSource={visibleVariants} size="small" pagination={{pageSize:10}} tableLayout="auto" expandable={{expandedRowRender:(v)=><Descriptions size="small" column={1} bordered items={[
+    {productId !== null && <Card id="mini-variants" title="3 — البطاقات" extra={<Button type="primary" icon={<PlusOutlined/>} onClick={()=>{variantForm.resetFields();setAddingVariant(true);}}>إضافة بطاقة</Button>}>
+      <Table<CatalogVariant> rowKey="id" dataSource={visibleVariants} size="small" pagination={{pageSize:10}} tableLayout="fixed" expandable={{expandedRowRender:(v)=><Descriptions size="small" column={1} bordered items={[
         {key:"value",label:"القيمة",children:v.denomination ?? "—"},
         {key:"buy",label:"سعر الشراء",children:v.purchase_price+" دج"},
         {key:"margin",label:"الربح",children:Number(v.markup_percent).toFixed(2)+"%"},
@@ -388,11 +389,12 @@ function CardsCatalog() {
         {title:"القيمة",dataIndex:"denomination",key:"denomination",width:85,responsive:["md"]},
         {title:"الشراء",dataIndex:"purchase_price",key:"purchase_price",width:100,responsive:["md"],render:(n:number)=>n+" دج"},
         {title:"الربح",dataIndex:"markup_percent",key:"markup_percent",width:85,responsive:["md"],render:(n:number)=>Number(n).toFixed(2)+"%"},
-        {title:"البيع",key:"sale",width:105,render:(_,v)=>(Number(v.purchase_price)/(1-Number(v.markup_percent)/100)).toFixed(2)+" دج"},
+        {title:"البيع",key:"sale",width:100,render:(_,v)=><Typography.Text style={{whiteSpace:"nowrap"}}>{(Number(v.purchase_price)/(1-Number(v.markup_percent)/100)).toFixed(2)}</Typography.Text>},
         {title:"المخزون",dataIndex:"stock_quantity",key:"stock",width:80},
-        {title:"الإجراءات",key:"actions",width:92,render:(_,v)=><Space size={4}><Button size="small" title={v.display_mode==="hidden"?"إظهار":"إخفاء"} aria-label={v.display_mode==="hidden"?"إظهار":"إخفاء"} icon={v.display_mode==="hidden"?<EyeInvisibleOutlined/>:<EyeOutlined/>} onClick={()=>toggleVisibility("flexy_mini_variants",v.id,v.display_mode)}/><Button size="small" title="تعديل" aria-label="تعديل" icon={<SettingOutlined/>} onClick={()=>{setEditingVariant(v);editForm.setFieldsValue({name:v.name,denomination:v.denomination,purchase_price:v.purchase_price,markup_percent:v.markup_percent,sort_index:v.sort_index,sale_price:Number((Number(v.purchase_price)/(1-Number(v.markup_percent)/100)).toFixed(2))});}}/></Space>}
+        {title:"الإجراءات",key:"actions",width:86,render:(_,v)=><Space size={2}><Button size="small" title={v.display_mode==="hidden"?"إظهار":"إخفاء"} aria-label={v.display_mode==="hidden"?"إظهار":"إخفاء"} icon={v.display_mode==="hidden"?<EyeInvisibleOutlined/>:<EyeOutlined/>} onClick={()=>toggleVisibility("flexy_mini_variants",v.id,v.display_mode)}/><Button size="small" title="تعديل" aria-label="تعديل" icon={<SettingOutlined/>} onClick={()=>{setEditingVariant(v);editForm.setFieldsValue({name:v.name,denomination:v.denomination,purchase_price:v.purchase_price,markup_percent:v.markup_percent,sort_index:v.sort_index,sale_price:Number((Number(v.purchase_price)/(1-Number(v.markup_percent)/100)).toFixed(2))});}}/></Space>}
       ]} />
-      <Form form={variantForm} layout="vertical" style={{ marginTop: 16 }} onValuesChange={(changed,all)=>syncCardPrices(variantForm,changed,all)} onFinish={v => save("flexy_mini_variants", { product_id: productId, name: v.name.trim(), denomination: Number(v.denomination || 0), purchase_price: Number(v.purchase_price), markup_percent: Number(v.markup_percent || 0), sort_index: Math.max(0, ...variants.filter(item => item.product_id === productId).map(item => Number(item.sort_index) || 0)) + 1 }, variantForm)}>
+      <Modal open={addingVariant} title="إضافة بطاقة" width={520} okText="إضافة بطاقة" confirmLoading={busy} onOk={()=>variantForm.submit()} onCancel={()=>{if(!busy)setAddingVariant(false);}} destroyOnHidden>
+      <Form form={variantForm} layout="vertical" size="small" onValuesChange={(changed,all)=>syncCardPrices(variantForm,changed,all)} onFinish={v => save("flexy_mini_variants", { product_id: productId, name: v.name.trim(), denomination: Number(v.denomination || 0), purchase_price: Number(v.purchase_price), markup_percent: Number(v.markup_percent || 0), sort_index: Math.max(0, ...variants.filter(item => item.product_id === productId).map(item => Number(item.sort_index) || 0)) + 1 }, variantForm).then(()=>setAddingVariant(false))}>
         <Row gutter={8}>
           <Col xs={24} sm={12}><Form.Item name="name" label="اسم البطاقة" rules={[{ required: true }]}><Input placeholder="مثلاً 60 UC" /></Form.Item></Col>
           <Col xs={12} sm={6}><Form.Item name="denomination" label="القيمة"><Input type="number" min={0} /></Form.Item></Col>
@@ -401,8 +403,8 @@ function CardsCatalog() {
           <Col xs={12}><Form.Item name="sale_price" label="سعر البيع (دج)" rules={[({getFieldValue})=>({validator:(_,v)=>{const buy=Number(getFieldValue("purchase_price"));const sale=Number(v);return v!==undefined&&v!==""&&(!Number.isFinite(sale)||sale<=0||sale<buy)?Promise.reject(new Error("سعر البيع يجب أن يكون أكبر من صفر ولا يقل عن الشراء")):Promise.resolve();}})]}><Input type="number" min={0} step="0.01" /></Form.Item></Col>
           <Col xs={12}><Form.Item name="markup_percent" label="هامش الربح من البيع %" initialValue={0} rules={[{required:true},{validator:(_,v)=>v!==undefined&&v!==""&&Number.isFinite(Number(v))&&Number(v)>=0&&Number(v)<100?Promise.resolve():Promise.reject(new Error("هامش الربح يجب أن يكون بين 0 وأقل من 100%"))}]}><Input type="number" step="0.01" /></Form.Item></Col>
         </Row>
-        <Button htmlType="submit" type="primary" disabled={busy}>إضافة بطاقة</Button>
       </Form>
+      </Modal>
     </Card>}
   </Space>;
 }
