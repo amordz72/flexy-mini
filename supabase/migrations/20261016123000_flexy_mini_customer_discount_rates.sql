@@ -64,7 +64,8 @@ grant execute on function public.flexy_mini_admin_discount_rates_read() to authe
 create function public.flexy_mini_admin_discount_rate_set(
   p_service_key text,
   p_discount_percent numeric,
-  p_customer_id bigint default null
+  p_customer_id bigint default null,
+  p_apply_both_mobilis boolean default false
 ) returns numeric
 language plpgsql security definer set search_path = '' as $$
 begin
@@ -79,6 +80,9 @@ begin
   if p_discount_percent is null or p_discount_percent < 0 or p_discount_percent > 100
      or p_discount_percent <> round(p_discount_percent,2) then
     raise exception 'Invalid discount percentage' using errcode='22023';
+  end if;
+  if coalesce(p_apply_both_mobilis,false) and p_service_key not in ('mobilis-credit','mobilis-offer') then
+    raise exception 'Both-service change is only supported for Mobilis' using errcode='22023';
   end if;
   if p_service_key like 'card:%' and not exists (
     select 1 from public.flexy_mini_products p
@@ -102,8 +106,21 @@ begin
     on conflict (customer_id,service_key) where customer_id is not null do update
       set discount_percent=excluded.discount_percent,updated_by=excluded.updated_by,updated_at=excluded.updated_at;
   end if;
+  if coalesce(p_apply_both_mobilis,false) then
+    if p_customer_id is null then
+      insert into public.flexy_mini_discount_rates(customer_id,service_key,discount_percent,updated_by,updated_at)
+        values(null,case when p_service_key='mobilis-credit' then 'mobilis-offer' else 'mobilis-credit' end,p_discount_percent,auth.uid(),now())
+      on conflict (service_key) where customer_id is null do update
+        set discount_percent=excluded.discount_percent,updated_by=excluded.updated_by,updated_at=excluded.updated_at;
+    else
+      insert into public.flexy_mini_discount_rates(customer_id,service_key,discount_percent,updated_by,updated_at)
+        values(p_customer_id,case when p_service_key='mobilis-credit' then 'mobilis-offer' else 'mobilis-credit' end,p_discount_percent,auth.uid(),now())
+      on conflict (customer_id,service_key) where customer_id is not null do update
+        set discount_percent=excluded.discount_percent,updated_by=excluded.updated_by,updated_at=excluded.updated_at;
+    end if;
+  end if;
   return p_discount_percent;
 end
-$$;
-revoke all on function public.flexy_mini_admin_discount_rate_set(text,numeric,bigint) from PUBLIC,anon;
-grant execute on function public.flexy_mini_admin_discount_rate_set(text,numeric,bigint) to authenticated;
+$;
+revoke all on function public.flexy_mini_admin_discount_rate_set(text,numeric,bigint,boolean) from PUBLIC,anon;
+grant execute on function public.flexy_mini_admin_discount_rate_set(text,numeric,bigint,boolean) to authenticated;
