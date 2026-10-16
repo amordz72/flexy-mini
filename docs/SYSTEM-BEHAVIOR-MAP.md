@@ -1,3 +1,11 @@
+## 2026-10-16 — First successful silent Sama discovery recovery (VERIFIED)
+
+At 16:30 UTC (17:30 Algeria), the active 15-minute Supabase cron initiated one nonfinancial `mobilis.offer.discovery` background job on `sama-3` / `server-2`. It completed at 16:30:32 UTC: job and discovery `success/DISCOVERY_COMPLETE`, recipient classified `PIXX`, five offers saved; one start, one reply, one release, session closed. No recipient number/PIN exposed in docs, zero background financial jobs, zero open or queued commands after. First idle-time recovery is **live-proven**. The code is tracked in [Station Connect PR #14](https://github.com/amordz72/station-connect/pull/14); Linux/Windows GitHub Actions run 38932351798 failed with no steps, so CI is NOT passed.
+
+**Not to confuse:** early refresh of still-valid active recipients is a proposal only; conditional 3–5 second grace and SIM pool/rotation are NOT implemented. Cached Revolution/Sama/PixX can become stale if an offer/SIM changes; no validated financial-failure-triggered cache invalidation exists yet, and there is NO permission for blind financial retry. The independent Sama financial PIN fix PR #13 remains undeployed.
+
+---
+
 ## 2026-10-16 — 30-day recipient classification and silent recovery (DB APPLIED)
 
 **User rules:** a known recipient gets cached Sama/PixX/Revolution identity for 30d, without a new discovery session. A new/expired/incomplete recipient may require the Sama network. A failed/unknown or incomplete reply is NOT evidence of "no offers". Server may opportunistically retry previously incomplete discoveries on an idle physical Sama modem; it must not interrupt actual financial work or continuously refresh a valid identity. Periodic early refreshing of frequently used recipients was only a suggested idea and is disabled. Current SIM offer-family may change, so cached identity is last-known evidence only; definitively carrier-confirmed mismatch should trigger review/re-discovery, not blind financial retry.
