@@ -33,7 +33,7 @@ test("cannot turn nominal/review money into booked profit and never treats unkno
 });
 test("only admin navigation, no writable data inputs or application wallet mutation",()=>{
   assert.match(shell, /\{key:"reports",icon:<HistoryOutlined\/>/);
-  assert.match(shell, /page === "reports" && client \? <DeferredPanel><FinancialReports db=\{client\}/>/);
+  assert.ok(shell.includes('page === "reports" && client ? <DeferredPanel><FinancialReports db={client}/>'));
   assert.match(ui, /flexy_mini_admin_financial_report/);
   assert.match(ui, /type="date"/);
   assert.match(ui, /الاستهلاك/);
