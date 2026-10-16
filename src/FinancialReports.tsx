@@ -122,7 +122,7 @@ export default function FinancialReports({ db }: { db: SupabaseClient }) {
     setRevision(value => value + 1);
   };
   const chooseMonth = (yearMonth: string) => {
-    if (!/^\\d{4}-\\d{2}$/.test(yearMonth)) return;
+    if (!/^\d{4}-\d{2}$/.test(yearMonth)) return;
     const [year, month] = yearMonth.split("-").map(Number);
     if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) return;
     const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
@@ -136,7 +136,7 @@ export default function FinancialReports({ db }: { db: SupabaseClient }) {
     if (!report || loading || error) return;
     const safe = (value: unknown) => {
       let content = String(value === null || value === undefined ? "غير متوفر" : value);
-      if (/^[=+@]|^-(?!\\d)|^[\\t\\r]/.test(content)) content = "'" + content;
+      if (/^[=+@]|^-(?!\d)|^[\t\r]/.test(content)) content = "'" + content;
       return '"' + content.replace(/"/g, '""') + '"';
     };
     const fields: unknown[][] = [
@@ -163,7 +163,7 @@ export default function FinancialReports({ db }: { db: SupabaseClient }) {
       group.total_orders, group.success_status_count, group.inferred_success_count,
       group.success_nominal_amount, group.recorded_direct_profit
     ]);
-    const csv = "\\uFEFF" + fields.map(row => row.map(safe).join(",")).join("\\r\\n");
+    const csv = "\uFEFF" + fields.map(row => row.map(safe).join(",")).join("\r\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
