@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Alert, Button, Card, Col, Empty, Input, Row, Select, Space, Spin, Table, Tabs, Tag, Typography } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import FinancialReportOrders from "./FinancialReportOrders";
 
 type ReportSummary = {
   total_orders: number;
@@ -70,6 +71,7 @@ export default function FinancialReports({ db }: { db: SupabaseClient }) {
   const [report, setReport] = useState<Report | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [tab, setTab] = useState("activity");
   const sequence = useRef(0);
 
   useEffect(() => {
@@ -119,6 +121,59 @@ export default function FinancialReports({ db }: { db: SupabaseClient }) {
     setApplied(next);
     setRevision(value => value + 1);
   };
+  const chooseMonth = (yearMonth: string) => {
+    if (!/^\d{4}-\d{2}$/.test(yearMonth)) return;
+    const [year, month] = yearMonth.split("-").map(Number);
+    if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) return;
+    const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    const next = { ...inputs, from: yearMonth + "-01", to: yearMonth + "-" + String(lastDay).padStart(2, "0") };
+    setInputs(next);
+    setApplied(next);
+    setRevision(value => value + 1);
+  };
+  // CSV contains only the filtered report's summary and grouped rows, NOT every order.
+  const exportSummaryCsv = () => {
+    if (!report || loading || error) return;
+    const safe = (value: unknown) => {
+      let content = String(value === null || value === undefined ? "غير متوفر" : value);
+      if (/^[=+@]|^-(?!\d)|^[\t\r]/.test(content)) content = "'" + content;
+      return '"' + content.replace(/"/g, '""') + '"';
+    };
+    const fields: unknown[][] = [
+      ["المصدر", report.source],
+      ["من تاريخ", report.from], ["إلى تاريخ", report.to],
+      ["الشبكة", applied.operator], ["حالة الطلب", applied.status],
+      ["ملاحظة", "القيمة الاسمية ليست مبلغًا محصلًا، والنجاح قد يكون مستنتجًا"],
+      ["المؤشر", "القيمة"],
+      ["عدد الطلبات", report.summary.total_orders],
+      ["حالات نجاح مسجلة", report.summary.success_status_count],
+      ["حالات نجاح مستنتجة", report.summary.inferred_success_count],
+      ["حالات فشل", report.summary.failed_count],
+      ["طلبات بقيمة اسمية إجمالية", report.summary.all_status_nominal_amount],
+      ["طلبات نجاح بقيمة اسمية", report.summary.success_nominal_amount],
+      ["مبيعات محفوظة مكتملة", report.summary.recorded_revenue],
+      ["ربح مباشر محفوظ مكتمل", report.summary.recorded_direct_profit],
+      ["مصاريف", "غير متوفرة"], ["صافي الربح", "غير مكتمل"],
+      [],
+      ["الشبكة", "الخدمة", "كل الطلبات", "حالات نجاح", "حالات نجاح مستنتجة",
+        "القيمة الاسمية للنجاح", "ربح مباشر محفوظ مكتمل"]
+    ];
+    for (const group of report.groups) fields.push([
+      group.operator ?? "غير مصنف", group.service_type ?? "غير مصنف",
+      group.total_orders, group.success_status_count, group.inferred_success_count,
+      group.success_nominal_amount, group.recorded_direct_profit
+    ]);
+    const csv = "\uFEFF" + fields.map(row => row.map(safe).join(",")).join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "flexy-report-summary-" + report.from + "-" + report.to + ".csv";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
   const summary = report?.summary;
   const metric = (label: string, value: string, emphasis: "none" | "good" = "none") =>
     <Col xs={12} sm={12} md={6}>
@@ -141,6 +196,11 @@ export default function FinancialReports({ db }: { db: SupabaseClient }) {
       description="مصدرنا الحالي flexy_orders وحده، بلا تكرار مع Station أو MyTool. تاريخ العملية بحسب يوم الإنشاء بتوقيت الجزائر. الحالات المسجلة نجاحًا لا تثبت وحدها وصول الشحن للزبون."/>
     <Card size="small" title="الفترة ونوع العمليات">
       <Row gutter={[8, 12]}>
+        <Col xs={24} sm={8}>
+          <Typography.Text type="secondary">اختيار الشهر مباشرة</Typography.Text>
+          <Input type="month" aria-label="اختيار الشهر" value={inputs.from.slice(0, 7)}
+            onChange={e => chooseMonth(e.target.value)} style={{ marginTop: 5 }}/>
+        </Col>
         <Col xs={12} sm={8}><Typography.Text type="secondary">من تاريخ</Typography.Text>
           <Input type="date" aria-label="من تاريخ" value={inputs.from} onChange={e => setInputs(old => ({ ...old, from: e.target.value }))} style={{ marginTop: 5 }}/></Col>
         <Col xs={12} sm={8}><Typography.Text type="secondary">حتى تاريخ</Typography.Text>
@@ -158,13 +218,15 @@ export default function FinancialReports({ db }: { db: SupabaseClient }) {
         <Button type="primary" onClick={apply} loading={loading}>عرض التقرير</Button>
         <Button onClick={chooseThisMonth}>هذا الشهر</Button>
         <Button icon={<ReloadOutlined />} onClick={() => setRevision(value => value + 1)} loading={loading}>تحديث</Button>
+        <Button disabled={!report || loading || Boolean(error)} onClick={exportSummaryCsv}>تصدير ملخص CSV</Button>
+        <Button disabled={!report || loading || Boolean(error)} onClick={() => window.print()}>طباعة</Button>
       </Space>
     </Card>
     {error && <Alert type="error" showIcon message={error}/>}
     {loading && <Spin/>}
     {report && summary && <>
       <Typography.Text type="secondary">الفترة المحسوبة: {report.from} ← {report.to} (الجزائر)</Typography.Text>
-      <Tabs defaultActiveKey="activity" items={[
+      <Tabs activeKey={tab} onChange={setTab} items={[
         { key: "activity", label: "الاستهلاك", children: <Space direction="vertical" size="middle" style={{ width: "100%" }}>
           <Row gutter={[8, 8]}>
             {metric("كل الطلبات", String(summary.total_orders))}
@@ -191,6 +253,8 @@ export default function FinancialReports({ db }: { db: SupabaseClient }) {
               ? "منها " + summary.inferred_success_count + " حالة مبنية على مهلة أو استنتاج رصيد. لا تُحسب أرباحًا مؤكدة."
               : "راجع أدلة التنفيذ قبل اعتماد أي تسوية مالية."}/>
         </Space> },
+        { key: "orders", label: "تفاصيل العمليات", children:
+          <FinancialReportOrders db={db} filters={applied} active={tab === "orders"}/> },
         { key: "profit", label: "الأرباح والمصاريف", children: <Space direction="vertical" size="middle" style={{ width: "100%" }}>
           <Row gutter={[8, 8]}>
             {metric("ربح الفليكسي المسجل", knownCash(summary.recorded_direct_profit))}
