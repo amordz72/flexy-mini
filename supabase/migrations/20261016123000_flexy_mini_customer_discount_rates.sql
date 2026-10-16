@@ -121,6 +121,6 @@ begin
   end if;
   return p_discount_percent;
 end
-$;
+$$;
 revoke all on function public.flexy_mini_admin_discount_rate_set(text,numeric,bigint,boolean) from PUBLIC,anon;
 grant execute on function public.flexy_mini_admin_discount_rate_set(text,numeric,bigint,boolean) to authenticated;
