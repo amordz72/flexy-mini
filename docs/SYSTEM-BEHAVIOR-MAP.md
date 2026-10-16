@@ -1,3 +1,13 @@
+## 2026-10-16 — 30-day recipient classification and silent recovery (DB APPLIED)
+
+**User rules:** a known recipient gets cached Sama/PixX/Revolution identity for 30d, without a new discovery session. A new/expired/incomplete recipient may require the Sama network. A failed/unknown or incomplete reply is NOT evidence of "no offers". Server may opportunistically retry previously incomplete discoveries on an idle physical Sama modem; it must not interrupt actual financial work or continuously refresh a valid identity. Periodic early refreshing of frequently used recipients was only a suggested idea and is disabled. Current SIM offer-family may change, so cached identity is last-known evidence only; definitively carrier-confirmed mismatch should trigger review/re-discovery, not blind financial retry.
+
+**Applied:** Station Connect Supabase `station_discovery_identity_30d_hardware_guard_20261016` version `20261016161644` sets Mobilis TTL 720h and prevents concurrent active sessions per modem and simultaneous discoveries of same phone. `station_idle_discovery_recovery_function_20261016` version `20261016162729` plus separate cron `station_idle_discovery_recovery_schedule_20261016` version `20261016162810` adds every-15-minute idle checks. Privacy restricted to server scheduler, one failed network discovery recovery per tick with min 24h and max 2 background attempts per 30d. Dry-run successfully located an eligible target, but **no automatic USSD result had been verified** after activation. Read details from [Station Connect PR #14](https://github.com/amordz72/station-connect/pull/14). No wallet/PIN/Agent/financial order changed.
+
+**Still pending:** conditional 3–5s after-discovery live-session grace, SIM pool rotation/priority waiting, definitive no-offers detection, financial network outcome/correct small Arsselli activated routes. PR #13 Sama profile PIN bug is draft/not deployed. No production customer financial readiness claim.
+
+---
+
 ## 40. 2026-10-16 — Scoped platform expense register with audit
 
 - **[SOURCE OWNERSHIP RECHECK]** The existing `money_operations` / `cash_place_operations` / `mytool_operations` belong to shared MyTool branches, accounts, cash places and reconciliations; there is no proven `Flexy Mini` platform expense record or scoped expenditure identity there. Never treat shared money movements as operating expenses for Flexy Mini. Historical `sales` and service orders remain excluded from this app's report to prevent fabricated margin or duplicated financial sources.
