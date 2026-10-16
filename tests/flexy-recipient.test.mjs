@@ -323,4 +323,53 @@ test('PixX 50/100/500 display complete catalog names and details without startin
   await close(r);
 });
 
+test('630 credits show only server-selected distributor and stage only a nonfinancial review',async()=>{
+ const db=makeDb(name=>{
+  if(name==='flexy_get_visible_offer_catalog_v2'||name==='flexy_mini_admin_sama_readiness')
+   return Promise.resolve(ok([]));
+  if(name==='station_connect_admin_arsselli_630_preflight')
+   return Promise.resolve({data:{
+    ready:true,reason:'FINANCIAL_EXECUTOR_NOT_YET_VERIFIED',phone:'0500000001',amount:1000,
+    distributor_account_code:'04',sim_uuid:'chosen-sim',station_uuid:'chosen-station',dispatch_enabled:false
+   },error:null});
+  if(name==='station_connect_admin_stage_arsselli_630')
+   return Promise.resolve({data:{
+    job_uuid:'review-only-job',status:'review',distributor_account_code:'04',dispatch_enabled:false
+   },error:null});
+  throw Error('unexpected RPC '+name);
+ });
+ const r=await mount(Flexy,{db,isCustomer:false});
+ const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
+ await act(async()=>phone.props.onChange({target:{value:'0500000001'}}));
+ const amount=r.root.findByType('amount');
+ await act(async()=>amount.props.onChange(1000));
+ assert.equal(r.root.findAllByType('select').length,0,'no distributor control in Flexy sale');
+ assert.equal(button(r,'تسجيل طلب 630 للمراجعة (دون إرسال)'),undefined);
+ await click(r,'فحص الرصيد واختيار الموزع');
+ assert.ok(r.root.findAllByType('alert').some(x=>String(x.props.message).includes('04 — GTS')));
+ const code=r.root.findAllByType('text').find(x=>String(x.props.children).includes('*630*0500000001*04*1000*'));
+ assert.ok(code,'network template includes server account and masks PIN');
+ await click(r,'تسجيل طلب 630 للمراجعة (دون إرسال)');
+ assert.deepEqual(Object.keys(db.calls.find(x=>x.name==='station_connect_admin_stage_arsselli_630').args).sort(),
+  ['p_amount','p_idempotency_key','p_phone']);
+ assert.equal(button(r,'تسجيل طلب 630 للمراجعة (دون إرسال)'),undefined);
+ assert.equal(db.calls.some(x=>x.name.includes('create_verified_offer_execute')),false);
+ await close(r);
+});
+
+test('changing 630 amount invalidates the previous server account decision',async()=>{
+ const db=makeDb(name=>Promise.resolve(name==='station_connect_admin_arsselli_630_preflight'?
+  {data:{ready:true,reason:'FINANCIAL_EXECUTOR_NOT_YET_VERIFIED',distributor_account_code:'05',sim_uuid:'a',station_uuid:'b'},error:null}
+  :ok([])));
+ const r=await mount(Flexy,{db,isCustomer:false});
+ const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
+ await act(async()=>phone.props.onChange({target:{value:'0500000001'}}));
+ await act(async()=>r.root.findByType('amount').props.onChange(500));
+ await click(r,'فحص الرصيد واختيار الموزع');
+ assert.ok(button(r,'تسجيل طلب 630 للمراجعة (دون إرسال)'));
+ await act(async()=>r.root.findByType('amount').props.onChange(1000));
+ assert.equal(button(r,'تسجيل طلب 630 للمراجعة (دون إرسال)'),undefined);
+ await close(r);
+});
+
 after(()=>rm(output,{recursive:true,force:true}));
