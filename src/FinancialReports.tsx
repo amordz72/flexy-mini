@@ -78,10 +78,10 @@ export default function FinancialReports({ db }: { db: SupabaseClient }) {
     setLoading(true);
     setError("");
     // No direct table SELECT, and no debit/credit/USSD operation.
-    void db.rpc("flexy_mini_admin_financial_report", {
+    void Promise.resolve(db.rpc("flexy_mini_admin_financial_report", {
       p_from: applied.from, p_to: applied.to,
       p_operator: applied.operator, p_status: applied.status
-    }).then(({ data, error: readError }) => {
+    })).then(({ data, error: readError }) => {
       if (!alive || request !== sequence.current) return;
       if (readError) throw readError;
       if (!data || data.read_only !== true || data.source !== "public.flexy_orders" ||
