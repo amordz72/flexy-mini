@@ -259,6 +259,20 @@ export default function FlexySimulationPage({
     <Modal title={editing ? "نسب " + editing.username + " — محاكاة فقط" : "نسب الزبون"}
       open={editingId !== null} onCancel={() => setEditingId(null)} footer={<Button type="primary" onClick={() => setEditingId(null)}>إغلاق المعاينة</Button>} width={630}>
       <Alert type="info" showIcon message="التغييرات تخص المحاكاة الحالية فقط، وليست حفظًا في حساب الزبون." style={{ marginBottom: 12 }}/>
+      <Row gutter={[8, 8]} style={{ marginBottom: 12 }}>
+        <Col xs={24} sm={12}>
+          <Typography.Text type="secondary">فلتر الشبكة</Typography.Text>
+          <Select aria-label="فلتر الشبكة داخل تعديل النسب" style={{ width: "100%", marginTop: 5 }}
+            value={networkFilter} options={networkOptions}
+            onChange={value => { setNetworkFilter(value); setServiceFilter("all"); }}/>
+        </Col>
+        <Col xs={24} sm={12}>
+          <Typography.Text type="secondary">فلتر المنتج / الخدمة</Typography.Text>
+          <Select aria-label="فلتر الخدمة داخل تعديل النسب" style={{ width: "100%", marginTop: 5 }}
+            value={serviceFilter} options={serviceOptions} onChange={setServiceFilter}
+            showSearch optionFilterProp="label"/>
+        </Col>
+      </Row>
       {editing && <>
         <Space wrap style={{ marginBottom: 12 }}>
           <Button onClick={() => setAccountRates(old => ({
