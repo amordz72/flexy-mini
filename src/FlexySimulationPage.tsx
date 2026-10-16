@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Card, Checkbox, Col, Empty, Input, InputNumber, Modal, Row, Select, Space, Table, Tabs, Tag, Typography } from "antd";
 import { ArrowRightOutlined, ExperimentOutlined, ReloadOutlined } from "@ant-design/icons";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -17,7 +17,7 @@ const coreServices: RateService[] = [
 const initialExamples: Rates = {
   "mobilis-credit": 3, "mobilis-offer": 5, "djezzy-credit": 1, "ooredoo-credit": 2
 };
-const validRate = (value: number | null) => value !== null && Number.isFinite(value) && value >= 0 && value <= 100;
+const validRate = (value: number | null): value is number => value !== null && Number.isFinite(value) && value >= 0 && value <= 100;
 const percent = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 2 }) + "%";
 const dinars = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " دج";
 
