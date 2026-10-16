@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "python3 scripts/generate_icons.py && tsc -b && vite build",
     "preview": "vite preview",
-    "test": "node --test tests/flexy-recipient.test.mjs tests/station-identity.test.mjs tests/arsselli-balance.test.mjs tests/customer-catalog.test.mjs tests/customer-rates.test.mjs tests/customer-rate-quote.test.mjs tests/financial-reports.test.mjs"
+    "test": "node --test tests/flexy-recipient.test.mjs tests/station-identity.test.mjs tests/arsselli-balance.test.mjs tests/customer-catalog.test.mjs tests/customer-rates.test.mjs tests/customer-rate-quote.test.mjs tests/financial-reports.test.mjs tests/financial-report-details.test.mjs"
   },
   "dependencies": {
     "@refinedev/core": "^5.0.0",
