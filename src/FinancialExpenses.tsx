@@ -76,7 +76,7 @@ export default function FinancialExpenses({ db, from, to, active }: {
     draft.title.trim().length > 0 && draft.title.trim().length <= 120 &&
     draft.amount !== null && Number.isFinite(draft.amount) &&
     draft.amount > 0 && draft.amount <= 100000000 &&
-    Math.round(draft.amount * 100) === draft.amount * 100 &&
+    Math.abs(Math.round(draft.amount * 100) - draft.amount * 100) < 1e-7 &&
     draft.note.length <= 500;
   const create = async () => {
     if (!validDraft || !requestKey || saving) return;
