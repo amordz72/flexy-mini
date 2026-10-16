@@ -1,3 +1,10 @@
+## 34. 2026-10-16 — Simulator filter controls inside rate-edit modal
+
+- **[USER BUG REPORT]** The admin simulator rate editor opened without the carrier/product filter seen in reference UIs. The customer list also showed only action buttons rather than any visible rates for filtered services.
+- **[SOURCE CHANGE]** `src/FlexySimulationPage.tsx`: shared operator/product-family (Mobilis/Djezzy/Ooredoo/card products) + searchable exact-service filter above tabs, **repeated inside the customer edit modal** so the filter is accessible while the modal is open. Customer table shows the selected service's simulated rate per existing account; search and active/disabled status filter display count. Default rates and rate-edit tables follow the same selected service filter. The selected customer and per-customer local rate snapshots remain intact through filtering.
+- **[BOUNDARY]** Existing admin-only customer list and read-only product names remain the only queries; no role filter is invented (customer listing does not expose role), no production updates, no financial execution, no new customer accounts. Rates are still **fictional local simulation** until a separately approved backend.
+- **[VERIFICATION]** Confirm Development Guard, deliberate fixture rejection, tests, TypeScript/build on PR, then visually verify modal filters and mobile-width table. No production financial claim.
+
 ## 33. 2026-10-16 — In-app customer discount simulator, no production rates
 
 - **[USER-APPROVED]** Build a simple pricing simulator using the accounts **already** registered in Flexy Mini (no dummy customer creation), each account with independent discount snapshots per service/product; a new account inherits defaults once at signup **in future production implementation**, not live-linked to them. Business pricing, customer role/permissions, financial margin, and station route eligibility are different layers.
