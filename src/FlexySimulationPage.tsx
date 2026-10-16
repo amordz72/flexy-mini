@@ -33,14 +33,19 @@ const validRate = (value: number | null): value is number => value !== null && N
 const percent = (value: number) => value.toLocaleString("en-US", { maximumFractionDigits: 2 }) + "%";
 const dinars = (value: number) => value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " دج";
 
-export default function FlexySimulationPage({ db, loadCustomers, onBack }: {
+export default function FlexySimulationPage({ db, loadCustomers, onBack, production = false }: {
   db?: SupabaseClient;
   loadCustomers: () => Promise<CustomerList>;
   onBack: () => void;
+  production?: boolean;
 }) {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [services, setServices] = useState<RateService[]>(coreServices);
-  const [defaults, setDefaults] = useState<Rates>(initialExamples);
+  const [defaults, setDefaults] = useState<Rates>(production ? {} : initialExamples);
+  const [defaultDraft, setDefaultDraft] = useState<number | null>(production ? null : 3);
+  const [ratesReady, setRatesReady] = useState(!production);
+  const [savingRate, setSavingRate] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [accountRates, setAccountRates] = useState<Record<number, Rates>>({});
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -64,10 +69,14 @@ export default function FlexySimulationPage({ db, loadCustomers, onBack }: {
     let live = true;
     const boot = async () => {
       try {
-        const [list, productResult] = await Promise.all([
+        if (production && !db) throw new Error("قاعدة البيانات غير متاحة");
+        const [list, productResult, ratesResult] = await Promise.all([
           loadCustomers(),
-          db ? db.from("flexy_mini_products").select("id,name").order("id", { ascending: true }).limit(100) : Promise.resolve(null)
+          db ? db.from("flexy_mini_products").select("id,name").order("id", { ascending: true }).limit(100) : Promise.resolve(null),
+          production && db ? db.rpc("flexy_mini_admin_discount_rates_read") : Promise.resolve(null)
         ]);
+        if (production && ratesResult?.error) throw new Error("تعذر قراءة النسب الحقيقية: " + ratesResult.error.message);
+        if (production && !Array.isArray(ratesResult?.data)) throw new Error("تعذر الحصول على نسب الإدارة الحقيقية");
         if (!live) return;
         if (list.error) throw list.error;
         if (!Array.isArray(list.data?.customers)) throw new Error("لم ترجع خدمة الإدارة قائمة الزبائن");
@@ -82,10 +91,22 @@ export default function FlexySimulationPage({ db, loadCustomers, onBack }: {
           }))
           : [];
         const allServices = [...coreServices, ...cardServices];
-        const snapshot = { ...initialExamples, ...Object.fromEntries(cardServices.map(service => [service.key, 0])) };
+        const simulated = { ...initialExamples, ...Object.fromEntries(cardServices.map(service => [service.key, 0])) };
+        const existingRates = production ? (ratesResult?.data || []) as Array<{
+          customer_id: number | null; service_key: string; discount_percent: number;
+        }> : [];
+        const snapshot: Rates = production
+          ? Object.fromEntries(existingRates.filter(row => row.customer_id === null).map(row => [row.service_key, Number(row.discount_percent)]))
+          : simulated;
         setServices(allServices);
         setDefaults(snapshot);
-        setAccountRates(Object.fromEntries(records.map(customer => [customer.id, { ...snapshot }])));
+        setDefaultDraft(snapshot["mobilis-credit"] ?? null);
+        setAccountRates(production
+          ? Object.fromEntries(records.map(customer => [customer.id, Object.fromEntries(
+              existingRates.filter(row => Number(row.customer_id) === customer.id).map(row => [row.service_key, Number(row.discount_percent)])
+            )]))
+          : Object.fromEntries(records.map(customer => [customer.id, { ...snapshot }])));
+        setRatesReady(true);
         setCustomers(records);
         setTestId(records[0]?.id ?? null);
         setLoadError(productResult?.error ? "تعذر قراءة أسماء المنتجات؛ خدمات الفليكسي ما زالت متاحة للمحاكاة." : "");
@@ -119,31 +140,57 @@ export default function FlexySimulationPage({ db, loadCustomers, onBack }: {
     const first = services.find(service => serviceCategory(service) === value);
     const next = first?.key ?? "";
     setServiceKey(next);
-    if (editingId !== null) setDraftRate(accountRates[editingId]?.[next] ?? 0);
+    if (editingId !== null) setDraftRate(accountRates[editingId]?.[next] ?? (production ? null : 0));
+    setDefaultDraft(defaults[next] ?? null);
     setApplyBoth(false);
   };
   const changeService = (value: string) => {
     setServiceKey(value);
-    if (editingId !== null) setDraftRate(accountRates[editingId]?.[value] ?? 0);
+    if (editingId !== null) setDraftRate(accountRates[editingId]?.[value] ?? (production ? null : 0));
+    setDefaultDraft(defaults[value] ?? null);
     setApplyBoth(false);
   };
   const openEditor = (customer: Customer) => {
     setEditingId(customer.id);
-    setDraftRate(accountRates[customer.id]?.[serviceKey] ?? 0);
+    setDraftRate(accountRates[customer.id]?.[serviceKey] ?? (production ? null : 0));
+    setSaveError("");
     setApplyBoth(false);
   };
   const closeEditor = () => { setEditingId(null); setApplyBoth(false); };
-  const applyEditedRate = () => {
-    if (editingId === null || !currentService || !validRate(draftRate)) return;
+  const applyEditedRate = async () => {
+    if (editingId === null || !currentService || !validRate(draftRate) || savingRate || !ratesReady) return;
     const id = editingId;
     const rate = draftRate;
+    const both = applyBoth && category === "flexy" && serviceKey.startsWith("mobilis-");
+    setSaveError("");
+    if (production) {
+      if (!db) { setSaveError("قاعدة البيانات غير متاحة"); return; }
+      setSavingRate(true);
+      const { error } = await db.rpc("flexy_mini_admin_discount_rate_set", {
+        p_service_key: serviceKey, p_discount_percent: rate, p_customer_id: id, p_apply_both_mobilis: both
+      });
+      setSavingRate(false);
+      if (error) { setSaveError("لم يتم حفظ النسبة: " + error.message); return; }
+    }
     setAccountRates(previous => ({
       ...previous,
-      [id]: applyBoth && category === "flexy" && serviceKey.startsWith("mobilis-")
+      [id]: both
         ? { ...previous[id], "mobilis-credit": rate, "mobilis-offer": rate }
         : { ...previous[id], [serviceKey]: rate }
     }));
     closeEditor();
+  };
+  const applyDefaultRate = async () => {
+    if (!currentService || !validRate(defaultDraft) || savingRate || !ratesReady || !production || !db) return;
+    setSaveError("");
+    setSavingRate(true);
+    const { error } = await db.rpc("flexy_mini_admin_discount_rate_set", {
+      p_service_key: serviceKey, p_discount_percent: defaultDraft,
+      p_customer_id: null, p_apply_both_mobilis: false
+    });
+    setSavingRate(false);
+    if (error) { setSaveError("لم يتم حفظ الافتراضي: " + error.message); return; }
+    setDefaults(previous => ({ ...previous, [serviceKey]: defaultDraft }));
   };
   const showTest = (customer: Customer) => { setTestId(customer.id); setTestService(serviceKey || "mobilis-credit"); setTab("test"); };
   const updateTestService = (value: string) => {
@@ -175,11 +222,17 @@ export default function FlexySimulationPage({ db, loadCustomers, onBack }: {
   return <Space direction="vertical" size="middle" style={{ width: "100%" }}>
     <Space wrap>
       <Button icon={<ArrowRightOutlined />} onClick={onBack}>العودة للموقع الرئيسي</Button>
-      <Tag color="purple" icon={<ExperimentOutlined />}>محاكاة فقط</Tag>
+      <Tag color={production ? "blue" : "purple"} icon={<ExperimentOutlined />}>
+        {production ? "إعدادات النسب الحقيقية" : "محاكاة فقط"}
+      </Tag>
     </Space>
-    <Alert type="warning" showIcon message="لا توجد تغييرات مالية أو حفظ حقيقي"
-      description="نستعمل أسماء الحسابات المسجلة فقط. كل النسب أمثلة قابلة للتعديل مؤقتًا؛ إعادة فتح المحاكاة تمسح تغييراتها." />
+    <Alert type={production ? "info" : "warning"} showIcon
+      message={production ? "إدارة نسب الزبائن الحقيقية — بدون تشغيل مالي" : "لا توجد تغييرات مالية أو حفظ حقيقي"}
+      description={production
+        ? "تُحفظ النسب التي تحددها الإدارة فقط. غير المحددة تبقى غير محددة، والافتراضي لا يغير حسابًا قديمًا. لا شحن ولا حركة محفظة."
+        : "نستعمل أسماء الحسابات المسجلة فقط. كل النسب أمثلة قابلة للتعديل مؤقتًا؛ إعادة فتح المحاكاة تمسح تغييراتها."}/>
     {loadError && <Alert type={customers.length ? "warning" : "error"} showIcon message={loadError}/>}
+    {saveError && <Alert type="error" showIcon message={saveError}/>}
     <Card size="small" title="اختيار الفئة والخدمة">{categorySelector(false)}</Card>
     <Tabs activeKey={tab} onChange={setTab} items={[
       { key: "customers", label: "نسب الزبائن", children:
@@ -206,27 +259,40 @@ export default function FlexySimulationPage({ db, loadCustomers, onBack }: {
                   render: (username: string) => <Typography.Text style={{ overflowWrap: "anywhere" }}>{username}</Typography.Text> },
                 { title: "النسبة", key: "rate", width: "23%", align: "center",
                   render: (_: unknown, customer: Customer) => <Typography.Text strong>
-                    {percent(accountRates[customer.id]?.[serviceKey] ?? 0)}
+                    {accountRates[customer.id]?.[serviceKey] === undefined
+                      ? "غير محددة" : percent(accountRates[customer.id][serviceKey])}
                   </Typography.Text> },
                 { title: "الإجراء", key: "edit", width: "32%", align: "center",
                   render: (_: unknown, customer: Customer) => <Button size="small" onClick={() => openEditor(customer)}>تعديل</Button> }
               ]}
               locale={{ emptyText: <Empty description={currentService ? "لا يوجد زبائن مطابقون" : "اختر خدمة متاحة أولاً"} /> }}/>
-            {currentService && filteredCustomers.length > 0 &&
+            {!production && currentService && filteredCustomers.length > 0 &&
               <Button size="small" block onClick={() => showTest(filteredCustomers[0])}>تجربة ربح العملية لأحد الزبائن</Button>}
           </Space>
         </Card> },
       { key: "defaults", label: "الافتراضي", children:
-        <Card size="small" title="نسبة افتراضية — محاكاة">
-          <Alert type="info" showIcon message="تعديل هذه القيمة لا يؤثر على أي زبون قديم، ولا يُحفظ في الإنتاج." style={{ marginBottom: 14 }}/>
+        <Card size="small" title={production ? "نسبة الحسابات الجديدة" : "نسبة افتراضية — محاكاة"}>
+          <Alert type="info" showIcon
+            message={production ? "الافتراضي يُنسخ للحسابات الجديدة فقط. تغييرُه لا يغير أي حساب قديم." :
+              "تعديل هذه القيمة لا يؤثر على أي زبون قديم، ولا يُحفظ في الإنتاج."}
+            style={{ marginBottom: 14 }}/>
           {currentService ? <Space direction="vertical" size="small" style={{ width: "100%" }}>
             <Typography.Text strong>{currentService.label}</Typography.Text>
-            {percentInput(defaults[serviceKey] ?? 0, value => {
-              if (validRate(value)) setDefaults(previous => ({ ...previous, [serviceKey]: value }));
-            })}
+            {production && <Typography.Text type="secondary">
+              القيمة المحفوظة: {defaults[serviceKey] === undefined ? "غير محددة" : percent(defaults[serviceKey])}
+            </Typography.Text>}
+            {production
+              ? <>
+                  {percentInput(defaultDraft, setDefaultDraft)}
+                  <Button type="primary" loading={savingRate} disabled={!validRate(defaultDraft) || !ratesReady}
+                    onClick={() => void applyDefaultRate()}>حفظ النسبة الافتراضية</Button>
+                </>
+              : percentInput(defaults[serviceKey] ?? 0, value => {
+                  if (validRate(value)) setDefaults(previous => ({ ...previous, [serviceKey]: value }));
+                })}
           </Space> : <Empty description="لا توجد منتجات في الفئة المختارة" />}
         </Card> },
-      { key: "test", label: "تجربة ربح العملية", children:
+      ...(!production ? [{ key: "test", label: "تجربة ربح العملية", children:
         <Card size="small" title="حاسبة افتراضية للربح والخسارة">
           <Row gutter={[12, 12]}>
             <Col xs={24} sm={12}>
@@ -274,13 +340,17 @@ export default function FlexySimulationPage({ db, loadCustomers, onBack }: {
           </Card> : <Empty description="اختر زبونًا موجودًا" />}
           <Alert type="info" showIcon style={{ marginTop: 12 }}
             message="الحاسبة توضيحية فقط؛ ليست اختيار شريحة ولا شحنًا حقيقيًا."/>
-        </Card> }
+        </Card> }] : [])
     ]}/>
     <Modal title={editing ? "تعديل نسبة " + editing.username : "تعديل نسبة الزبون"} open={editingId !== null}
-      onCancel={closeEditor} onOk={applyEditedRate} okText="تطبيق تجريبي" cancelText="إلغاء"
-      okButtonProps={{ disabled: !currentService || !validRate(draftRate) }} destroyOnHidden>
+      onCancel={closeEditor} onOk={() => void applyEditedRate()}
+      okText={production ? "حفظ النسبة" : "تطبيق تجريبي"} cancelText="إلغاء"
+      confirmLoading={savingRate}
+      okButtonProps={{ disabled: !currentService || !validRate(draftRate) || !ratesReady }} destroyOnHidden>
       {editing && <Space direction="vertical" size="middle" style={{ width: "100%" }}>
-        <Alert type="info" showIcon message="هذه معاينة فقط؛ لن تتغير بيانات حساب الزبون." />
+        <Alert type="info" showIcon message={production
+          ? "هذه النسبة تخص هذا الزبون فقط. لا تتغير بنسب الافتراضي لاحقًا."
+          : "هذه معاينة فقط؛ لن تتغير بيانات حساب الزبون."} />
         <Typography.Text>اسم المستخدم: <strong>{editing.username}</strong></Typography.Text>
         {categorySelector(true)}
         {currentService ? <>
