@@ -9,7 +9,7 @@ const output=new URL('../node_modules/.arsselli-balance-tests/',import.meta.url)
 await mkdir(output,{recursive:true});
 const ui=`import React from 'react';
 const c=name=>props=>React.createElement(name,props,props.children);
-export const Alert=props=>React.createElement('alert',props,[props.message,props.description]),Button=c('button'),Tag=c('tag'),Space=c('space'),Typography={Text:c('text')};
+export const Alert=props=>React.createElement('alert',props,[props.message,props.description]),Button=c('button'),Tag=c('tag'),Space=c('space'),Card=c('card'),InputNumber=c('input-number'),Switch=c('switch'),Typography={Text:c('text')};
 export const Descriptions=props=>React.createElement('descriptions',props,(props.items||[]).map(item=>React.createElement('field',{key:item.key,label:item.label},item.children)));
 export const Collapse=props=>React.createElement('collapse',props,(props.items||[]).map(item=>React.createElement('section',{key:item.key},item.children)));
 export const message={info(){},success(){},warning(){},error(){}};
@@ -35,6 +35,11 @@ const dbFor=(opts={})=>{
   calls.push({name,args});
   if(name==='station_connect_admin_arsselli_balances')return result(opts.saved??saved);
   if(name==='station_connect_admin_arsselli_recent_responses')return result(opts.history??[]);
+  if(name==='station_connect_admin_arsselli_account_preferences')return result(opts.preferences??[
+   {distributor_account_code:'04',account_name:'GTS',priority:10,enabled:true,
+    baseline_amount:5000,baseline_checked_at:'2026-10-15T10:00:00Z',pending_hold:500,spendable_balance:4500}
+  ]);
+  if(name==='station_connect_admin_set_arsselli_account_preference')return result({});
   if(name==='station_connect_admin_queue_arsselli_balance'){
    if(opts.throwOnQueue)throw Error('lost transport');
    return result([{job_uuid:'job-one',status:'queued'}]);
@@ -90,6 +95,22 @@ test('a preexisting queued job is recovered instead of silently duplicated after
  assert.equal(db.calls.filter(x=>x.name.includes('queue')).length,0);
  assert.equal(r.root.findAllByType('button').find(x=>textOf(x).includes('قراءة رصيد أرسلي عبر الشبكة')).props.disabled,true);
  assert.match(textOf(r.root),/old-job/);
+ await close(r);
+});
+test('per-SIM account priority changes go to server RPC, not modem/Agent',async()=>{
+ const db=dbFor(),r=await mount({db,simUuid:'sim-1',canRequestBalance:false});
+ assert.equal(db.calls.filter(x=>x.name==='station_connect_admin_arsselli_account_preferences').length,0);
+ const panel=r.root.findAllByType('collapse').find(x=>typeof x.props.onChange==='function');
+ assert.ok(panel,'Priority panel exists');
+ await act(async()=>panel.props.onChange(['priorities']));
+ assert.equal(db.calls.filter(x=>x.name==='station_connect_admin_arsselli_account_preferences').length,1);
+ const priority=r.root.findByType('input-number');
+ await act(async()=>priority.props.onChange(5));
+ await press(r,'حفظ');
+ const saves=db.calls.filter(x=>x.name==='station_connect_admin_set_arsselli_account_preference');
+ assert.equal(saves.length,1);
+ assert.deepEqual(saves[0].args,{p_sim_uuid:'sim-1',p_distributor_account_code:'04',p_priority:5,p_enabled:true});
+ assert.equal(db.calls.filter(x=>x.name.includes('queue')).length,0);
  await close(r);
 });
 after(async()=>rm(output,{recursive:true,force:true}));

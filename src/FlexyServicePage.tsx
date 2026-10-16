@@ -36,6 +36,15 @@ type EligibleRoute = {
 };
 type Mode = "offers" | "credit";
 type PendingRequest = { fingerprint: string; key: string; job?: Job };
+type CreditPreflight = {
+  ready: boolean; reason: string; phone?: string; amount?: number;
+  distributor_account_code?: string; sim_uuid?: string; station_uuid?: string;
+  dispatch_enabled?: boolean;
+};
+const arsselliAccounts: Record<string,string> = {
+  "01": "POSTE", "02": "ASSILOU", "03": "DATA", "04": "GTS", "05": "MOBILIS"
+};
+
 const pendingKey = "flexy_mini_admin_pending_sama_v1";
 const readPending = (): PendingRequest | null => {
   try {
@@ -83,9 +92,12 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
   const [manualAmount, setManualAmount] = useState<number | null>(null);
   const [manualIndex, setManualIndex] = useState("");
   const [amount, setAmount] = useState<number | null>(null);
-  const [creditDistributor,setCreditDistributor] = useState("03");
   const [creditCheckBusy,setCreditCheckBusy] = useState(false);
-  const [creditCheck,setCreditCheck] = useState<{ready:boolean;reason:string}|null>(null);
+  const [creditCheck,setCreditCheck] = useState<CreditPreflight|null>(null);
+  const [creditCheckInput,setCreditCheckInput] = useState<string|null>(null);
+  const checkedCreditReady = Boolean(creditCheck?.ready
+    && creditCheck.distributor_account_code && creditCheck.sim_uuid && creditCheck.station_uuid
+    && creditCheckInput === [normalizePhone(phone),amount].join(":"));
   const [creditCheckError,setCreditCheckError] = useState("");
   const [creditStageBusy,setCreditStageBusy] = useState(false);
   const [creditStageResult,setCreditStageResult] = useState("");
@@ -113,13 +125,17 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
     if (!db || !validPhone(normalizePhone(phone)) || !amount || !Number.isInteger(amount) || amount < 1 || amount > 50000) return;
     setCreditCheckBusy(true);
     setCreditCheck(null);
+    setCreditCheckInput(null);
+    setCreditStageResult("");
     setCreditCheckError("");
     try {
       const result = await db.rpc("station_connect_admin_arsselli_630_preflight", {
         p_phone: normalizePhone(phone), p_amount: amount
       });
       if (result.error) throw result.error;
-      setCreditCheck(result.data as {ready:boolean;reason:string});
+      const checked = result.data as CreditPreflight;
+      setCreditCheck(checked);
+      setCreditCheckInput([normalizePhone(phone),amount].join(":"));
     } catch (error) {
       setCreditCheckError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -129,7 +145,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
 
   const stageCredit630 = async () => {
     const recipient = normalizePhone(phone);
-    if (!db || isCustomer || !creditCheck?.ready || !validPhone(recipient) ||
+    if (!db || isCustomer || !checkedCreditReady || !validPhone(recipient) ||
         !amount || !Number.isInteger(amount) || amount < 1 || amount > 50000) return;
     setCreditStageBusy(true);
     setCreditCheckError("");
@@ -139,8 +155,12 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
         p_phone: recipient, p_amount: amount, p_idempotency_key: key
       });
       if (error) throw error;
-      const result = data as {job_uuid?:string;status?:string};
-      setCreditStageResult(`تم تسجيل طلب للمراجعة: ${result.job_uuid || "—"}. لم يُرسل أي رصيد.`);
+      const result = data as {job_uuid?:string;status?:string;distributor_account_code?:string;dispatch_enabled?:boolean};
+      if (!result?.job_uuid || result.dispatch_enabled !== false) throw new Error("لم يُؤكد السيرفر إنشاء طلب مراجعة غير مالي");
+      const code = result.distributor_account_code || "—";
+      setCreditStageResult(`تم تسجيل طلب للمراجعة بحساب ${code} — ${arsselliAccounts[code] || "غير معروف"}. رقم الطلب: ${result.job_uuid}. لم يُرسل أي رصيد.`);
+      setCreditCheck(null);
+      setCreditCheckInput(null);
     } catch (error) {
       setCreditCheckError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -405,6 +425,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
               setMode("credit"); setIdentity(null); setChosenId(null); setOfferDetails(null);
               setManual(false); setManualFamily(undefined); setManualAmount(null); setManualIndex("");
               setAmount(null); setConfirmSend(false);
+              setCreditCheck(null); setCreditCheckInput(null); setCreditStageResult("");
             }
             setPhone(next);
           }}
@@ -427,19 +448,21 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
         {isCustomer&&<Alert showIcon type="warning" message="إرسال الرصيد العادي للزبائن غير متاح حاليًا"/>}
         <Space wrap>{[100, 200, 500].map(value =>
           <Button key={value} type={amount === value ? "primary" : "default"}
-            onClick={() => setAmount(value)}>{currency(value)}</Button>)}</Space>
+            onClick={() => {setAmount(value);setCreditCheck(null);setCreditCheckInput(null);setCreditStageResult("");}}>{currency(value)}</Button>)}</Space>
         <InputNumber<number> min={1} max={100000} precision={0} value={amount}
-          onChange={setAmount} style={{ width: "100%" }} size="large" placeholder="المبلغ" addonAfter="دج" />
+          onChange={value => {setAmount(value);setCreditCheck(null);setCreditCheckInput(null);setCreditStageResult("");}} style={{ width: "100%" }} size="large" placeholder="المبلغ" addonAfter="دج" />
         {!isCustomer&&<Space direction="vertical" style={{width:"100%"}}>
-          <Alert type="info" showIcon message="اختبار أرسلي 630 — رصيد عادي" description="قالب 630 مصحح بحساب الموزع. هذا المسار ما زال تحضيرًا فقط دون إرسال مالي؛ يحتاج تفعيل التنفيذ على السيرفر بعد مطابقة مسار Agent."/>
-          <Select aria-label="حساب موزع أرسالي" value={creditDistributor} onChange={setCreditDistributor} options={[{value:"01",label:"01 — POSTE"},{value:"02",label:"02 — ASSILOU"},{value:"03",label:"03 — DATA"},{value:"04",label:"04 — GTS"},{value:"05",label:"05 — MOBILIS"}]}/>
-          <Typography.Text strong>معاينة أمر الشحن (PIN سري)</Typography.Text>
-          <Typography.Text code dir="ltr">{validPhone(normalizePhone(phone)) && Number.isInteger(amount) && Number(amount)>0 ? `*630*${normalizePhone(phone)}*${creditDistributor}*${amount}*{service_pin}#` : "أدخل رقمًا صحيحًا ومبلغًا أولًا"}</Typography.Text>
-          <Button block loading={creditCheckBusy} onClick={() => void checkCredit630()}>فحص جاهزية 630</Button>
-          {creditCheck?.ready && <Button block loading={creditStageBusy} onClick={() => void stageCredit630()}>تسجيل طلب 630 للمراجعة (دون إرسال)</Button>}
+          <Alert type="info" showIcon message="أرسلي 630 — اختيار الموزع من السيرفر" description="السيرفر يختار الحساب حسب ترتيب الإدارة والرصيد المتاح، وليس الـAgent. هذا المسار يسجل طلب مراجعة فقط، ولا يرسل رصيدًا ماليًا."/>
+          <Button block loading={creditCheckBusy} onClick={() => void checkCredit630()}>فحص الرصيد واختيار الموزع</Button>
+          {checkedCreditReady && creditCheck && <>
+            <Alert type="success" showIcon message={`الموزع المختار: ${creditCheck.distributor_account_code} — ${arsselliAccounts[creditCheck.distributor_account_code || ""] || "غير معروف"}`} description="تم تحديد الموزع والشريحة من السيرفر؛ القرار قد يتغير عند تسجيل الطلب إذا تغير الرصيد."/>
+            <Typography.Text strong>معاينة أمر 630 — دون إظهار PIN الحقيقي</Typography.Text>
+            <Typography.Text code dir="ltr">{`*630*${normalizePhone(phone)}*${creditCheck.distributor_account_code}*${amount}*{service_pin}#`}</Typography.Text>
+            <Button block loading={creditStageBusy} disabled={creditStageBusy} onClick={() => void stageCredit630()}>تسجيل طلب 630 للمراجعة (دون إرسال)</Button>
+          </>}
           {creditStageResult && <Alert type="success" showIcon message={creditStageResult}/>}
           {creditCheckError && <Alert type="error" message={creditCheckError}/>}
-          {creditCheck && <Alert type="info" message={creditCheck.ready ? "الشريحة متصلة، الإرسال غير مفعّل" : "لا توجد شريحة جاهزة"}/>}
+          {creditCheck && !checkedCreditReady && <Alert type="warning" showIcon message="لا يوجد حاليًا حساب موزع مؤهل ورصيد كافٍ لهذا المبلغ"/>}
         </Space>}
       </Space>
     </Card> : <>
