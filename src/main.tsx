@@ -20,6 +20,7 @@ const CardCodeImportAdmin = React.lazy(() => import("./CardCodeImportAdmin"));
 const StationOverview = React.lazy(() => import("./StationOverview"));
 const FlexyServicePage = React.lazy(() => import("./FlexyServicePage"));
 const FlexySimulationPage = React.lazy(() => import("./FlexySimulationPage"));
+const FinancialReports = React.lazy(() => import("./FinancialReports"));
 import BuildCopyButton from "./BuildCopyButton";
 import StartupDiagnostics from "./StartupDiagnostics";
 import { supportPhone, supportWhatsApp } from "./settings";
@@ -139,6 +140,7 @@ const items = [
   {key:"inventory",icon:<PlusOutlined/>,label:"أكواد البطاقات"},
   {key:"customers",icon:<UserOutlined/>,label:"الزبائن"},
   {key:"rates",icon:<SettingOutlined/>,label:"نسب الزبائن"},
+  {key:"reports",icon:<HistoryOutlined/>,label:"التقارير المالية"},
   {key:"simulation",icon:<SettingOutlined/>,label:"المحاكاة — نسب الزبائن"},
   {key:"devices",icon:<SafetyCertificateOutlined/>,label:"الأجهزة الموثوقة"},
   {key:"wallets",icon:<DatabaseOutlined/>,label:"المحافظ"},
@@ -149,7 +151,7 @@ const items = [
   {key:"settings",icon:<SettingOutlined/>,label:"الإعدادات"}
  ]}
 ];
-const names:Record<string,string>={rates:"نسب الزبائن",simulation:"المحاكاة — نسب الزبائن",wallets:"المحافظ",devices:"الأجهزة الموثوقة",home:"الرئيسية",flexy:"الفليكسي",idoom:"تعبئة إيدوم",store:"متجر البطاقات",operations:"العمليات",cards:"إدارة البطاقات والأصناف",inventory:"إضافة أكواد البطاقات",customers:"إدارة الزبائن",stations:"المحطات والشرائح","supplier-sites":"مواقع الموردين",members:"المستخدمون والصلاحيات",ads:"إدارة الإعلانات",settings:"الإعدادات"};
+const names:Record<string,string>={reports:"التقارير المالية",rates:"نسب الزبائن",simulation:"المحاكاة — نسب الزبائن",wallets:"المحافظ",devices:"الأجهزة الموثوقة",home:"الرئيسية",flexy:"الفليكسي",idoom:"تعبئة إيدوم",store:"متجر البطاقات",operations:"العمليات",cards:"إدارة البطاقات والأصناف",inventory:"إضافة أكواد البطاقات",customers:"إدارة الزبائن",stations:"المحطات والشرائح","supplier-sites":"مواقع الموردين",members:"المستخدمون والصلاحيات",ads:"إدارة الإعلانات",settings:"الإعدادات"};
 const sample = [
   { key: "1", name: "موبيليس", kind: "فليكسي", state: "واجهة تجريبية" },
   { key: "2", name: "بطاقات موبيليس", kind: "بطاقات", state: "غير مربوط" },
@@ -900,7 +902,7 @@ function DeferredPanel({children}:{children:React.ReactNode}) {
 function Dashboard({customerToken,customerAccount,customerError,onCustomerLogout}:{customerToken?:string;customerAccount?:{username:string;phone?:string;party_id:number;wallet?:{balance:number;debt:number;profit:number}|null}|null;customerError?:string;onCustomerLogout?:()=>void} = {}) {
   const isCustomer=Boolean(customerToken);
   const { mutate: logout } = useLogout();
-  const validPages = new Set(["home","flexy","idoom","store","operations","cards","inventory","customers","devices","wallets","stations","supplier-sites","members","ads","settings","simulation","rates"]);
+  const validPages = new Set(["home","flexy","idoom","store","operations","cards","inventory","customers","devices","wallets","stations","supplier-sites","members","ads","settings","simulation","rates","reports"]);
   const readPage = () => { const value = new URLSearchParams(window.location.hash.split("?")[1] || "").get("page"); return value && validPages.has(value) ? value : "home"; };
   const [page, setPageState] = useState(readPage);
   const setPage = (next: string) => {
@@ -954,8 +956,8 @@ function Dashboard({customerToken,customerAccount,customerError,onCustomerLogout
             </Row>
           </> : page === "flexy" ? <DeferredPanel><FlexyServicePage db={client} isCustomer={isCustomer} onOpenStations={isCustomer ? undefined : () => setPage("stations")}/></DeferredPanel> : isCustomer ? (page==="store"||page==="cards" ? <SharedCardsStore token={customerToken!}/> : page==="operations" ? <MovementLedger admin={false}/> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز"/></Card>) : !isCustomer && (page === "simulation" || page === "rates") ? <DeferredPanel><FlexySimulationPage
     db={client} loadCustomers={() => customerAdminRequest({action:"list"})}
-    onBack={() => setPage("home")} production={page === "rates"}/></DeferredPanel> : page === "store" ? <SharedCardsStore/> : page === "ads" && client ? <DeferredPanel><AdSystem db={client} admin /></DeferredPanel> : page === "supplier-sites" && client ? <DeferredPanel><SupplierSites db={client}/></DeferredPanel> : page === "stations" && client ? <DeferredPanel><StationOverview db={client}/></DeferredPanel> : page === "settings" ? <ConnectionDiagnostics /> : page === "devices" ? <TrustedDevices /> : page === "wallets" ? <MiniWalletAdmin /> : page === "customers" ? <MasterCustomerLookup /> : page === "members" ? <><MiniMembers />{client&&<DeferredPanel><CreditAdmin db={client}/></DeferredPanel>}</> : page === "cards" ? <Space direction="vertical" size="large" style={{width:"100%"}}><SharedCardsStore/><CardsCatalog /></Space> : page === "inventory" && client ? <DeferredPanel><CardCodeImportAdmin db={client}/></DeferredPanel> : page === "operations" ? <MovementLedger admin={!isCustomer}/> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز" /></Card>}
-          <div className="app-footer">Flexy Mini · Refine + Ant Design · {page === "rates" ? "إدارة نسب حقيقية — معاينة تسعير دون إرسال" : "عرض تجريبي فقط"}</div>
+    onBack={() => setPage("home")} production={page === "rates"}/></DeferredPanel> : page === "reports" && client ? <DeferredPanel><FinancialReports db={client}/></DeferredPanel> : page === "store" ? <SharedCardsStore/> : page === "ads" && client ? <DeferredPanel><AdSystem db={client} admin /></DeferredPanel> : page === "supplier-sites" && client ? <DeferredPanel><SupplierSites db={client}/></DeferredPanel> : page === "stations" && client ? <DeferredPanel><StationOverview db={client}/></DeferredPanel> : page === "settings" ? <ConnectionDiagnostics /> : page === "devices" ? <TrustedDevices /> : page === "wallets" ? <MiniWalletAdmin /> : page === "customers" ? <MasterCustomerLookup /> : page === "members" ? <><MiniMembers />{client&&<DeferredPanel><CreditAdmin db={client}/></DeferredPanel>}</> : page === "cards" ? <Space direction="vertical" size="large" style={{width:"100%"}}><SharedCardsStore/><CardsCatalog /></Space> : page === "inventory" && client ? <DeferredPanel><CardCodeImportAdmin db={client}/></DeferredPanel> : page === "operations" ? <MovementLedger admin={!isCustomer}/> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز" /></Card>}
+          <div className="app-footer">Flexy Mini · Refine + Ant Design · {page === "rates" ? "إدارة نسب حقيقية — معاينة تسعير دون إرسال" : page === "reports" ? "تقرير من السجلات — قراءة فقط" : "عرض تجريبي فقط"}</div>
         </Content>
         <nav className="bottom-service-nav" aria-label="خدمات الموقع" dir="rtl">
           {!isCustomer && <Button type="text" className="flexy-lab-shortcut" onClick={() => setPage(page === "simulation" ? "home" : "simulation")} aria-label={page === "simulation" ? "العودة للموقع الرئيسي" : "فتح المحاكاة داخل التطبيق"}>
