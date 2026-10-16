@@ -1,3 +1,11 @@
+## 35. 2026-10-16 — Compact mobile rate preview replacing wide comparison
+
+- **[USER APPROVED / UI REFERENCE]** The Tehni Pay screenshots show a simple screen: product category -> subcategory -> list with customer, one rate and an edit button; edit modal has the user name, subcategory, percent, Apply/Cancel. User specifically wanted **no horizontal-scroll, multi-service comparison table** on phone and no new A/B/C rate groups.
+- **[UI CHANGE]** `src/FlexySimulationPage.tsx` keeps the existing authenticated admin simulation but now displays **one chosen subservice** in a compact Ant Design customer table (username/rate/edit). There are category options for Flexy, IDOOM/internet, telecom cards, and games/digital cards; product names come from the current catalogue read. Where a category is empty, it shows an empty placeholder rather than fake entries. Customer filtering and 10-row pagination remain available.
+- **[EDIT SAFETY]** The Ant Design modal has an editable draft percent. Cancel discards unsubmitted edits; Apply updates **only** the selected customer's simulation-only in-memory rate for that service. An explicit checkbox can apply the same rate to Mobilis ordinary and activated together. 0% is a valid rate. The default tab edits only an independent new-account template snapshot; existing simulation customer values are not changed by defaults.
+- **[BOUNDARIES]** All pricing data and suggested purchase costs are **fabricated simulation examples**, never live source costs or actual registered customer discounts. Real account usernames are read from the existing admin-only customer listing. No new customer accounts, role assignments, price DB writes, customer wallet changes, USSD or network operations. Prior profit calculator preserved as a simulation tab. Return-to-main entry preserved.
+- **[VERIFICATION TO FINISH]** GitHub PR guard (deliberate violation test and architecture policy), existing code tests, TypeScript + production build; after deployment verify phone UI and customer account list. No PWA verification claim until observed.
+
 ## 34. 2026-10-16 — Simulator filter controls inside rate-edit modal
 
 - **[USER BUG REPORT]** The admin simulator rate editor opened without the carrier/product filter seen in reference UIs. The customer list also showed only action buttons rather than any visible rates for filtered services.
