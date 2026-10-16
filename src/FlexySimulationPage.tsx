@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Card, Checkbox, Col, Empty, Input, InputNumber, Modal, Row, Select, Space, Table, Tabs, Tag, Typography } from "antd";
 import { ArrowRightOutlined, ExperimentOutlined } from "@ant-design/icons";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import FlexyCardQuotePreview from "./FlexyCardQuotePreview";
 
 type Customer = { id: number; username: string; active: boolean; party_id?: number };
 type CustomerList = { data: { customers?: Customer[] } | null; error: Error | null };
@@ -292,6 +293,9 @@ export default function FlexySimulationPage({ db, loadCustomers, onBack, product
                 })}
           </Space> : <Empty description="لا توجد منتجات في الفئة المختارة" />}
         </Card> },
+      ...(production ? [{ key: "preview", label: "معاينة سعر البيع", children:
+        <FlexyCardQuotePreview db={db} customers={customers} serviceKey={serviceKey}
+          serviceLabel={currentService?.label || ""}/> }] : []),
       ...(!production ? [{ key: "test", label: "تجربة ربح العملية", children:
         <Card size="small" title="حاسبة افتراضية للربح والخسارة">
           <Row gutter={[12, 12]}>
