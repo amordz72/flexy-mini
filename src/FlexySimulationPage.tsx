@@ -18,6 +18,18 @@ const initialExamples: Rates = {
   "mobilis-credit": 3, "mobilis-offer": 5, "djezzy-credit": 1, "ooredoo-credit": 2
 };
 const validRate = (value: number | null): value is number => value !== null && Number.isFinite(value) && value >= 0 && value <= 100;
+type NetworkFilter = "all" | "mobilis" | "djezzy" | "ooredoo" | "products";
+const serviceNetwork = (service: RateService): NetworkFilter =>
+  service.key.startsWith("mobilis-") ? "mobilis" :
+  service.key.startsWith("djezzy-") ? "djezzy" :
+  service.key.startsWith("ooredoo-") ? "ooredoo" : "products";
+const networkOptions: { value: NetworkFilter; label: string }[] = [
+  { value: "all", label: "كل الشبكات والمنتجات" },
+  { value: "mobilis", label: "موبيليس" },
+  { value: "djezzy", label: "جيزي" },
+  { value: "ooredoo", label: "أوريدو" },
+  { value: "products", label: "البطاقات والألعاب والإنترنت" }
+];
 const percent = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 2 }) + "%";
 const dinars = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " دج";
 
@@ -35,6 +47,9 @@ export default function FlexySimulationPage({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [query, setQuery] = useState("");
+  const [accountStatus, setAccountStatus] = useState("all");
+  const [networkFilter, setNetworkFilter] = useState<NetworkFilter>("all");
+  const [serviceFilter, setServiceFilter] = useState("mobilis-credit");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [tab, setTab] = useState("customers");
   const [testId, setTestId] = useState<number | null>(null);
@@ -61,7 +76,7 @@ export default function FlexySimulationPage({
           .map(c => ({ id: c.id, username: c.username, active: Boolean(c.active), party_id: c.party_id }));
         const cards: RateService[] = !productResult?.error && Array.isArray(productResult?.data)
           ? productResult.data.map((p: { id: number; name: string }) => ({
-            key: "card:" + p.id, label: "بطاقة / لعبة — " + p.name, category: "other" as const
+            key: "card:" + p.id, label: "منتج — " + p.name, category: "other" as const
           }))
           : [];
         const definitions = [...coreServices, ...cards];
@@ -86,8 +101,24 @@ export default function FlexySimulationPage({
   }, []);
 
   const filtered = useMemo(() =>
-    customers.filter(c => (c.username + " " + (c.party_id ?? "")).toLowerCase().includes(query.trim().toLowerCase())),
-  [customers, query]);
+    customers.filter(c =>
+      (c.username + " " + (c.party_id ?? "")).toLowerCase().includes(query.trim().toLowerCase()) &&
+      (accountStatus === "all" || (accountStatus === "active" ? c.active : !c.active))),
+  [customers, query, accountStatus]);
+  const networkServices = useMemo(
+    () => services.filter(service => networkFilter === "all" || serviceNetwork(service) === networkFilter),
+    [services, networkFilter]
+  );
+  const filteredServices = useMemo(
+    () => networkServices.filter(service => serviceFilter === "all" || service.key === serviceFilter),
+    [networkServices, serviceFilter]
+  );
+  // Limit only the customer comparison table width. Default and edit tables show every matching service.
+  const visibleCustomerServices = serviceFilter === "all" ? filteredServices.slice(0, 3) : filteredServices;
+  const serviceOptions = [
+    { value: "all", label: "كل خدمات هذا الفلتر" },
+    ...networkServices.map(service => ({ value: service.key, label: service.label }))
+  ];
   const editing = customers.find(c => c.id === editingId);
   const testing = customers.find(c => c.id === testId);
   const selectedRates = testId === null ? null : accountRates[testId];
@@ -122,14 +153,53 @@ export default function FlexySimulationPage({
     <Alert showIcon type="warning" message="تجربة دون أي شحن أو تعديل للزبائن"
       description="الأسماء من حسابات Flexy Mini الموجودة بصلاحية الإدارة. النسب المعروضة أمثلة داخل ذاكرة الصفحة، وليست نسبهم الحقيقية. لا نحفظ شيئًا في Supabase أو في أرصدة الزبائن، وتُصفّر التعديلات التجريبية عند إعادة فتح الصفحة."/>
     {loadError && <Alert showIcon type={customers.length ? "warning" : "error"} message={loadError}/>}
+    <Card size="small" title="فلترة النسب حسب الشبكة والخدمة">
+      <Row gutter={[8, 8]}>
+        <Col xs={24} sm={12}>
+          <Typography.Text type="secondary">الشبكة / فئة المنتجات</Typography.Text>
+          <Select aria-label="فلتر الشبكة أو فئة المنتج" style={{ width: "100%", marginTop: 5 }}
+            value={networkFilter} onChange={value => { setNetworkFilter(value); setServiceFilter("all"); }}
+            options={networkOptions}/>
+        </Col>
+        <Col xs={24} sm={12}>
+          <Typography.Text type="secondary">الخدمة / المنتج</Typography.Text>
+          <Select aria-label="فلتر الخدمة أو المنتج" style={{ width: "100%", marginTop: 5 }}
+            value={serviceFilter} onChange={setServiceFilter} showSearch optionFilterProp="label"
+            options={serviceOptions}/>
+        </Col>
+      </Row>
+      <Typography.Text type="secondary" style={{ display: "block", marginTop: 8 }}>
+        {filteredServices.length} خدمة مطابقة — هذا الفلتر يظهر في الافتراضي ونسب الزبائن معًا.
+      </Typography.Text>
+    </Card>
     <Tabs activeKey={tab} onChange={setTab} items={[
       { key: "customers", label: "نسب الزبائن", children: <Card size="small" title="الزبائن الموجودون" extra={<Tag>{customers.length} حساب</Tag>}>
         <Space direction="vertical" style={{ width: "100%" }} size="middle">
-          <Input.Search allowClear placeholder="بحث باسم المستخدم أو معرف الماستر" value={query} onChange={e => setQuery(e.target.value)}/>
+          <Row gutter={[8, 8]}>
+            <Col xs={24} sm={14}>
+              <Input.Search allowClear placeholder="ابحث باسم الزبون أو معرّف الماستر" value={query}
+                onChange={e => setQuery(e.target.value)}/>
+            </Col>
+            <Col xs={24} sm={10}>
+              <Select aria-label="فلتر حالة الزبون" value={accountStatus} style={{ width: "100%" }}
+                onChange={setAccountStatus} options={[
+                  { value: "all", label: "كل الزبائن" },
+                  { value: "active", label: "النشطون فقط" },
+                  { value: "inactive", label: "المعطّلون فقط" }
+                ]}/>
+            </Col>
+          </Row>
+          <Typography.Text type="secondary">{filtered.length} زبون مطابق</Typography.Text>
+          {serviceFilter === "all" && filteredServices.length > visibleCustomerServices.length &&
+            <Alert type="info" showIcon message="يعرض الجدول أول 3 خدمات. اختر خدمة محددة من الفلتر لعرض نسبتها لكل الزبائن."/>}
           <Table<Customer> size="small" rowKey="id" loading={loading} dataSource={filtered} pagination={{ pageSize: 10, showSizeChanger: false }}
-            scroll={{ x: 440 }}
+            scroll={{ x: Math.max(440, 350 + visibleCustomerServices.length * 125) }}
             columns={[
-              { title: "اسم المستخدم", dataIndex: "username", key: "username" },
+              { title: "اسم المستخدم", dataIndex: "username", key: "username", width: 135 },
+              ...visibleCustomerServices.map(service => ({
+                title: service.label, key: service.key, width: 135,
+                render: (_: unknown, c: Customer) => <Tag color="blue">{percent(accountRates[c.id]?.[service.key] ?? 0)}</Tag>
+              })),
               { title: "الحالة", key: "status", width: 85, render: (_, c) => <Tag color={c.active ? "green" : "default"}>{c.active ? "نشط" : "معطّل"}</Tag> },
               { title: "النسب التجريبية", key: "rates", width: 170,
                 render: (_, c) => <Space size={4} wrap>
@@ -142,7 +212,7 @@ export default function FlexySimulationPage({
       </Card> },
       { key: "defaults", label: "الافتراضي", children: <Card size="small" title="قالب الحساب الجديد — للتجربة فقط">
         <Alert showIcon type="info" message="تعديل الافتراضي لا يغير نسب أي زبون موجود في المحاكاة؛ يُنسخ فقط عند إنشاء الحساب الحقيقي مستقبلًا، بعد برمجة الميزة." style={{ marginBottom: 12 }}/>
-        <Table<RateService> size="small" rowKey="key" dataSource={services} pagination={{ pageSize: 10 }} columns={[
+        <Table<RateService> size="small" rowKey="key" dataSource={filteredServices} pagination={{ pageSize: 10 }} columns={[
           { title: "المنتج / الخدمة", dataIndex: "label", key: "label" },
           { title: "النسبة", key: "rate", width: 145, render: (_, s) => percentInput(defaults[s.key] ?? 0,
             value => { if (validRate(value)) setDefaults(old => ({ ...old, [s.key]: value })); }) }
@@ -198,7 +268,10 @@ export default function FlexySimulationPage({
             نسخ الافتراضي الحالي لهذا الزبون (تجربة)
           </Button>
         </Space>
-        <Table<RateService> size="small" rowKey="key" dataSource={services} pagination={{ pageSize: 8 }}
+        <Typography.Text type="secondary" style={{ display: "block", marginBottom: 10 }}>
+          الفلتر اللي فوق الصفحة يطبق هنا أيضًا: {filteredServices.length} خدمة
+        </Typography.Text>
+        <Table<RateService> size="small" rowKey="key" dataSource={filteredServices} pagination={{ pageSize: 8 }}
           columns={[
             { title: "الخدمة / المنتج", dataIndex: "label", key: "label" },
             { title: "نسبة الزبون", key: "rate", width: 150, render: (_, s) =>
