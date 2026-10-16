@@ -120,7 +120,6 @@ export default function FinancialReports({ db }: { db: SupabaseClient }) {
     setRevision(value => value + 1);
   };
   const summary = report?.summary;
-  const cashMissing = (value: number | string | null) => value === null ? true : !Number.isFinite(Number(value));
   const metric = (label: string, value: string, emphasis: "none" | "good" = "none") =>
     <Col xs={12} sm={12} md={6}>
       <Card size="small" style={{ background: "#f8fafc", height: "100%" }}>
