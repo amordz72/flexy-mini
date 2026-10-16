@@ -138,6 +138,7 @@ const items = [
   {key:"cards",icon:<DatabaseOutlined/>,label:"إدارة البطاقات والأصناف"},
   {key:"inventory",icon:<PlusOutlined/>,label:"أكواد البطاقات"},
   {key:"customers",icon:<UserOutlined/>,label:"الزبائن"},
+  {key:"rates",icon:<SettingOutlined/>,label:"نسب الزبائن"},
   {key:"simulation",icon:<SettingOutlined/>,label:"المحاكاة — نسب الزبائن"},
   {key:"devices",icon:<SafetyCertificateOutlined/>,label:"الأجهزة الموثوقة"},
   {key:"wallets",icon:<DatabaseOutlined/>,label:"المحافظ"},
@@ -148,7 +149,7 @@ const items = [
   {key:"settings",icon:<SettingOutlined/>,label:"الإعدادات"}
  ]}
 ];
-const names:Record<string,string>={simulation:"المحاكاة — نسب الزبائن",wallets:"المحافظ",devices:"الأجهزة الموثوقة",home:"الرئيسية",flexy:"الفليكسي",idoom:"تعبئة إيدوم",store:"متجر البطاقات",operations:"العمليات",cards:"إدارة البطاقات والأصناف",inventory:"إضافة أكواد البطاقات",customers:"إدارة الزبائن",stations:"المحطات والشرائح","supplier-sites":"مواقع الموردين",members:"المستخدمون والصلاحيات",ads:"إدارة الإعلانات",settings:"الإعدادات"};
+const names:Record<string,string>={rates:"نسب الزبائن",simulation:"المحاكاة — نسب الزبائن",wallets:"المحافظ",devices:"الأجهزة الموثوقة",home:"الرئيسية",flexy:"الفليكسي",idoom:"تعبئة إيدوم",store:"متجر البطاقات",operations:"العمليات",cards:"إدارة البطاقات والأصناف",inventory:"إضافة أكواد البطاقات",customers:"إدارة الزبائن",stations:"المحطات والشرائح","supplier-sites":"مواقع الموردين",members:"المستخدمون والصلاحيات",ads:"إدارة الإعلانات",settings:"الإعدادات"};
 const sample = [
   { key: "1", name: "موبيليس", kind: "فليكسي", state: "واجهة تجريبية" },
   { key: "2", name: "بطاقات موبيليس", kind: "بطاقات", state: "غير مربوط" },
@@ -899,7 +900,7 @@ function DeferredPanel({children}:{children:React.ReactNode}) {
 function Dashboard({customerToken,customerAccount,customerError,onCustomerLogout}:{customerToken?:string;customerAccount?:{username:string;phone?:string;party_id:number;wallet?:{balance:number;debt:number;profit:number}|null}|null;customerError?:string;onCustomerLogout?:()=>void} = {}) {
   const isCustomer=Boolean(customerToken);
   const { mutate: logout } = useLogout();
-  const validPages = new Set(["home","flexy","idoom","store","operations","cards","inventory","customers","devices","wallets","stations","supplier-sites","members","ads","settings","simulation"]);
+  const validPages = new Set(["home","flexy","idoom","store","operations","cards","inventory","customers","devices","wallets","stations","supplier-sites","members","ads","settings","simulation","rates"]);
   const readPage = () => { const value = new URLSearchParams(window.location.hash.split("?")[1] || "").get("page"); return value && validPages.has(value) ? value : "home"; };
   const [page, setPageState] = useState(readPage);
   const setPage = (next: string) => {
@@ -951,7 +952,9 @@ function Dashboard({customerToken,customerAccount,customerError,onCustomerLogout
                 { title: "بطاقات رقمية", subtitle: "ألعاب، اتصالات وبرامج", color: "#625ee8", target: "store", symbol: "AppstoreOutlined" }
               ].map(service => <Col xs={24} md={8} key={service.title}><Card hoverable onClick={() => setPage(service.target)} style={{background:service.color,borderColor:service.color}}><Space direction="vertical" size="middle"><Space align="center"><span style={{color:"#fff"}}>{service.symbol==="PhoneOutlined"?<PhoneOutlined/>:service.symbol==="WifiOutlined"?<WifiOutlined/>:<AppstoreOutlined/>}</span><Typography.Text strong style={{color:"#fff"}}>{service.title}</Typography.Text></Space><Typography.Text style={{color:"#fff"}}>{service.subtitle}</Typography.Text></Space></Card></Col>)}
             </Row>
-          </> : page === "flexy" ? <DeferredPanel><FlexyServicePage db={client} isCustomer={isCustomer} onOpenStations={isCustomer ? undefined : () => setPage("stations")}/></DeferredPanel> : isCustomer ? (page==="store"||page==="cards" ? <SharedCardsStore token={customerToken!}/> : page==="operations" ? <MovementLedger admin={false}/> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز"/></Card>) : !isCustomer && page === "simulation" ? <DeferredPanel><FlexySimulationPage db={client} loadCustomers={() => customerAdminRequest({action:"list"})} onBack={() => setPage("home")}/></DeferredPanel> : page === "store" ? <SharedCardsStore/> : page === "ads" && client ? <DeferredPanel><AdSystem db={client} admin /></DeferredPanel> : page === "supplier-sites" && client ? <DeferredPanel><SupplierSites db={client}/></DeferredPanel> : page === "stations" && client ? <DeferredPanel><StationOverview db={client}/></DeferredPanel> : page === "settings" ? <ConnectionDiagnostics /> : page === "devices" ? <TrustedDevices /> : page === "wallets" ? <MiniWalletAdmin /> : page === "customers" ? <MasterCustomerLookup /> : page === "members" ? <><MiniMembers />{client&&<DeferredPanel><CreditAdmin db={client}/></DeferredPanel>}</> : page === "cards" ? <Space direction="vertical" size="large" style={{width:"100%"}}><SharedCardsStore/><CardsCatalog /></Space> : page === "inventory" && client ? <DeferredPanel><CardCodeImportAdmin db={client}/></DeferredPanel> : page === "operations" ? <MovementLedger admin={!isCustomer}/> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز" /></Card>}
+          </> : page === "flexy" ? <DeferredPanel><FlexyServicePage db={client} isCustomer={isCustomer} onOpenStations={isCustomer ? undefined : () => setPage("stations")}/></DeferredPanel> : isCustomer ? (page==="store"||page==="cards" ? <SharedCardsStore token={customerToken!}/> : page==="operations" ? <MovementLedger admin={false}/> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز"/></Card>) : !isCustomer && (page === "simulation" || page === "rates") ? <DeferredPanel><FlexySimulationPage
+    db={client} loadCustomers={() => customerAdminRequest({action:"list"})}
+    onBack={() => setPage("home")} production={page === "rates"}/></DeferredPanel> : page === "store" ? <SharedCardsStore/> : page === "ads" && client ? <DeferredPanel><AdSystem db={client} admin /></DeferredPanel> : page === "supplier-sites" && client ? <DeferredPanel><SupplierSites db={client}/></DeferredPanel> : page === "stations" && client ? <DeferredPanel><StationOverview db={client}/></DeferredPanel> : page === "settings" ? <ConnectionDiagnostics /> : page === "devices" ? <TrustedDevices /> : page === "wallets" ? <MiniWalletAdmin /> : page === "customers" ? <MasterCustomerLookup /> : page === "members" ? <><MiniMembers />{client&&<DeferredPanel><CreditAdmin db={client}/></DeferredPanel>}</> : page === "cards" ? <Space direction="vertical" size="large" style={{width:"100%"}}><SharedCardsStore/><CardsCatalog /></Space> : page === "inventory" && client ? <DeferredPanel><CardCodeImportAdmin db={client}/></DeferredPanel> : page === "operations" ? <MovementLedger admin={!isCustomer}/> : <Card title={names[page]}><Empty description="الخدمة قيد التجهيز" /></Card>}
           <div className="app-footer">Flexy Mini · Refine + Ant Design · عرض تجريبي فقط</div>
         </Content>
         <nav className="bottom-service-nav" aria-label="خدمات الموقع" dir="rtl">
