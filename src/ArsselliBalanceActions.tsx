@@ -1,6 +1,7 @@
 import {useCallback,useEffect,useRef,useState} from "react";
 import {Alert,Button,Collapse,Descriptions,Space,Tag,Typography,message} from "antd";
 import type {SupabaseClient} from "@supabase/supabase-js";
+import ArsselliAccountPriorities from "./ArsselliAccountPriorities";
 
 type AccountBalance={
  account_key:string;distributor_account_code:string|null;account_name:string;
@@ -111,6 +112,7 @@ export default function ArsselliBalanceActions({db,simUuid,canRequestBalance}:{
 
  return <Space direction="vertical" size="small" style={{width:"100%"}}>
   <Typography.Text strong>رصيد أرسلي — حسابات الموزعين</Typography.Text>
+  <ArsselliAccountPriorities db={db} simUuid={simUuid}/>
   {loading&&!loaded&&<Typography.Text type="secondary">جاري قراءة الأرصدة المسجلة...</Typography.Text>}
   {loaded&&<Descriptions size="small" bordered column={1} items={[
    {key:"gts",label:"GTS (04)",children:gts?amount(gts.balance_amount):"لم يُقرأ بعد"},
