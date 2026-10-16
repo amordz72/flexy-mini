@@ -4,6 +4,10 @@
 
 ## Mandatory startup — no reset / no guessing
 
+**CANONICAL FLEXy ENTITY CONTRACT (2026-10-16):** Before changes to customers, server routing, Station/Agent, modem/SIM, distributor accounts, wallets, USSD codes, discovery, or execution, read [`amordz72/mytool-dev/flexy/policy/ENTITY-OWNERSHIP-CONTRACT.md`](https://github.com/amordz72/mytool-dev/blob/main/flexy/policy/ENTITY-OWNERSHIP-CONTRACT.md). Every feature must name its actor, stable entity ID, owning layer, permission boundary and related existing table before adding a UI or RPC. Admin confirmation of an operational USSD code is distinct from live-money execution authorization. **Do not create a second registry or bury the shared «الاتصالات والشبكات/الأكواد التشغيلية» under individual SIM cards.**
+
+
+
 1. Open `amordz72/developer/AGENTS.md` and `WORKING-CONTEXT.md`.
 2. Identify current work from `ACTIVE-PROJECT.md`, `PROJECT_CATALOG.md` and `NEXT-STEP.md`; some old snapshots are dated and must not override current user instruction.
 3. **Read this repo's [docs/SYSTEM-BEHAVIOR-MAP.md](docs/SYSTEM-BEHAVIOR-MAP.md) FIRST for Flexy semantics, actual component locations, verified tests and open gaps.**
