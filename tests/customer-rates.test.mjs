@@ -29,6 +29,6 @@ test("rates are admin-only and simulation remains isolated from persistent write
 });
 test("atomic admin editor can apply the same rate to both Mobilis products",()=>{
   assert.match(sql, /p_apply_both_mobilis boolean default false/);
-  assert.match(sql, /both-service change is only supported for Mobilis/);
+  assert.match(sql, /Both-service change is only supported for Mobilis/);
   assert.match(source, /p_apply_both_mobilis: both/);
 });
