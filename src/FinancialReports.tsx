@@ -3,6 +3,7 @@ import { Alert, Button, Card, Col, Empty, Input, Row, Select, Space, Spin, Table
 import { ReloadOutlined } from "@ant-design/icons";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import FinancialReportOrders from "./FinancialReportOrders";
+import FinancialExpenses from "./FinancialExpenses";
 
 type ReportSummary = {
   total_orders: number;
@@ -153,7 +154,7 @@ export default function FinancialReports({ db }: { db: SupabaseClient }) {
       ["طلبات نجاح بقيمة اسمية", report.summary.success_nominal_amount],
       ["مبيعات محفوظة مكتملة", report.summary.recorded_revenue],
       ["ربح مباشر محفوظ مكتمل", report.summary.recorded_direct_profit],
-      ["مصاريف", "غير متوفرة"], ["صافي الربح", "غير مكتمل"],
+      ["مصاريف المنصة", "ارجع إلى سجل مصاريف Flexy Mini الخاص بالفترة"], ["صافي الربح", "غير مكتمل"],
       [],
       ["الشبكة", "الخدمة", "كل الطلبات", "حالات نجاح", "حالات نجاح مستنتجة",
         "القيمة الاسمية للنجاح", "ربح مباشر محفوظ مكتمل"]
@@ -183,7 +184,7 @@ export default function FinancialReports({ db }: { db: SupabaseClient }) {
       </Card>
     </Col>;
   const noNumbers = <Alert type="warning" showIcon message="لا نحسب قيمة غير محفوظة على أنها صفرًا"
-    description="الطلبات القديمة لا تحمل تكلفة بيع وربحًا موثوقين. وأرباح الألعاب وإيدوم والمصاريف ليست ضمن مصدر هذا التقرير. لن نعرض صافيًا وهميًا."/>;
+    description="الطلبات القديمة لا تحمل ربحًا موثوقًا، وأرباح الألعاب وإيدوم غير مربوطة. المصاريف المسجلة مستقلة بالأسفل، لكن لا يمكن استخراج صافي ربح مكتمل."/>;
   const groupColumns = [
     { title: "الخدمة", key: "service", render: (_: unknown, item: Group) =>
       <Typography.Text style={{ overflowWrap: "anywhere" }}>{groupTitle(item)}</Typography.Text>, width: "45%" },
@@ -192,8 +193,8 @@ export default function FinancialReports({ db }: { db: SupabaseClient }) {
   ];
 
   return <Space direction="vertical" size="middle" style={{ width: "100%" }}>
-    <Alert type="info" showIcon message="التقارير — قراءة فقط من طلبات Flexy Mini"
-      description="مصدرنا الحالي flexy_orders وحده، بلا تكرار مع Station أو MyTool. تاريخ العملية بحسب يوم الإنشاء بتوقيت الجزائر. الحالات المسجلة نجاحًا لا تثبت وحدها وصول الشحن للزبون."/>
+    <Alert type="info" showIcon message="التقارير — مصدر العمليات مستقل عن سجل مصاريف المنصة"
+      description="الاستهلاك يقرأ flexy_orders فقط، ومصاريف Flexy Mini تُسجّل في سجل مستقل دون تأثير على المحفظة أو MyTool. لا نعتبر حالة نجاح تقنية تحصيلًا مثبتًا."/>
     <Card size="small" title="الفترة ونوع العمليات">
       <Row gutter={[8, 12]}>
         <Col xs={24} sm={8}>
@@ -260,14 +261,15 @@ export default function FinancialReports({ db }: { db: SupabaseClient }) {
             {metric("ربح الفليكسي المسجل", knownCash(summary.recorded_direct_profit))}
             {metric("ربح البطاقات والألعاب", "غير مربوط")}
             {metric("ربح إيدوم", "غير مربوط")}
-            {metric("المصاريف", "غير مسجلة")}
+            {metric("مصاريف المنصة", "التفصيل أدناه")}
           </Row>
           {noNumbers}
+          <FinancialExpenses db={db} from={applied.from} to={applied.to} active={tab === "profit"}/>
           <Card size="small" title="نتيجة الفترة">
             <Space direction="vertical" style={{ width: "100%" }}>
               <Typography.Text>عدد الحالات الناجحة تقنيًا: <b>{summary.success_status_count}</b></Typography.Text>
               <Typography.Text>منها ذات ربح محفوظ: <b>{summary.success_with_profit_count}</b></Typography.Text>
-              <Typography.Text>المصاريف: <b>غير متوفرة</b></Typography.Text>
+              <Typography.Text>المصاريف: <b>تُعرض في سجل Flexy Mini أدناه</b></Typography.Text>
               <Typography.Text strong>صافي الربح: <Tag>غير مكتمل — لا يمكن حسابه</Tag></Typography.Text>
             </Space>
           </Card>
