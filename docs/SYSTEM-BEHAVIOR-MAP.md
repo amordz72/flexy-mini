@@ -1,3 +1,15 @@
+## 2026-10-17 — USER PRIORITY: finish live Flexy first; freeze package expansion
+
+**OWNER DECISION — no runtime changes in this entry.** The existing Mobilis SAMA catalog/presentation is accepted for this phase. Sama is one presentation group with three existing packages/families (`Sama Mix`, `Sama Talk`, `Sama Net`). Their current collapsible/stacked layout is sufficient; no need to refactor into a table. Existing PixX and Revolution offer lists remain as they are.
+
+**DEFER:** proposing/building `flexy_offer_packages` or any other new package/group tables; extra internet-only / voice-only / mixed classification, editorial display rows, advanced manual family ordering, automatic family-mode machinery, cosmetic redesign, or seeding speculative Djezzy/Ooredoo offers. The foregoing are ideas for a later iteration, not implementation requests or permissions for new migrations.
+
+**DO NOW:** prioritize the operational product: (1) ordinary-credit execution end to end; (2) activated-offer execution end to end; (3) network result classification, safely surfaced success/failure/review, and user acceptance on actual hardware. Preserve strict no-double-send, source/route evidence and customer confirmation. Continue to Djezzy/Ooredoo only once this core path is proven, using real carrier prompts/screens and supplied evidence rather than invented catalogs or network indexes. In Djezzy, present discovered options faithfully to network responses; do not invent categorization. **No real-money USSD without explicit per-test authorization.**
+
+**ACTIVE REPO:** `amordz72/flexy-mini` for product work; `mytool-dev` is currently PAUSED (read existing canonical entity contracts as references only, do not modify that repository). Station Connect can be audited if needed to finish actual execution. This decision does not assert that ordinary/activated execution already works.
+
+---
+
 ## 2026-10-17 — Confirmed View Index administration (IMPLEMENTED / PHONE CHECK REQUIRED)
 
 - **Only Flexy Mini active:** MyTool Dev remains paused. Same canonical `public.flexy_offer_catalog.sort_index` holds customer-facing **View Index**; presentation position is independent of execution-route `network_index` and any network USSD screen navigation. Existing admin/catalog RPCs remain the single source for offers; no parallel product, SIM or code registry.
