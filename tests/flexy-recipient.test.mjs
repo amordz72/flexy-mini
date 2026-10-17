@@ -547,7 +547,7 @@ test('new confirmed 632 SMS resumes 630 preflight automatically without second b
  confirmed=true;
  await act(async()=>{for(const tick of [...timers.values()])await tick();});await flush();
  assert.ok(r.root.findAllByType('alert').some(x=>String(x.props.message).includes('04 — GTS')));
- assert.ok(button(r,'تأكيد الإرسال'));
+ assert.ok(r.root.findAllByType('modal').some(x=>String(x.props.title).includes('شحن رصيد حقيقي')),'recovered balance opens the confirmation modal automatically');
  assert.ok(!r.root.findAllByType('alert').some(x=>String(x.props.message).includes('جاري تحديث رصيد أرسلي تلقائيًا')));
  assert.equal(db.calls.filter(x=>x.name==='station_connect_admin_arsselli_630_preflight').length,1);
  assert.equal(db.calls.some(x=>x.name==='station_connect_admin_stage_arsselli_630'),false);
