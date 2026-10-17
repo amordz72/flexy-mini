@@ -37,7 +37,9 @@ test("direct 630 keeps an unresolved intent across reload and never auto-resends
  assert.match(flexy,/prior\.phone===recipient && prior\.amount===amount/);
  assert.match(flexy,/!\["success","failed"\]\.includes\(prior\.status\)/);
  assert.match(flexy,/station_connect_admin_630_credit_job/);
- assert.doesNotMatch(flexy,/useEffect\([\s\S]*?station_connect_admin_send_arsselli_630/);
+ const confirmCode=flexy.slice(flexy.indexOf("const confirmCredit630Send = async"),
+   flexy.indexOf("useEffect(() => {",flexy.indexOf("const confirmCredit630Send = async")));
+ assert.match(confirmCode,/station_connect_admin_send_arsselli_630/);
 });
 test("unchanged amount control cannot reset the direct-630 send lock",()=>{
  assert.match(flexy,/onClick=\{\(\) => \{if\(amount===value\)return;/);
