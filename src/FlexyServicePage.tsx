@@ -226,7 +226,9 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
     .sort((a,b) => {
       const ia = familyOrder.indexOf(a.family), ib = familyOrder.indexOf(b.family);
       if (ia !== ib && (ia >= 0 || ib >= 0)) return (ia < 0 ? 99 : ia)-(ib < 0 ? 99 : ib);
-      return a.family === b.family ? a.amount-b.amount : a.family.localeCompare(b.family);
+      return a.family === b.family
+        ? (a.sort_index ?? 999999)-(b.sort_index ?? 999999) || a.amount-b.amount
+        : a.family.localeCompare(b.family);
     });
   const chosen = eligibleOffers.find(row => row.offer_uuid === chosenId) || null;
   const samaRoute = Boolean(verifiedGroup && chosen?.execution_enabled && chosen?.execution_available

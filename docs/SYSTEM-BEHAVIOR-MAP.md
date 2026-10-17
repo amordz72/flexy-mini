@@ -1,3 +1,14 @@
+## 2026-10-17 — Confirmed View Index administration (IMPLEMENTED / PHONE CHECK REQUIRED)
+
+- **Only Flexy Mini active:** MyTool Dev remains paused. Same canonical `public.flexy_offer_catalog.sort_index` holds customer-facing **View Index**; presentation position is independent of execution-route `network_index` and any network USSD screen navigation. Existing admin/catalog RPCs remain the single source for offers; no parallel product, SIM or code registry.
+- **Admin UI:** `src/TelecomCatalogAdmin.tsx` now shows a View Index number and `تعديل` instead of numeric 1/2 route-count badges. An Ant Design confirmation modal shows old position, editable new position (1..size of operator+family), and says other offers in the family may shift. Cancellation makes zero DB calls; Save invokes only `flexy_mini_admin_offer_view_reorder`.
+- **Server write gate:** `supabase/migrations/20261017150000_flexy_mini_admin_offer_view_index_reorder.sql` adds a single authenticated+admin-only SECDEF RPC; denies anon/unauthenticated, requires expected `updated_at` to prevent stale edits, locks the family, reorders to contiguous `sort_index` values in a single SQL transaction. Existing duplicate/ambiguous positions are normalized only **after user confirmation**. Nothing is silently reordered by installation of the migration.
+- **Customer display:** `src/FlexyServicePage.tsx` uses `sort_index` within each existing eligible offer family instead of forcibly ordering by amount. Existing discovery group eligibility, role policy, execution index and financial routing are unchanged.
+- **Verified:** GitHub CI tests, UI framework guard and production build passed on branch; DB migration applied and confirmed admin permissions, 27 existing offers unchanged, 25 existing execution routes unchanged. **No phone acceptance and no real admin reorder attempted from the customer's account**: USER_CONFIRM_REQUIRED.
+- **Decision not executed:** Network Index is **read-only by default**, scoped to a verified execution route/SIM family. Any later change requires independent evidence audit/confirmation; don't copy Sama network index into Arsselli or infer from View Index. No network-index edit added in this batch.
+
+---
+
 ## 2026-10-17 — «الاتصالات والشبكات» administrative catalog (SOURCE ONLY)
 
 **User direction:** \`amordz72/mytool-dev\` development is PAUSED. Continue actual product work in **Flexy Mini**. Shared canonical Supabase entities/RPCs remain readable dependencies, **not** authorization to edit MyTool Dev source or create parallel catalog tables. The previous draft documentation PR in MyTool Dev is not part of this Flexy Mini release.
