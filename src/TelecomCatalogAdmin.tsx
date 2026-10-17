@@ -167,7 +167,7 @@ export default function TelecomCatalogAdmin({ db }: { db: SupabaseClient }) {
       {error && <Alert type="error" showIcon message={error}/>}
       <Space wrap>
         <Select aria-label="المتعامل" style={{ width: 190 }} value={operator}
-          options={networkOptions} onChange={value => { setOperator(value); setFamily("all"); setSimType("all"); }}/>
+          options={networkOptions} onChange={value => { setOperator(value); setFamily("all"); setSimType("all"); setPurpose("all"); }}/>
         <Input.Search aria-label="البحث في الكاتالوجات" allowClear
           placeholder="بحث في العروض أو الأكواد" style={{ width: 210 }}
           value={search} onChange={event => setSearch(event.target.value)}/>
