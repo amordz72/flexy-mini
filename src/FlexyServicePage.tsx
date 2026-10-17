@@ -480,7 +480,18 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
           setCreditStageResult("بدأ إرسال 630 لكن نتيجته المالية لم تتأكد من الشبكة/SMS. لا تعاود الشحن. المرجع: "+creditDirectJobUuid);
           refreshHistory();
         } else if(status==="failed") {
-          setCreditStageResult("ورد فشل للعملية؛ لا تكررها قبل مراجعة رد الشبكة. المرجع: "+creditDirectJobUuid);
+          // A closed 630 session with NO confirmation reply is a proven
+          // non-send. Do not keep a browser-only financial lock after the
+          // server has finished reconciliation; other failures stay locked.
+          const notSent=String(job.result_code||"")==="630_CONFIRMATION_NOT_SENT"
+            || String(job.result_code||"")==="630_CONFIRMATION_NOT_SENT_NO_DEBIT_632";
+          if(notSent) {
+            setCreditSendAttempted(false);
+            creditRequestKey.current=null;
+            setCreditStageResult("لم يرسل البرنامج تأكيد 1 للشبكة؛ أُغلقت العملية دون إرسال فليكسي. المرجع: "+creditDirectJobUuid);
+          } else {
+            setCreditStageResult("ورد فشل للعملية؛ لا تكررها قبل مراجعة رد الشبكة. المرجع: "+creditDirectJobUuid);
+          }
           refreshHistory();
         } else {
           setCreditStageResult("قيد الإرسال والتحقق من الشبكة. مرجع العملية: "+creditDirectJobUuid);
