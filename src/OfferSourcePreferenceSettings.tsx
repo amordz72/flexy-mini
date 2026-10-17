@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Button, Card, InputNumber, Modal, Select, Space, Typography, message } from "antd";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import ArsselliBalanceRefreshSettings from "./ArsselliBalanceRefreshSettings";
 
 type SourceSimType = "mobilis-sama" | "mobilis-arsselli";
 type RoutingPolicy = {
@@ -70,7 +71,7 @@ export default function OfferSourcePreferenceSettings({db}:{db:SupabaseClient}) 
         ?"تغيّرت الإعدادات من جهاز آخر؛ حدّث الصفحة أولًا.":"فشل الحفظ: "+reason);
     } finally {setSaving(false);}
   };
-  return <Card title="أولوية تنفيذ عروض Mobilis" extra={
+  return <><Card title="أولوية تنفيذ عروض Mobilis" extra={
     <Button size="small" onClick={()=>void refresh()} loading={loading}>تحديث</Button>}>
     <Space direction="vertical" size="middle" style={{width:"100%"}}>
       <Alert type="info" showIcon message="الأولوية إعدادات وليست منعًا"
@@ -109,5 +110,5 @@ export default function OfferSourcePreferenceSettings({db}:{db:SupabaseClient}) 
         <Typography.Text type="secondary">لا يغيّر اعتماد أي مسار، ولا ينفّذ أمر USSD.</Typography.Text>
       </Space>
     </Modal>
-  </Card>;
+  </Card><ArsselliBalanceRefreshSettings db={db}/></>;
 }
