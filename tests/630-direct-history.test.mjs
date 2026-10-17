@@ -28,3 +28,18 @@ test("status UI distinguishes NOT SENT from real post-network REVIEW and does no
  assert.doesNotMatch(flexy,/station_connect_admin_dispatch_630_test_once/);
  assert.doesNotMatch(flexy,/station_connect_admin_630_test_gate_status/);
 });
+
+test("direct 630 keeps an unresolved intent across reload and never auto-resends it",()=>{
+ assert.match(flexy,/flexy_mini_admin_pending_630_v1/);
+ assert.match(flexy,/const recoveredCredit630=useRef/);
+ assert.match(flexy,/useState\(Boolean\(recoveredCredit630\.current\)\)/);
+ assert.match(flexy,/saveCredit630Pending\(pending\);[\s\S]*?db\.rpc\("station_connect_admin_send_arsselli_630"/);
+ assert.match(flexy,/prior\.phone===recipient && prior\.amount===amount/);
+ assert.match(flexy,/!\["success","failed"\]\.includes\(prior\.status\)/);
+ assert.match(flexy,/station_connect_admin_630_credit_job/);
+ assert.doesNotMatch(flexy,/useEffect\([\s\S]*?station_connect_admin_send_arsselli_630/);
+});
+test("unchanged amount control cannot reset the direct-630 send lock",()=>{
+ assert.match(flexy,/onClick=\{\(\) => \{if\(amount===value\)return;/);
+ assert.match(flexy,/onChange=\{value => \{if\(amount===value\)return;/);
+});
