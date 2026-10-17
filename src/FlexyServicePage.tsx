@@ -777,7 +777,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
         <Space wrap>{[100, 200, 500].map(value =>
           <Button key={value} type={amount === value ? "primary" : "default"}
             onClick={() => {++creditBalanceRequestSerial.current;setCreditBalanceWait(null);setCreditBalanceMessage("");setAmount(value);setCreditCheck(null);setCreditCheckInput(null);setCreditStageResult("");creditSendIntent.current=false;creditRequestKey.current=null;setCreditDirectConfirm(false);setCreditSendAttempted(false);setCreditDirectJobUuid(null);setCreditTransferStatus("");}}>{currency(value)}</Button>)}</Space>
-        <InputNumber<number> min={1} max={100000} precision={0} value={amount}
+        <InputNumber<number> min={40} max={50000} precision={0} value={amount}
           onChange={value => {++creditBalanceRequestSerial.current;setCreditBalanceWait(null);setCreditBalanceMessage("");setAmount(value);setCreditCheck(null);setCreditCheckInput(null);setCreditStageResult("");creditSendIntent.current=false;creditRequestKey.current=null;setCreditDirectConfirm(false);setCreditSendAttempted(false);setCreditDirectJobUuid(null);setCreditTransferStatus("");}} style={{ width: "100%" }} size="large" placeholder="المبلغ" addonAfter="دج" />
         {!isCustomer&&<Space direction="vertical" style={{width:"100%"}}>
           {creditAvailability && !creditAvailability.ready && !creditBalanceWait && <Alert
