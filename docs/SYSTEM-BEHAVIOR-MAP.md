@@ -1,3 +1,15 @@
+## 2026-10-17 — CUMULATIVE Arsselli balance, 6h/12h settings and automatic nonfinancial 632 (DB APPLIED)
+
+**Owner correction:** No manual station-page balance refresh, no USSD 632 before every recharge. Last network-confirmed 632 baseline is cumulative per (SIM UUID, distributor account code). Existing operational spendable function subtracts confirmed sends since baseline and all pending/review holds; ambiguous results block until reconciled. Do not duplicate the ledger, per-transaction network reads or manually alter balances.
+
+**Server:** Station Connect policy defaults to 6h (admin-selectable 12h). Canonical ordinary 630 account selection, preflight and admin automatic 632 refresh all use policy TTL, so an old baseline cannot be chosen for dispatch. When TTL has not expired, preflight immediately selects from cumulative operational balance with no 632 USSD; after expiry or missing baseline, existing nonfinancial 632 request is queued/reused once, and recent failed/unknown result is not silently re-queued. Approved online Station/SIM and account permissions still apply; 696 route is unaffected. Supabase applied/read back. No 630 money send or customer wallet mutation.
+
+**UI:** On same ordinary credit screen, existing `فحص الرصيد واختيار الموزع` calls server ensure. If the nonfinancial 632 query is needed, the UI shows `جاري التحديث التلقائي لرصيد أرسلي` and polls every 5 seconds up to 90 seconds, continuing preflight when network/SMS baseline is confirmed. No extra button/page; a changed phone or amount invalidates the previous pending selection. In existing Settings, an Ant Design card lets the authorized admin choose 6 or 12 hours, with confirmation. Settings changes never trigger USSD.
+
+**Evidence/limits:** Flexy Mini development guard + tests/build PASS on PR #39 branch. Station Connect Agent Check runner fails with zero steps (not tested end-to-end on modem). Financial 630 exact-job gate remains OFF, two 630 review jobs and zero 630 financial commands; Android PWA acceptance still requires owner checking deployed build. No MyTool Dev changes.
+
+---
+
 ## 2026-10-17 — 630 one-time financial trial gate and UI (IMPLEMENTATION / NO LIVE CHARGE)
 
 - Existing `630` credit page continues admin-only nonfinancial preflight/staging. New private Station Connect `station_connect_630_test_gate` defaults `enabled=false` and can authorize at most one fresh owner-approved `job_uuid` with expiration and max first-trial amount 40 DZD. No client/agent authorization endpoint and no general customer money send.
