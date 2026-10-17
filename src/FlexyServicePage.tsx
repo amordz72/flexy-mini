@@ -166,6 +166,14 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
   const [creditCheckError,setCreditCheckError] = useState("");
   const [creditStageBusy,setCreditStageBusy] = useState(false);
   const [creditStageResult,setCreditStageResult] = useState("");
+  const [creditPreparedJob,setCreditPreparedJob] = useState<{
+    jobUuid:string;phone:string;amount:number;account:string;
+  }|null>(null);
+  const [creditTrialAuthorized,setCreditTrialAuthorized] = useState(false);
+  const [creditTrialAttempted,setCreditTrialAttempted] = useState(false);
+  const [creditTrialConfirm,setCreditTrialConfirm] = useState(false);
+  const [creditTrialBusy,setCreditTrialBusy] = useState(false);
+  const creditTrialLock = useRef(false);
   const [stationUuid, setStationUuid] = useState<string | null>(null);
   const [stationName, setStationName] = useState("");
   const [stationBusy, setStationBusy] = useState(false);
@@ -192,6 +200,8 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
     setCreditCheck(null);
     setCreditCheckInput(null);
     setCreditStageResult("");
+    setCreditPreparedJob(null);
+    setCreditTrialAuthorized(false);
     setCreditCheckError("");
     try {
       const result = await db.rpc("station_connect_admin_arsselli_630_preflight", {
@@ -228,12 +238,66 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
       if (!result?.job_uuid || result.dispatch_enabled !== false) throw new Error("لم يُؤكد السيرفر إنشاء طلب مراجعة غير مالي");
       const code = result.distributor_account_code || "—";
       setCreditStageResult(`تم تسجيل طلب للمراجعة بحساب ${code} — ${arsselliAccounts[code] || "غير معروف"}. رقم الطلب: ${result.job_uuid}. لم يُرسل أي رصيد.`);
+      setCreditPreparedJob({jobUuid:result.job_uuid,phone:recipient,amount,account:code});
+      setCreditTrialAuthorized(false);
+      setCreditTrialAttempted(false);
       setCreditCheck(null);
       setCreditCheckInput(null);
     } catch (error) {
       setCreditCheckError(error instanceof Error ? error.message : String(error));
     } finally {
       setCreditStageBusy(false);
+    }
+  };
+
+  // An owner-approved, exact-job server gate (disabled by default) may later
+  // expose the single-use test. The health poll never queues USSD or a job.
+  useEffect(() => {
+    if (!db || isCustomer || mode !== "credit" || !creditPreparedJob
+      || creditTrialAttempted || creditPreparedJob.phone !== normalizePhone(phone)
+      || creditPreparedJob.amount !== amount) {
+      setCreditTrialAuthorized(false);
+      return;
+    }
+    let active=true;
+    const refresh=async()=>{
+      try {
+        const {data,error}=await db.rpc("station_connect_admin_630_test_gate_status",{
+          p_job_uuid:creditPreparedJob.jobUuid
+        });
+        if(error)throw error;
+        if(active)setCreditTrialAuthorized(Boolean(data?.armed_for_this_job));
+      } catch {if(active)setCreditTrialAuthorized(false);}
+    };
+    void refresh();
+    const timer=window.setInterval(()=>{void refresh();},30000);
+    return ()=>{active=false;window.clearInterval(timer);};
+  },[db,isCustomer,mode,creditPreparedJob,creditTrialAttempted,phone,amount]);
+
+  const sendCreditTrialOnce = async () => {
+    const staged=creditPreparedJob;
+    if (!db || !staged || isCustomer || !creditTrialAuthorized
+      || creditTrialLock.current || creditTrialAttempted || creditTrialBusy
+      || staged.phone!==normalizePhone(phone) || staged.amount!==amount) return;
+    creditTrialLock.current=true;
+    setCreditTrialAttempted(true);
+    setCreditTrialAuthorized(false);
+    setCreditTrialConfirm(false);
+    setCreditTrialBusy(true);
+    try {
+      const {data,error}=await db.rpc("station_connect_admin_dispatch_630_test_once",{
+        p_job_uuid:staged.jobUuid,p_expected_phone:staged.phone,p_expected_amount:staged.amount
+      });
+      if(error)throw error;
+      if(data?.job_uuid!==staged.jobUuid || data?.single_use!==true)
+        throw new Error("UNCONFIRMED_630_TEST_DISPATCH");
+      setCreditStageResult("بدأت محاولة شحن تجريبية واحدة عبر الشبكة. النتيجة المالية غير مؤكدة حتى مراجعة رد الشبكة أو SMS. لا تعاود العملية.");
+      refreshHistory();
+    } catch {
+      setCreditStageResult("نتيجة محاولة 630 غير مؤكدة؛ قد يكون أمر الشبكة بدأ. لا تضغط إرسالًا ثانيًا. راجع سجل العملية قبل أي قرار.");
+    } finally {
+      setCreditTrialBusy(false);
+      creditTrialLock.current=false;
     }
   };
 
@@ -543,6 +607,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
               setManual(false); setManualFamily(undefined); setManualAmount(null); setManualIndex("");
               setAmount(null); setConfirmSend(false);
               setCreditCheck(null); setCreditCheckInput(null); setCreditStageResult("");
+              setCreditPreparedJob(null); setCreditTrialAuthorized(false); setCreditTrialConfirm(false);
             }
             setPhone(next);
           }}
@@ -565,9 +630,9 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
         {isCustomer&&<Alert showIcon type="warning" message="إرسال الرصيد العادي للزبائن غير متاح حاليًا"/>}
         <Space wrap>{[100, 200, 500].map(value =>
           <Button key={value} type={amount === value ? "primary" : "default"}
-            onClick={() => {setAmount(value);setCreditCheck(null);setCreditCheckInput(null);setCreditStageResult("");}}>{currency(value)}</Button>)}</Space>
+            onClick={() => {setAmount(value);setCreditCheck(null);setCreditCheckInput(null);setCreditStageResult("");setCreditPreparedJob(null);setCreditTrialAuthorized(false);setCreditTrialConfirm(false);}}>{currency(value)}</Button>)}</Space>
         <InputNumber<number> min={1} max={100000} precision={0} value={amount}
-          onChange={value => {setAmount(value);setCreditCheck(null);setCreditCheckInput(null);setCreditStageResult("");}} style={{ width: "100%" }} size="large" placeholder="المبلغ" addonAfter="دج" />
+          onChange={value => {setAmount(value);setCreditCheck(null);setCreditCheckInput(null);setCreditStageResult("");setCreditPreparedJob(null);setCreditTrialAuthorized(false);setCreditTrialConfirm(false);}} style={{ width: "100%" }} size="large" placeholder="المبلغ" addonAfter="دج" />
         {!isCustomer&&<Space direction="vertical" style={{width:"100%"}}>
           {creditAvailability && !creditAvailability.ready && <Alert
             showIcon type={credit630OfflineReasons.has(creditAvailability.reason) ? "error" : "warning"}
@@ -582,7 +647,30 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
             <Typography.Text code dir="ltr">{`*630*${normalizePhone(phone)}*${creditCheck.distributor_account_code}*${amount}*{service_pin}#`}</Typography.Text>
             <Button block loading={creditStageBusy} disabled={creditStageBusy} onClick={() => void stageCredit630()}>تسجيل طلب 630 للمراجعة (دون إرسال)</Button>
           </>}
-          {creditStageResult && <Alert type="success" showIcon message={creditStageResult}/>}
+          {creditStageResult && <Alert type={creditTrialAttempted?"warning":"success"} showIcon message={creditStageResult}/>}
+          {creditPreparedJob && creditTrialAuthorized && !creditTrialAttempted
+            && creditPreparedJob.phone===normalizePhone(phone)
+            && creditPreparedJob.amount===amount && <>
+            <Alert type="warning" showIcon
+              message="تجربة 630 مالية حقيقية مصرح بها لهذا الطلب فقط"
+              description="الإرسال قد يخصم من حساب الموزع. لا يمكن تكراره تلقائيًا، والنتيجة تبقى قيد التحقق من الشبكة."/>
+            <Button block danger type="primary" disabled={creditTrialBusy}
+              onClick={()=>setCreditTrialConfirm(true)}>تأكيد إرسال تجريبي واحد — 630</Button>
+          </>}
+          <Modal title="تأكيد شحن مالي تجريبي واحد" open={creditTrialConfirm}
+            okText="أؤكد إرسال 630 مرة واحدة" okType="danger"
+            cancelText="إلغاء" confirmLoading={creditTrialBusy}
+            okButtonProps={{disabled:!creditTrialAuthorized || creditTrialAttempted}}
+            onCancel={()=>{if(!creditTrialBusy)setCreditTrialConfirm(false)}}
+            onOk={()=>void sendCreditTrialOnce()}>
+            <Space direction="vertical">
+              <Typography.Text strong>هذا أمر مالي حقيقي وليس مجرد مراجعة.</Typography.Text>
+              <Typography.Text>رقم المستفيد: {creditPreparedJob?.phone}</Typography.Text>
+              <Typography.Text>المبلغ: {creditPreparedJob?.amount} دج</Typography.Text>
+              <Typography.Text>حساب الموزع: {creditPreparedJob?.account}</Typography.Text>
+              <Typography.Text type="secondary">عند ضياع الرد لا تعاود الإرسال؛ النتيجة غير المؤكدة تحتاج مراجعة يدوية.</Typography.Text>
+            </Space>
+          </Modal>
           {creditCheckError && <Alert type="error" message={creditCheckError}/>}
           {creditCheck && !checkedCreditReady && !creditAvailability && !creditAvailabilityError &&
             <Alert type="warning" showIcon message={credit630Feedback(creditCheck.reason).message}
