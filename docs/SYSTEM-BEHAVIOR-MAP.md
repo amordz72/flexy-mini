@@ -1,3 +1,15 @@
+## 2026-10-17 — «الاتصالات والشبكات» administrative catalog (SOURCE ONLY)
+
+**User direction:** \`amordz72/mytool-dev\` development is PAUSED. Continue actual product work in **Flexy Mini**. Shared canonical Supabase entities/RPCs remain readable dependencies, **not** authorization to edit MyTool Dev source or create parallel catalog tables. The previous draft documentation PR in MyTool Dev is not part of this Flexy Mini release.
+
+- **[UI SOURCE]** \`src/TelecomCatalogAdmin.tsx\` + admin-only navigation in \`src/main.tsx\` add a read-only «الاتصالات والشبكات» page with two separate tabs: «كاتالوجات العروض» and «الأكواد التشغيلية». Filters: operator, offer family, execution-route SIM type, purpose (codes), and search. Offer table expands to show only its associated execution routes and distinct evidence source kinds; an offer without any route stays in the unfiltered catalog. Carrier family does not become a SIM type; Dima/Gold are not seeded or claimed executable.
+- **[OWNERSHIP / NO REBUILD]** All catalog data is loaded via existing guarded admin RPCs: \`station_connect_admin_operators\`, \`station_connect_admin_sim_types\`, \`admin_flexy_list_offer_catalog\`, \`admin_flexy_offer_execution_routes\`, \`admin_flexy_offer_source_matrix\`, \`mytool_admin_ussd_codes_list\`. UI does not read \`private\` tables directly, duplicate cards/products, write to records, run USSD, create jobs or create financial orders. Code knowledge/implementation status is displayed independently of execution permission. \`route.enabled && verified\` does NOT claim a live connected SIM or financial readiness.
+- **[PERMISSION]** Admin-only menu branch, customer menu remains services-only; RPCs enforce \`private.is_shop_admin()\` independently of the UI.
+- **[VERIFICATION LEVEL]** Source implementation and isolated regression test; GitHub PR checks and installed Android phone acceptance are separate evidence gates. No migrations, no database data changes, no network/Agent or financial tests. The user must verify displayed page and filters on the deployed PWA after merge/release; until then mark \`IMPLEMENTED / USER_CONFIRM_REQUIRED\`.
+- **[NEXT]** After mobile acceptance, decide whether editable service/family management is necessary or can be achieved through existing catalog/admin operations. Do not introduce arbitrary service catalogs or modify MyTool Dev while paused.
+
+---
+
 ## 2026-10-16 — First successful silent Sama discovery recovery (VERIFIED)
 
 At 16:30 UTC (17:30 Algeria), the active 15-minute Supabase cron initiated one nonfinancial `mobilis.offer.discovery` background job on `sama-3` / `server-2`. It completed at 16:30:32 UTC: job and discovery `success/DISCOVERY_COMPLETE`, recipient classified `PIXX`, five offers saved; one start, one reply, one release, session closed. No recipient number/PIN exposed in docs, zero background financial jobs, zero open or queued commands after. First idle-time recovery is **live-proven**. The code is tracked in [Station Connect PR #14](https://github.com/amordz72/station-connect/pull/14); Linux/Windows GitHub Actions run 38932351798 failed with no steps, so CI is NOT passed.
