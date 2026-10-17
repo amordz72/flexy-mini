@@ -6,8 +6,12 @@ type ResponseStep = { sequence: number; action: string; status: string; response
 type Operation = { job_uuid: string; phone: string; service: string; offer_name: string; amount: number | null;
   status: string; result_code: string | null; result_text: string; created_at: string; completed_at: string | null;
   responses: ResponseStep[]; total_count: number };
-const statusNames: Record<string,string> = {queued:"منتظر",claimed:"قيد المعالجة",success:"ناجحة",failed:"فشلت",review:"قيد المراجعة",unavailable:"غير متاحة"};
-const state = (value:string) => <Tag color={value==="success"?"green":value==="failed"||value==="review"?"red":"orange"}>{statusNames[value]||value}</Tag>;
+const statusNames: Record<string,string> = {
+ queued:"في الطابور",claimed:"قيد التنفيذ",success:"ناجحة",failed:"فشلت",
+ review:"نتيجة الشبكة غير مؤكدة",prepared:"لم يُرسل",unavailable:"غير متاحة"
+};
+const state = (value:string) => <Tag color={value==="prepared"?"default":
+ value==="success"?"green":value==="failed"||value==="review"?"red":"orange"}>{statusNames[value]||value}</Tag>;
 const response = (value:string) => <Typography.Text style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{value||"—"}</Typography.Text>;
 const date = (value:string) => new Date(value).toLocaleString("ar-DZ");
 

@@ -1,3 +1,15 @@
+## 2026-10-17 — Direct Mobilis Arsselli 630 admin send, no misleading preparatory REVIEW (DB VERIFIED / UI DEPLOY PENDING)
+
+**USER-REQUESTED CHANGE:** Stop displaying fake REVIEW after a fresh 632 baseline; that happened because prior button called nonfinancial `station_connect_admin_stage_arsselli_630` regardless of actual funds and never sent USSD. New same React/Ant Design `FlexyServicePage` has ONE `إرسال رصيد عادي — 630` button. It first performs the existing on-demand 632 nonfinancial balance freshness flow (configurable 6/12h cumulative ledger; wait in place for SMS if due), runs server preflight, and opens a standard confirmation modal showing real phone, amount and distributor. Only clicking modal OK executes `station_connect_admin_send_arsselli_630`. No temporary manual gate, review preparation, new UI architecture or PIN shown. Exact-user/phone/amount/source balance is reverified and locked in one SQL transaction at dispatch.
+
+**REAL states:** new job starts QUEUED → CLAIMED as the USSD session is created. UI polls admin-only `station_connect_admin_630_credit_job` for the actual network job. Review means an *actual* financial command has an unconfirmed outcome, **not** that balance was too low or a preparatory job was created. Unknown transport failure is not retryable from UI. Admin operators only, customer access and offer routes unaffected. `station_connect_admin_stage_arsselli_630` remains safely nonfinancial for previously installed clients and cannot become financial due this change.
+
+**History:** `supabase/migrations/20261017211000_flexy_recent_operations_include_direct_630.sql` installed in Supabase, extending the existing `flexy_mini_admin_recent_operations` RPC to include `mobilis.flexy.ordinary.630`; old nonfinancial `630_NETWORK_SEQUENCE_UNVERIFIED` rows surface the derived neutral status `prepared` with label `لم يُرسل` without modifying historical jobs, and live command raw remains PIN-redacted. Real review displays `نتيجة الشبكة غير مؤكدة`. No MyTool Dev modifications.
+
+**Verification levels:** PostgreSQL function definitions compiled/read back, admin read RPCs and test gate disabled; zero direct jobs/financial commands immediately after DB migration. Frontend mocked tests/guard/build PASS on branch, main Pages and physical send pending. Station test runner unavailable due infrastructure; final terminal SMS success proof unavailable until first live real operation.
+
+---
+
 ## 2026-10-17 — CUMULATIVE Arsselli balance, 6h/12h settings and automatic nonfinancial 632 (DB APPLIED)
 
 **Owner correction:** No manual station-page balance refresh, no USSD 632 before every recharge. Last network-confirmed 632 baseline is cumulative per (SIM UUID, distributor account code). Existing operational spendable function subtracts confirmed sends since baseline and all pending/review holds; ambiguous results block until reconciled. Do not duplicate the ledger, per-transaction network reads or manually alter balances.

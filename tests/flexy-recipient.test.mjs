@@ -326,65 +326,70 @@ test('PixX 50/100/500 display complete catalog names and details without startin
   await close(r);
 });
 
-test('630 credits show only server-selected distributor and stage only a nonfinancial review',async()=>{
+test('630 direct send uses server-selected distributor, and NO financial action before explicit modal OK',async()=>{
+ let moneyCalls=0;
  const db=makeDb(name=>{
-  if(name==='flexy_get_visible_offer_catalog_v2'||name==='flexy_mini_admin_sama_readiness')
-   return Promise.resolve(ok([]));
   if(name==='station_connect_admin_arsselli_630_availability')
    return Promise.resolve({data:{ready:true,reason:'READY'},error:null});
   if(name==='station_connect_admin_630_ensure_fresh_balance')
    return Promise.resolve({data:balanceReady,error:null});
   if(name==='station_connect_admin_arsselli_630_preflight')
-   return Promise.resolve({data:{
-    ready:true,reason:'FINANCIAL_EXECUTOR_NOT_YET_VERIFIED',phone:'0500000001',amount:1000,
-    distributor_account_code:'04',sim_uuid:'chosen-sim',station_uuid:'chosen-station',dispatch_enabled:false
-   },error:null});
-  if(name==='station_connect_admin_stage_arsselli_630')
-   return Promise.resolve({data:{
-    job_uuid:'review-only-job',status:'review',distributor_account_code:'04',dispatch_enabled:false
-   },error:null});
-  throw Error('unexpected RPC '+name);
+   return Promise.resolve({data:{ready:true,reason:'READY',phone:'0500000001',amount:40,
+    distributor_account_code:'04',sim_uuid:'chosen-sim',station_uuid:'chosen-station'},error:null});
+  if(name==='station_connect_admin_send_arsselli_630'){
+   moneyCalls++;
+   return Promise.resolve({data:{job_uuid:'direct-630-job-1',status:'claimed',
+    distributor_account_code:'04',dispatch_queued:true},error:null});
+  }
+  if(name==='station_connect_admin_630_credit_job')
+   return Promise.resolve({data:[{job_uuid:'direct-630-job-1',status:'claimed',result_code:'630_COMMAND_QUEUED'}],error:null});
+  return Promise.resolve(ok([]));
  });
  const r=await mount(Flexy,{db,isCustomer:false});
  const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
  await act(async()=>phone.props.onChange({target:{value:'0500000001'}}));
- const amount=r.root.findByType('amount');
- await act(async()=>amount.props.onChange(1000));
- assert.equal(r.root.findAllByType('select').length,0,'no distributor control in Flexy sale');
- assert.equal(button(r,'تسجيل طلب 630 للمراجعة (دون إرسال)'),undefined);
- await click(r,'فحص الرصيد واختيار الموزع');
- assert.ok(r.root.findAllByType('alert').some(x=>String(x.props.message).includes('04 — GTS')));
- const code=r.root.findAllByType('text').find(x=>String(x.props.children).includes('*630*0500000001*04*1000*'));
- assert.ok(code,'network template includes server account and masks PIN');
- await click(r,'تسجيل طلب 630 للمراجعة (دون إرسال)');
- assert.deepEqual(Object.keys(db.calls.find(x=>x.name==='station_connect_admin_stage_arsselli_630').args).sort(),
-  ['p_amount','p_idempotency_key','p_phone']);
- assert.equal(button(r,'تسجيل طلب 630 للمراجعة (دون إرسال)'),undefined);
- assert.equal(db.calls.some(x=>x.name.includes('create_verified_offer_execute')),false);
+ await act(async()=>r.root.findByType('amount').props.onChange(40));await flush();
+ assert.equal(r.root.findAllByType('select').length,0,'distributor chosen only by server');
+ await click(r,'إرسال رصيد عادي — 630');
+ assert.equal(moneyCalls,0,'preflight and balance are not a financial transfer');
+ const modal=r.root.findByType('modal');
+ assert.ok(String(modal.props.title).includes('شحن رصيد حقيقي'));
+ assert.ok(texts(modal).includes('04'));
+ await act(async()=>modal.props.onOk());await flush();
+ assert.equal(moneyCalls,1,'one real dispatch after affirmative confirmation');
+ const financial=db.calls.filter(x=>x.name==='station_connect_admin_send_arsselli_630');
+ assert.equal(financial.length,1);
+ assert.equal(financial[0].args.p_phone,'0500000001');
+ assert.equal(financial[0].args.p_amount,40);
+ assert.equal(financial[0].args.p_expected_distributor_account,'04');
+ assert.ok(financial[0].args.p_idempotency_key.length>8);
+ assert.equal(db.calls.some(x=>x.name==='station_connect_admin_stage_arsselli_630'),false);
+ assert.equal(db.calls.some(x=>x.name.includes('test_gate')),false);
+ assert.ok(r.root.findAllByType('alert').some(x=>String(x.props.message).includes('قيد الإرسال')||
+   String(x.props.message).includes('أُدرج أمر')));
+ const buttonSend=button(r,'إرسال رصيد عادي — 630');
+ assert.ok(buttonSend.props.disabled,'same intent cannot be sent twice from UI');
  await close(r);
 });
-
-test('changing 630 amount invalidates the previous server account decision',async()=>{
+test('change of 630 amount invalidates old account selection and modal',async()=>{
  const db=makeDb(name=>Promise.resolve(
-  name==='station_connect_admin_630_ensure_fresh_balance'
-   ?{data:balanceReady,error:null}
-   :name==='station_connect_admin_arsselli_630_availability'
-    ?{data:{ready:true,reason:'READY'},error:null}
-    :name==='station_connect_admin_arsselli_630_preflight'
-    ?{data:{ready:true,reason:'FINANCIAL_EXECUTOR_NOT_YET_VERIFIED',distributor_account_code:'05',sim_uuid:'a',station_uuid:'b'},error:null}
-    :ok([])
+  name==='station_connect_admin_630_ensure_fresh_balance'?{data:balanceReady,error:null}:
+  name==='station_connect_admin_arsselli_630_availability'?{data:{ready:true,reason:'READY'},error:null}:
+  name==='station_connect_admin_arsselli_630_preflight'
+   ?{data:{ready:true,reason:'READY',distributor_account_code:'05',sim_uuid:'a',station_uuid:'b'},error:null}
+   :ok([])
  ));
  const r=await mount(Flexy,{db,isCustomer:false});
  const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
  await act(async()=>phone.props.onChange({target:{value:'0500000001'}}));
  await act(async()=>r.root.findByType('amount').props.onChange(500));
- await click(r,'فحص الرصيد واختيار الموزع');
- assert.ok(button(r,'تسجيل طلب 630 للمراجعة (دون إرسال)'));
+ await click(r,'إرسال رصيد عادي — 630');
+ assert.ok(r.root.findByType('modal'),'confirmation only after verified distributor');
  await act(async()=>r.root.findByType('amount').props.onChange(1000));
- assert.equal(button(r,'تسجيل طلب 630 للمراجعة (دون إرسال)'),undefined);
+ assert.equal(r.root.findAllByType('modal').length,0);
+ assert.equal(db.calls.some(x=>x.name==='station_connect_admin_send_arsselli_630'),false);
  await close(r);
 });
-
 
 test('630 offline Station shows a clear connection error, not a false low balance',async()=>{
  const offline={ready:false,reason:'STATION_OFFLINE',dispatch_enabled:false};
@@ -404,8 +409,8 @@ test('630 offline Station shows a clear connection error, not a false low balanc
  assert.ok(!alerts.some(x=>String(x.props.message).includes('رصيد كافٍ')));
  assert.ok(r.root.findAllByType('tag').some(x=>texts(x).includes('Arsselli غير متصلة')));
  assert.ok(!r.root.findAllByType('tag').some(x=>texts(x).includes('Sama غير جاهزة')));
- await click(r,'فحص الرصيد واختيار الموزع');
- assert.equal(button(r,'تسجيل طلب 630 للمراجعة (دون إرسال)'),undefined);
+ await click(r,'إرسال رصيد عادي — 630');
+ assert.equal(button(r,'تأكيد الإرسال'),undefined);
  assert.equal(db.calls.some(x=>/stage_arsselli_630|create_verified_offer_execute/.test(x.name)),false);
  await close(r);
 });
@@ -441,78 +446,53 @@ test('630 reconnect state refreshes automatically but does not queue a financial
 });
 
 
-test('630 stage never offers real financial dispatch unless server arms EXACT job',async()=>{
+test('630 never dispatches if server availability is offline or blocked',async()=>{
+ let rpcCount=0;
  const db=makeDb(name=>{
   if(name==='station_connect_admin_arsselli_630_availability')
-   return Promise.resolve({data:{ready:true,reason:'READY'},error:null});
+   return Promise.resolve({data:{ready:false,reason:'STATION_OFFLINE'},error:null});
   if(name==='station_connect_admin_630_ensure_fresh_balance')
-   return Promise.resolve({data:balanceReady,error:null});
-  if(name==='station_connect_admin_arsselli_630_preflight')
-   return Promise.resolve({data:{ready:true,reason:'FINANCIAL_EXECUTOR_NOT_YET_VERIFIED',
-    distributor_account_code:'04',sim_uuid:'sim',station_uuid:'station',dispatch_enabled:false},error:null});
-  if(name==='station_connect_admin_stage_arsselli_630')
-   return Promise.resolve({data:{job_uuid:'630-prepared-unarmed',status:'review',
-    distributor_account_code:'04',dispatch_enabled:false},error:null});
-  if(name==='station_connect_admin_630_test_gate_status')
-   return Promise.resolve({data:{armed_for_this_job:false,single_use:true},error:null});
-  if(name==='station_connect_admin_dispatch_630_test_once')throw Error('MUST NEVER DISPATCH');
+   return Promise.resolve({data:{state:'blocked',ready:false,reason:'STATION_OFFLINE',financial_operation:false},error:null});
+  if(name==='station_connect_admin_send_arsselli_630')rpcCount++;
   return Promise.resolve(ok([]));
  });
  const r=await mount(Flexy,{db,isCustomer:false});
- const p=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
- await act(async()=>p.props.onChange({target:{value:'0500000001'}}));
+ const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
+ await act(async()=>phone.props.onChange({target:{value:'0500000001'}}));
  await act(async()=>r.root.findByType('amount').props.onChange(40));await flush();
- await click(r,'فحص الرصيد واختيار الموزع');
- await click(r,'تسجيل طلب 630 للمراجعة (دون إرسال)');await flush();
- assert.equal(button(r,'تأكيد إرسال تجريبي واحد — 630'),undefined);
- assert.equal(db.calls.some(x=>x.name==='station_connect_admin_dispatch_630_test_once'),false);
+ await click(r,'إرسال رصيد عادي — 630');
+ assert.equal(rpcCount,0);
+ assert.equal(r.root.findAllByType('modal').length,0);
+ assert.ok(r.root.findAllByType('alert').some(x=>String(x.props.message).includes('لا يوجد اتصال')));
  await close(r);
 });
-test('one-shot 630 only appears after exact-job server arm and cannot resend',async()=>{
- let dispatchCount=0;
+test('uncertain 630 transport error blocks a second attempt with a different key',async()=>{
+ let moneyCalls=0;
  const db=makeDb(name=>{
   if(name==='station_connect_admin_arsselli_630_availability')
    return Promise.resolve({data:{ready:true,reason:'READY'},error:null});
   if(name==='station_connect_admin_630_ensure_fresh_balance')
    return Promise.resolve({data:balanceReady,error:null});
   if(name==='station_connect_admin_arsselli_630_preflight')
-   return Promise.resolve({data:{ready:true,reason:'FINANCIAL_EXECUTOR_NOT_YET_VERIFIED',
-    distributor_account_code:'04',sim_uuid:'sim',station_uuid:'station',dispatch_enabled:false},error:null});
-  if(name==='station_connect_admin_stage_arsselli_630')
-   return Promise.resolve({data:{job_uuid:'630-specific-staged-job',status:'review',
-    distributor_account_code:'04',dispatch_enabled:false},error:null});
-  if(name==='station_connect_admin_630_test_gate_status')
-   return Promise.resolve({data:{armed_for_this_job:true,single_use:true,max_test_amount:40},error:null});
-  if(name==='station_connect_admin_dispatch_630_test_once'){
-   dispatchCount++;
-   return Promise.resolve({data:{job_uuid:'630-specific-staged-job',status:'claimed',
-    single_use:true,financial_result:'unknown'},error:null});
+   return Promise.resolve({data:{ready:true,reason:'READY',distributor_account_code:'04',sim_uuid:'sim',station_uuid:'station'},error:null});
+  if(name==='station_connect_admin_send_arsselli_630'){
+   moneyCalls++;
+   return Promise.resolve({data:null,error:{message:'request timeout'}});
   }
   return Promise.resolve(ok([]));
  });
  const r=await mount(Flexy,{db,isCustomer:false});
- const p=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
- await act(async()=>p.props.onChange({target:{value:'0500000001'}}));
+ const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
+ await act(async()=>phone.props.onChange({target:{value:'0500000001'}}));
  await act(async()=>r.root.findByType('amount').props.onChange(40));await flush();
- await click(r,'فحص الرصيد واختيار الموزع');
- await click(r,'تسجيل طلب 630 للمراجعة (دون إرسال)');await flush();
- assert.ok(button(r,'تأكيد إرسال تجريبي واحد — 630'),'arm exposes opt-in confirmation');
- assert.equal(dispatchCount,0,'arm alone never queues a job');
- await click(r,'تأكيد إرسال تجريبي واحد — 630');
- const modal=r.root.findByType('modal');
- assert.equal(dispatchCount,0,'opening modal alone never charges');
- assert.ok(texts(modal).includes('هذا أمر مالي حقيقي'));
- await act(async()=>modal.props.onOk());await flush();
- const calls=db.calls.filter(x=>x.name==='station_connect_admin_dispatch_630_test_once');
- assert.equal(calls.length,1);
- assert.deepEqual(calls[0].args,{p_job_uuid:'630-specific-staged-job',
-  p_expected_phone:'0500000001',p_expected_amount:40});
- assert.equal(dispatchCount,1);
- assert.equal(button(r,'تأكيد إرسال تجريبي واحد — 630'),undefined);
- assert.ok(r.root.findAllByType('alert').some(x=>String(x.props.message).includes('النتيجة المالية غير مؤكدة')));
+ await click(r,'إرسال رصيد عادي — 630');
+ await act(async()=>r.root.findByType('modal').props.onOk());await flush();
+ assert.equal(moneyCalls,1);
+ assert.ok(button(r,'إرسال رصيد عادي — 630').props.disabled);
+ assert.ok(r.root.findAllByType('alert').some(x=>String(x.props.message).includes('غير مؤكدة')));
+ assert.equal(db.calls.some(x=>x.name==='station_connect_admin_stage_arsselli_630'),false);
  await close(r);
 });
-
 
 test('630 automatically waits for a 632 balance read within the same credit screen',async()=>{
  let checks=0;
@@ -534,10 +514,10 @@ test('630 automatically waits for a 632 balance read within the same credit scre
  const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
  await act(async()=>phone.props.onChange({target:{value:'0500000001'}}));
  await act(async()=>r.root.findByType('amount').props.onChange(40));await flush();
- await click(r,'فحص الرصيد واختيار الموزع');
+ await click(r,'إرسال رصيد عادي — 630');
  assert.equal(checks,1);
- assert.ok(r.root.findAllByType('alert').some(x=>String(x.props.message).includes('جاري التحديث التلقائي لرصيد أرسلي')));
- assert.equal(button(r,'تسجيل طلب 630 للمراجعة (دون إرسال)'),undefined);
+ assert.ok(r.root.findAllByType('alert').some(x=>String(x.props.message).includes('جاري تحديث رصيد أرسلي تلقائيًا')));
+ assert.equal(button(r,'تأكيد الإرسال'),undefined);
  assert.equal(db.calls.some(x=>x.name==='station_connect_admin_arsselli_630_preflight'),false);
  const intervals=[...timers.values()];
  assert.equal(intervals.length,2,'one readonly health timer and one pending balance timer');
@@ -563,12 +543,12 @@ test('new confirmed 632 SMS resumes 630 preflight automatically without second b
  const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
  await act(async()=>phone.props.onChange({target:{value:'0500000001'}}));
  await act(async()=>r.root.findByType('amount').props.onChange(40));await flush();
- await click(r,'فحص الرصيد واختيار الموزع');
+ await click(r,'إرسال رصيد عادي — 630');
  confirmed=true;
  await act(async()=>{for(const tick of [...timers.values()])await tick();});await flush();
  assert.ok(r.root.findAllByType('alert').some(x=>String(x.props.message).includes('04 — GTS')));
- assert.ok(button(r,'تسجيل طلب 630 للمراجعة (دون إرسال)'));
- assert.ok(!r.root.findAllByType('alert').some(x=>String(x.props.message).includes('جاري التحديث التلقائي لرصيد أرسلي')));
+ assert.ok(r.root.findAllByType('modal').some(x=>String(x.props.title).includes('شحن رصيد حقيقي')),'recovered balance opens the confirmation modal automatically');
+ assert.ok(!r.root.findAllByType('alert').some(x=>String(x.props.message).includes('جاري تحديث رصيد أرسلي تلقائيًا')));
  assert.equal(db.calls.filter(x=>x.name==='station_connect_admin_arsselli_630_preflight').length,1);
  assert.equal(db.calls.some(x=>x.name==='station_connect_admin_stage_arsselli_630'),false);
  await close(r);
@@ -584,11 +564,11 @@ test('change recipient cancels pending 632 results for old recipient',async()=>{
  const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
  await act(async()=>phone.props.onChange({target:{value:'0500000001'}}));
  await act(async()=>r.root.findByType('amount').props.onChange(40));await flush();
- await click(r,'فحص الرصيد واختيار الموزع');
+ await click(r,'إرسال رصيد عادي — 630');
  await act(async()=>phone.props.onChange({target:{value:'0500000002'}}));await flush();
  confirmed=true;
  await act(async()=>{for(const tick of [...timers.values()])await tick();});await flush();
- assert.equal(button(r,'تسجيل طلب 630 للمراجعة (دون إرسال)'),undefined);
+ assert.equal(button(r,'تأكيد الإرسال'),undefined);
  assert.equal(db.calls.some(x=>x.name==='station_connect_admin_arsselli_630_preflight'),false);
  await close(r);
 });
