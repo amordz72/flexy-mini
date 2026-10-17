@@ -127,6 +127,25 @@ const arsselliAccounts: Record<string,string> = {
   "01": "POSTE", "02": "ASSILOU", "03": "DATA", "04": "GTS", "05": "MOBILIS"
 };
 
+
+type Credit630Pending={key:string;startedAt:number;jobUuid?:string};
+const credit630PendingPrefix="flexy_mini_pending_credit_630_v1:";
+const readCredit630Pending=(uid:string):Credit630Pending|null=>{
+  try{
+    const p=JSON.parse(window.localStorage.getItem(credit630PendingPrefix+uid)||"null");
+    return p && typeof p.key==="string" && p.key.startsWith("direct-630:")
+      && typeof p.startedAt==="number" && p.startedAt>0
+      && (p.jobUuid===undefined ||
+        (typeof p.jobUuid==="string" && /^[0-9a-f-]{36}$/i.test(p.jobUuid)))
+      ? p as Credit630Pending:null;
+  }catch{return null;}
+};
+const saveCredit630Pending=(uid:string,p:Credit630Pending|null)=>{
+  try{
+    if(p)window.localStorage.setItem(credit630PendingPrefix+uid,JSON.stringify(p));
+    else window.localStorage.removeItem(credit630PendingPrefix+uid);
+  }catch{/* Browser storage may be restricted; backend idempotency remains. */}
+};
 const pendingKey = "flexy_mini_admin_pending_sama_v1";
 const readPending = (): PendingRequest | null => {
   try {
@@ -197,6 +216,47 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
   const creditSendIntent = useRef(false);
   const creditDirectLock = useRef(false);
   const creditRequestKey = useRef<string|null>(null);
+  const [creditRestoring,setCreditRestoring]=useState(!isCustomer);
+  const creditOwnerId=useRef<string|null>(null);
+  const credit630Pending=useRef<Credit630Pending|null>(null);
+  const [creditPendingActive,setCreditPendingActive]=useState(false);
+  const keepCreditPending=(p:Credit630Pending|null)=>{
+    credit630Pending.current=p;
+    setCreditPendingActive(Boolean(p));
+    if(creditOwnerId.current)saveCredit630Pending(creditOwnerId.current,p);
+  };
+  // Restore an existing job only. Never replay USSD on reload.
+  // Persistence is owner-scoped and stores no phone, amount or service PIN.
+  useEffect(()=>{
+    if(!db || isCustomer){setCreditRestoring(false);return;}
+    let active=true;
+    const restore=async()=>{
+      try{
+        const {data,error}=await db.auth.getUser();
+        if(error || !data?.user?.id)throw Error("AUTH_REQUIRED");
+        if(!active)return;
+        creditOwnerId.current=data.user.id;
+        const prior=readCredit630Pending(data.user.id);
+        if(prior){
+          credit630Pending.current=prior;
+          setCreditPendingActive(true);
+          creditRequestKey.current=prior.key;
+          setCreditSendAttempted(true);
+          setCreditTransferStatus("unknown");
+          if(prior.jobUuid){
+            setCreditDirectJobUuid(prior.jobUuid);
+            setCreditStageResult("جار استرجاع حالة عملية 630 السابقة من السيرفر بلا إرسال جديد...");
+          }else{
+            setCreditStageResult("هناك محاولة 630 سابقة انقطع ردها قبل استلام مرجع العملية. قد يكون الشحن بدأ؛ لا تكرر الإرسال.");
+          }
+        }
+      }catch{
+        if(active)setCreditCheckError("تعذر التحقق من جلسة الإدارة؛ يرجى إعادة الدخول قبل الإرسال المالي.");
+      }finally{if(active)setCreditRestoring(false);}
+    };
+    void restore();
+    return()=>{active=false;};
+  },[db,isCustomer]);
   const [stationUuid, setStationUuid] = useState<string | null>(null);
   const [stationName, setStationName] = useState("");
   const [stationBusy, setStationBusy] = useState(false);
