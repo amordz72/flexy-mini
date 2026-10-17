@@ -411,6 +411,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
       || !validPhone(recipient) || !amount || !Number.isInteger(amount)
       || amount<40 || amount>50000
       || creditStageBusy || creditSendAttempted || creditBalanceWait
+      || creditRestoring || credit630Pending.current || !creditOwnerId.current
       || creditDirectLock.current) return;
     creditSendIntent.current=true;
     setCreditCheckError("");
@@ -427,6 +428,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
     const selectedAccount=creditCheck?.distributor_account_code;
     if (!db || isCustomer || mode!=="credit" || !checkedCreditReady
       || creditDirectLock.current || creditStageBusy || creditSendAttempted
+      || creditRestoring || credit630Pending.current || !creditOwnerId.current
       || !validPhone(recipient) || !amount || amount<40 || amount>50000
       || !selectedAccount) return;
     creditDirectLock.current=true;
@@ -436,6 +438,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
     setCreditCheckError("");
     const key=creditRequestKey.current || "direct-630:"+crypto.randomUUID();
     creditRequestKey.current=key;
+    keepCreditPending({key,startedAt:Date.now()});
     try {
       const {data,error}=await db.rpc("station_connect_admin_send_arsselli_630",{
         p_phone:recipient,p_amount:amount,p_idempotency_key:key,
@@ -449,6 +452,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
       if (!job?.job_uuid || job.dispatch_queued!==true
         || job.distributor_account_code!==selectedAccount)
         throw new Error("630_DISPATCH_RESULT_UNKNOWN");
+      keepCreditPending({key,startedAt:credit630Pending.current?.startedAt||Date.now(),jobUuid:job.job_uuid});
       setCreditDirectJobUuid(job.job_uuid);
       setCreditTransferStatus("claimed");
       setCreditStageResult("أُدرج أمر 630 للإرسال عبر المحطة. ننتظر رد الشبكة؛ لم يُثبت وصول الرصيد بعد.");
@@ -482,6 +486,10 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
         setCreditTransferStatus(status);
         if(status==="success") {
           setCreditStageResult("أكدت الشبكة نجاح شحن 630. المرجع: "+creditDirectJobUuid);
+          keepCreditPending(null);
+          creditRequestKey.current=null;
+          setCreditSendAttempted(false);
+          setCreditDirectJobUuid(null);
           refreshHistory();
         } else if(status==="review") {
           setCreditStageResult("بدأ إرسال 630 لكن نتيجته المالية لم تتأكد من الشبكة/SMS. لا تعاود الشحن. المرجع: "+creditDirectJobUuid);
@@ -801,7 +809,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
           size="large" dir="ltr" inputMode="tel" autoComplete="tel"
           aria-label="رقم الهاتف المراد شحنه"
           placeholder="0XXXXXXXXX" value={phone}
-          maxLength={20} disabled={sendBusy}
+          maxLength={20} disabled={sendBusy || creditPendingActive}
           prefix={<PhoneOutlined />}
           onChange={event => {
             const next = normalizePhone(event.target.value);
@@ -811,9 +819,12 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
               setAmount(null); setConfirmSend(false);
               setCreditCheck(null); setCreditCheckInput(null); setCreditStageResult("");
               ++creditBalanceRequestSerial.current; setCreditBalanceWait(null); setCreditBalanceMessage("");
-              creditSendIntent.current=false; creditRequestKey.current=null;
-              setCreditDirectConfirm(false); setCreditSendAttempted(false);
-              setCreditDirectJobUuid(null); setCreditTransferStatus("");
+              creditSendIntent.current=false;
+              setCreditDirectConfirm(false);
+              if(!credit630Pending.current){
+                creditRequestKey.current=null; setCreditSendAttempted(false);
+                setCreditDirectJobUuid(null); setCreditTransferStatus("");
+              }
             }
             setPhone(next);
           }}
@@ -836,9 +847,9 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
         {isCustomer&&<Alert showIcon type="warning" message="إرسال الرصيد العادي للزبائن غير متاح حاليًا"/>}
         <Space wrap>{[100, 200, 500].map(value =>
           <Button key={value} type={amount === value ? "primary" : "default"}
-            onClick={() => {++creditBalanceRequestSerial.current;setCreditBalanceWait(null);setCreditBalanceMessage("");setAmount(value);setCreditCheck(null);setCreditCheckInput(null);setCreditStageResult("");creditSendIntent.current=false;creditRequestKey.current=null;setCreditDirectConfirm(false);setCreditSendAttempted(false);setCreditDirectJobUuid(null);setCreditTransferStatus("");}}>{currency(value)}</Button>)}</Space>
-        <InputNumber<number> min={40} max={50000} precision={0} value={amount}
-          onChange={value => {++creditBalanceRequestSerial.current;setCreditBalanceWait(null);setCreditBalanceMessage("");setAmount(value);setCreditCheck(null);setCreditCheckInput(null);setCreditStageResult("");creditSendIntent.current=false;creditRequestKey.current=null;setCreditDirectConfirm(false);setCreditSendAttempted(false);setCreditDirectJobUuid(null);setCreditTransferStatus("");}} style={{ width: "100%" }} size="large" placeholder="المبلغ" addonAfter="دج" />
+            onClick={() => {++creditBalanceRequestSerial.current;setCreditBalanceWait(null);setCreditBalanceMessage("");setAmount(value);setCreditCheck(null);setCreditCheckInput(null);if(!credit630Pending.current)setCreditStageResult("");creditSendIntent.current=false;setCreditDirectConfirm(false);if(!credit630Pending.current){creditRequestKey.current=null;setCreditSendAttempted(false);setCreditDirectJobUuid(null);setCreditTransferStatus("");}}}>{currency(value)}</Button>)}</Space>
+        <InputNumber<number> min={40} max={50000} precision={0} disabled={creditPendingActive} value={amount}
+          onChange={value => {++creditBalanceRequestSerial.current;setCreditBalanceWait(null);setCreditBalanceMessage("");setAmount(value);setCreditCheck(null);setCreditCheckInput(null);if(!credit630Pending.current)setCreditStageResult("");creditSendIntent.current=false;setCreditDirectConfirm(false);if(!credit630Pending.current){creditRequestKey.current=null;setCreditSendAttempted(false);setCreditDirectJobUuid(null);setCreditTransferStatus("");}}} style={{ width: "100%" }} size="large" placeholder="المبلغ" addonAfter="دج" />
         {!isCustomer&&<Space direction="vertical" style={{width:"100%"}}>
           {creditAvailability && !creditAvailability.ready && !creditBalanceWait && <Alert
             showIcon type={credit630OfflineReasons.has(creditAvailability.reason) ? "error" : "warning"}
@@ -848,7 +859,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
           <Alert type="info" showIcon message="رصيد عادي 630 — إرسال مباشر" description="البرنامج يختار الموزع ويتأكد من الرصيد تلقائيًا، ثم يرسل أمر الشحن إلى الشبكة بعد تأكيد الرقم والمبلغ. لا ينشئ طلب مراجعة تحضيريًا."/>
           <Button block type="primary"
             loading={creditCheckBusy || Boolean(creditBalanceWait) || creditStageBusy}
-            disabled={Boolean(creditBalanceWait) || creditSendAttempted
+            disabled={Boolean(creditBalanceWait) || creditSendAttempted || creditRestoring || creditPendingActive
               || creditCheckBusy || creditStageBusy || !validPhone(normalizePhone(phone))
               || !amount || amount<40 || amount>50000 || !Number.isInteger(amount)}
             onClick={()=>void beginCredit630Send()}>إرسال رصيد عادي — 630</Button>
@@ -860,6 +871,8 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
             message={"الموزّع الجاهز: "+creditCheck.distributor_account_code+" — "+
               (arsselliAccounts[creditCheck.distributor_account_code || ""] || "غير معروف")}
             description="سيُعاد فحص الشريحة ورصيد الموزع في السيرفر لحظة تأكيد الإرسال."/>}
+          {creditRestoring && <Alert showIcon type="info" message="جار استرجاع حالة أي عملية شحن سابقة..."/>}
+          {creditPendingActive && !creditStageResult && <Alert showIcon type="warning" message="هناك عملية 630 سابقة غير محسومة. لن نكررها تلقائيًا."/>}
           {creditStageResult && <Alert showIcon
             type={creditTransferStatus==="success"?"success":
               ["review","unknown","failed"].includes(creditTransferStatus)?"warning":"info"}
