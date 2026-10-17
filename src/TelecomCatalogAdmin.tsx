@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Button, Card, Empty, Input, Select, Space, Table, Tabs, Tag, Typography } from "antd";
+import { Alert, Button, Card, Empty, Input, InputNumber, Modal, Select, Space, Table, Tabs, Tag, Typography, message } from "antd";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 type Operator = { operator_key: string; display_name: string; enabled: boolean };
@@ -8,6 +8,7 @@ type Offer = {
   offer_uuid: string; operator: string; group_code: string; family: string;
   amount: number; display_name: string; active: boolean; execution_enabled: boolean;
   admin_visibility: string; customer_visibility: string;
+  sort_index: number; updated_at: string;
 };
 type Route = {
   route_uuid: string; offer_uuid: string; sim_type: string; execution_method: string;
@@ -31,9 +32,10 @@ const labelFor = (key: string, operators: Operator[]) =>
 const unique = (values: string[]) => [...new Set(values)].sort((a, b) => a.localeCompare(b, "ar"));
 
 /**
- * Admin-only, read-only overview of canonical operator/offer/route/code records.
+ * Admin-only overview of canonical operator/offer/route/code records.
  * Product prices, customer cards, modems and individual SIMs are deliberately not copied here.
- * These RPCs perform their own shop-admin checks; no financial or USSD command is sent.
+ * The only mutation is a confirmed presentation-order RPC with its own admin check.
+ * No financial or USSD command is sent.
  */
 export default function TelecomCatalogAdmin({ db }: { db: SupabaseClient }) {
   const [data, setData] = useState<CatalogData>(empty);
@@ -46,6 +48,9 @@ export default function TelecomCatalogAdmin({ db }: { db: SupabaseClient }) {
   const [simType, setSimType] = useState("all");
   const [search, setSearch] = useState("");
   const [purpose, setPurpose] = useState("all");
+  const [editingOffer, setEditingOffer] = useState<Offer | null>(null);
+  const [targetPosition, setTargetPosition] = useState<number | null>(null);
+  const [savingOrder, setSavingOrder] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -109,6 +114,43 @@ export default function TelecomCatalogAdmin({ db }: { db: SupabaseClient }) {
     .map(item => ({ value: item.sim_type, label: item.display_name })),
   [data.simTypes, operator]);
 
+  const familyOrdered = (offer: Offer) => data.offers
+    .filter(item => item.operator === offer.operator && item.family === offer.family)
+    .sort((a, b) => (a.sort_index ?? 999999) - (b.sort_index ?? 999999)
+      || a.amount - b.amount || a.offer_uuid.localeCompare(b.offer_uuid));
+  const viewPosition = (offer: Offer) => familyOrdered(offer)
+    .findIndex(item => item.offer_uuid === offer.offer_uuid) + 1;
+
+  const openViewEdit = (offer: Offer) => {
+    setEditingOffer(offer);
+    setTargetPosition(viewPosition(offer));
+  };
+
+  const saveViewOrder = async () => {
+    if (!editingOffer || targetPosition === null || !Number.isInteger(targetPosition) ||
+      targetPosition < 1 || targetPosition > familyOrdered(editingOffer).length) return;
+    setSavingOrder(true);
+    try {
+      const { error: saveError } = await db.rpc("flexy_mini_admin_offer_view_reorder", {
+        p_offer_uuid: editingOffer.offer_uuid,
+        p_target_position: targetPosition,
+        p_expected_updated_at: editingOffer.updated_at,
+      });
+      if (saveError) throw new Error(saveError.message);
+      setEditingOffer(null);
+      setTargetPosition(null);
+      setRefresh(value => value + 1);
+      message.success("تم حفظ View Index وترتيب عروض العائلة");
+    } catch (cause) {
+      const reason = cause instanceof Error ? cause.message : "خطأ غير معروف";
+      message.error(reason.includes("VIEW_ORDER_STALE_RELOAD")
+        ? "تغيّر ترتيب العروض. حدّث القائمة وحاول مجددًا."
+        : "فشل حفظ ترتيب العرض: " + reason);
+    } finally {
+      setSavingOrder(false);
+    }
+  };
+
   const filteredOffers = useMemo(() => data.offers.filter(offer => {
     if (operator !== "all" && offer.operator !== operator) return false;
     if (family !== "all" && offer.family !== family) return false;
@@ -117,7 +159,10 @@ export default function TelecomCatalogAdmin({ db }: { db: SupabaseClient }) {
     const query = search.trim().toLocaleLowerCase();
     return !query || [offer.display_name, offer.family, offer.group_code, String(offer.amount)]
       .some(value => String(value || "").toLocaleLowerCase().includes(query));
-  }), [data.offers, data.routes, operator, family, simType, search]);
+  }).sort((a, b) => a.operator.localeCompare(b.operator)
+    || a.family.localeCompare(b.family)
+    || (a.sort_index ?? 999999) - (b.sort_index ?? 999999)
+    || a.amount - b.amount), [data.offers, data.routes, operator, family, simType, search]);
 
   const filteredCodes = useMemo(() => data.codes.filter(code => {
     if (operator !== "all" && code.operator_key !== operator) return false;
@@ -196,8 +241,11 @@ export default function TelecomCatalogAdmin({ db }: { db: SupabaseClient }) {
               { title: "القيمة", key: "amount", render: (_, offer) => String(offer.amount) + " دج" },
               { title: "حالة العرض", key: "active", render: (_, offer) =>
                 <Tag color={offer.active ? "green" : "default"}>{offer.active ? "نشط" : "معطل"}</Tag> },
-              { title: "المسارات", key: "routes", render: (_, offer) =>
-                data.routes.filter(route => route.offer_uuid === offer.offer_uuid).length },
+              { title: "View Index", key: "view", render: (_, offer) => <Space size="small">
+                <Typography.Text>{viewPosition(offer)}</Typography.Text>
+                <Button size="small" onClick={() => openViewEdit(offer)}
+                  aria-label={"تعديل ترتيب ظهور " + offer.display_name}>تعديل</Button>
+              </Space> },
             ]}/>
           <Typography.Text type="secondary">
             عرض واحد لكل هوية تجارية؛ الشريحة ومسار التنفيذ منفصلان. غياب المسار لا يحذف العرض.
@@ -231,6 +279,26 @@ export default function TelecomCatalogAdmin({ db }: { db: SupabaseClient }) {
             description="نطاق تعريف الكود ليس إثباتًا لربطه بشريحة فعلية. الأكواد هنا للعرض الإداري فقط، دون اختبار شبكة أو تنفيذ USSD."/>
         </Space> },
       ]}/>
+      <Modal title="تأكيد تعديل View Index" open={Boolean(editingOffer)}
+        okText="تأكيد الحفظ" cancelText="إلغاء" confirmLoading={savingOrder}
+        okButtonProps={{ disabled: !editingOffer || targetPosition === null ||
+          !Number.isInteger(targetPosition) || targetPosition < 1 ||
+          targetPosition > (editingOffer ? familyOrdered(editingOffer).length : 0) }}
+        onOk={() => void saveViewOrder()}
+        onCancel={() => { if (!savingOrder) { setEditingOffer(null); setTargetPosition(null); } }}>
+        {editingOffer && <Space direction="vertical" size="middle" style={{width:"100%"}}>
+          <Typography.Text strong>{editingOffer.display_name} — {editingOffer.family}</Typography.Text>
+          <Typography.Text>الترتيب الحالي: {viewPosition(editingOffer)}</Typography.Text>
+          <Space wrap>
+            <Typography.Text>الترتيب الجديد:</Typography.Text>
+            <InputNumber aria-label="View Index الجديد" inputMode="numeric" min={1}
+              max={familyOrdered(editingOffer).length} precision={0}
+              value={targetPosition} onChange={setTargetPosition}/>
+          </Space>
+          <Alert type="info" showIcon message="سيُعاد ترتيب عروض نفس المتعامل والعائلة فقط."
+            description="لن يتغير Network Index ولا نوع الشريحة أو مسار التنفيذ، ولن تُرسل أي عملية فليكسي."/>
+        </Space>}
+      </Modal>
     </Space>
   </Card>;
 }
