@@ -1,3 +1,12 @@
+## 2026-10-17 — Arsselli 630 precise connectivity messaging (SOURCE / PHONE CHECK REQUIRED)
+
+- **Owner correction:** When ordinary-credit 630 preflight has no eligible account because Arsselli Station Connect is offline, the UI must state **"لا يوجد اتصال بمحطة Arsselli"** rather than assuming insufficient distributor balance. A Sama offline warning does not explain Arsselli credit readiness.
+- **New Station Connect read-only admin RPC:** `station_connect_admin_arsselli_630_availability(p_amount)`, uses existing 90-second station/modem/SIM health and account selector. Structured reasons differentiate station offline, modem offline, SIM stale, approval/PIN missing, unknown/review/disabled/insufficient distributor balance. Existing 630 preflight reuses the same status.
+- **Actual UI behavior:** same `FlexyServicePage` / Ant Design card and common layout; while editing a valid 630 amount, check readiness automatically, refresh every 30 seconds, show the relevant Arabic tag and alert, and require a fresh eligible source before exposing review-only staging. Offers mode keeps its existing Sama indicator. A client↔server network exception is a distinct "cannot verify" state, **not** proof the PC/Agent is offline.
+- **Safety:** read-only inspection never dispatches USSD; `630` stage still returns `review/dispatch_enabled=false`, `696` remains separately governed. No balances, accounts, customer policies or shared MyTool tables changed. QA/CI, production deployment and Android PWA acceptance are separate evidence levels.
+
+---
+
 ## 2026-10-17 — User confirmed 630 vs 696, settings-based selection (IN PROGRESS)
 
 **User confirmed actual USSD syntaxes from field evidence:** Mobilis Arsselli `630` is **ordinary credit** and requires a distributor account (`*630*{phone}*{distributor}*{amount}*{pin}#`, known minimum 40 DZD); Mobilis Arsselli `696` is **activated offer purchase** (`*696*1*{phone}*{distributor}*{amount}*{pin}#`); Mobilis Sama uses `665` for activated offers. Prior user-provided network evidence establishes *code syntax*, not financial success of the Flexy Mini/Station Connect orchestration. Do not conflate them or force default distributor 04 for all operations.
