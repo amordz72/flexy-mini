@@ -1,3 +1,11 @@
+## 2026-10-18 — Reconciled 630 without reply(1) must clear stale browser lock (frontend source fix)
+
+**Observed bug:** after an admin-owned Mobilis ordinary 630 request was proven `630_CONFIRMATION_NOT_SENT` by server command/session evidence (closed session, **zero ussd_reply**), Supabase updated its financial job from REVIEW to FAILED and released its cumulative 632 hold. However the currently installed Flexy Mini client kept `creditSendAttempted=true` for every FAILED, even for *verified never-confirmed* 630 attempts. The local-storage metadata was cleared for terminal failures but the in-memory disabled send button remained until manual reload; this was an **incorrect UI-only lock**, not an unsettled financial debit.
+
+**Narrow fix:** when the existing admin-only `station_connect_admin_630_credit_job` read RPC returns `status=failed` AND `result_code IN ('630_CONFIRMATION_NOT_SENT','630_CONFIRMATION_NOT_SENT_NO_DEBIT_632')`, clear only the browser click lock and idempotency-key reference, and display an explicit Arabic **no 1 was sent; operation ended without recharge** message. All unknown, REVIEW and other failed results still follow their existing no-repeat behavior. No auto resend, no financial operation, no new network query or database mutation. Existing server-side idempotency/holds and user modal remain mandatory for any separately authorized new transaction. Backend Edge v24 remains unpatched until Station Connect PR #22 is verified and deployed; do NOT claim real ordinary 630 works just because the frontend lock was removed.
+
+---
+
 ## 2026-10-17 — 630 page-reload recovery without a second financial send (PR #41)
 
 **Problem found in direct-630 React source:** the request idempotency key, job UUID and in-progress send lock lived in React refs/state only. A lost HTTP reply or page reload could discard that evidence, and selecting the *same* amount again reset the lock. This is a browser-recovery gap, NOT evidence of a successful or failed financial transaction.
