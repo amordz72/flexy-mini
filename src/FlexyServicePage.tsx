@@ -785,41 +785,37 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
             message={credit630Feedback(creditAvailability.reason).message}
             description={credit630Feedback(creditAvailability.reason).description}/>}
           {creditAvailabilityError && <Alert showIcon type="warning" message={creditAvailabilityError}/>}
-          <Alert type="info" showIcon message="أرسلي 630 — اختيار الموزع من السيرفر" description="السيرفر يختار الحساب حسب ترتيب الإدارة والرصيد المتاح، وليس الـAgent. هذا المسار يسجل طلب مراجعة فقط، ولا يرسل رصيدًا ماليًا."/>
-          <Button block loading={creditCheckBusy || Boolean(creditBalanceWait)}
-            disabled={Boolean(creditBalanceWait)}
-            onClick={() => void checkCredit630()}>فحص الرصيد واختيار الموزع</Button>
+          <Alert type="info" showIcon message="رصيد عادي 630 — إرسال مباشر" description="البرنامج يختار الموزع ويتأكد من الرصيد تلقائيًا، ثم يرسل أمر الشحن إلى الشبكة بعد تأكيد الرقم والمبلغ. لا ينشئ طلب مراجعة تحضيريًا."/>
+          <Button block type="primary"
+            loading={creditCheckBusy || Boolean(creditBalanceWait) || creditStageBusy}
+            disabled={Boolean(creditBalanceWait) || creditSendAttempted
+              || creditCheckBusy || creditStageBusy || !validPhone(normalizePhone(phone))
+              || !amount || amount<40 || amount>50000 || !Number.isInteger(amount)}
+            onClick={()=>void beginCredit630Send()}>إرسال رصيد عادي — 630</Button>
           {creditBalanceWait && <Alert type="info" showIcon
-            message="جاري التحديث التلقائي لرصيد أرسلي"
-            description={creditBalanceMessage || "انتظر حوالي دقيقة؛ نقرأ الرصيد ثم نكمل اختيار الموزع وحدنا."}/>}
-          {checkedCreditReady && creditCheck && <>
-            <Alert type="success" showIcon message={`الموزع المختار: ${creditCheck.distributor_account_code} — ${arsselliAccounts[creditCheck.distributor_account_code || ""] || "غير معروف"}`} description="تم تحديد الموزع والشريحة من السيرفر؛ القرار قد يتغير عند تسجيل الطلب إذا تغير الرصيد."/>
-            <Typography.Text strong>معاينة أمر 630 — دون إظهار PIN الحقيقي</Typography.Text>
-            <Typography.Text code dir="ltr">{`*630*${normalizePhone(phone)}*${creditCheck.distributor_account_code}*${amount}*{service_pin}#`}</Typography.Text>
-            <Button block loading={creditStageBusy} disabled={creditStageBusy} onClick={() => void stageCredit630()}>تسجيل طلب 630 للمراجعة (دون إرسال)</Button>
-          </>}
-          {creditStageResult && <Alert type={creditTrialAttempted?"warning":"success"} showIcon message={creditStageResult}/>}
-          {creditPreparedJob && creditTrialAuthorized && !creditTrialAttempted
-            && creditPreparedJob.phone===normalizePhone(phone)
-            && creditPreparedJob.amount===amount && <>
-            <Alert type="warning" showIcon
-              message="تجربة 630 مالية حقيقية مصرح بها لهذا الطلب فقط"
-              description="الإرسال قد يخصم من حساب الموزع. لا يمكن تكراره تلقائيًا، والنتيجة تبقى قيد التحقق من الشبكة."/>
-            <Button block danger type="primary" disabled={creditTrialBusy}
-              onClick={()=>setCreditTrialConfirm(true)}>تأكيد إرسال تجريبي واحد — 630</Button>
-          </>}
-          <Modal title="تأكيد شحن مالي تجريبي واحد" open={creditTrialConfirm}
-            okText="أؤكد إرسال 630 مرة واحدة" okType="danger"
-            cancelText="إلغاء" confirmLoading={creditTrialBusy}
-            okButtonProps={{disabled:!creditTrialAuthorized || creditTrialAttempted}}
-            onCancel={()=>{if(!creditTrialBusy)setCreditTrialConfirm(false)}}
-            onOk={()=>void sendCreditTrialOnce()}>
+            message="جاري تحديث رصيد أرسلي تلقائيًا"
+            description={creditBalanceMessage || "انتظر قليلًا؛ بعد وصول SMS نكمل اختيار الموزع دون خطوات يدوية."}/>}
+          {checkedCreditReady && creditCheck && !creditSendAttempted && <Alert
+            type="success" showIcon
+            message={"الموزّع الجاهز: "+creditCheck.distributor_account_code+" — "+
+              (arsselliAccounts[creditCheck.distributor_account_code || ""] || "غير معروف")}
+            description="سيُعاد فحص الشريحة ورصيد الموزع في السيرفر لحظة تأكيد الإرسال."/>}
+          {creditStageResult && <Alert showIcon
+            type={creditTransferStatus==="success"?"success":
+              ["review","unknown","failed"].includes(creditTransferStatus)?"warning":"info"}
+            message={creditStageResult}/>}
+          <Modal title="تأكيد شحن رصيد حقيقي — 630" open={creditDirectConfirm}
+            okText="تأكيد الإرسال" cancelText="إلغاء"
+            confirmLoading={creditStageBusy}
+            okButtonProps={{disabled:creditSendAttempted || !checkedCreditReady || creditStageBusy}}
+            onCancel={()=>{creditSendIntent.current=false;setCreditDirectConfirm(false);}}
+            onOk={()=>void confirmCredit630Send()}>
             <Space direction="vertical">
-              <Typography.Text strong>هذا أمر مالي حقيقي وليس مجرد مراجعة.</Typography.Text>
-              <Typography.Text>رقم المستفيد: {creditPreparedJob?.phone}</Typography.Text>
-              <Typography.Text>المبلغ: {creditPreparedJob?.amount} دج</Typography.Text>
-              <Typography.Text>حساب الموزع: {creditPreparedJob?.account}</Typography.Text>
-              <Typography.Text type="secondary">عند ضياع الرد لا تعاود الإرسال؛ النتيجة غير المؤكدة تحتاج مراجعة يدوية.</Typography.Text>
+              <Typography.Text strong>سيُرسل هذا الرصيد إلى شبكة موبيليس فعلًا.</Typography.Text>
+              <Typography.Text>المستفيد: <bdi dir="ltr">{normalizePhone(phone)}</bdi></Typography.Text>
+              <Typography.Text>المبلغ: {amount} دج</Typography.Text>
+              <Typography.Text>حساب الموزع: {creditCheck?.distributor_account_code} — {arsselliAccounts[creditCheck?.distributor_account_code||""]||""}</Typography.Text>
+              <Typography.Text type="secondary">إذا ضاع رد الشبكة لا نعيد الشحن تلقائيًا؛ نراجع العملية نفسها.</Typography.Text>
             </Space>
           </Modal>
           {creditCheckError && <Alert type="error" message={creditCheckError}/>}
