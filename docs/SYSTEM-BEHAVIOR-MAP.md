@@ -1,3 +1,13 @@
+## 2026-10-17 — 630 page-reload recovery without a second financial send (PR #41)
+
+**Problem found in direct-630 React source:** the request idempotency key, job UUID and in-progress send lock lived in React refs/state only. A lost HTTP reply or page reload could discard that evidence, and selecting the *same* amount again reset the lock. This is a browser-recovery gap, NOT evidence of a successful or failed financial transaction.
+
+**Source fix:** existing `src/FlexyServicePage.tsx` now persists the exact admin-intended recipient, amount, distributor, idempotency key and (once returned) job UUID to bounded browser storage before the financial RPC. Reload restores the same job and uses only the existing admin-only `station_connect_admin_630_credit_job` **read RPC**. An unresolved previous request with the same phone + amount is not silently issued again. Selecting an unchanged amount does not clear the lock. Stored recovery metadata contains no PIN or USSD code; standard admin-side role gates remain server-owned. `success`/terminal `failed` clear stored pending metadata; `review`/unknown stays for investigation. No new DB tables, RPCs, other UI system, Agent business logic or financial network requests during this code change.
+
+**Evidence:** [Flexy Mini PR #41](https://github.com/amordz72/flexy-mini/pull/41). Architecture guard and source regression tests run in PR CI; TypeScript/production build and Android PWA readback require independent successful checks. Financial first proof of `630` remains **NOT VERIFIED** until an explicitly approved actual transaction and carrier/SMS confirmation. Station Connect Windows runner failure is separate.
+
+---
+
 ## 2026-10-17 — Direct Mobilis Arsselli 630 admin send, no misleading preparatory REVIEW (DB VERIFIED / UI DEPLOY PENDING)
 
 **USER-REQUESTED CHANGE:** Stop displaying fake REVIEW after a fresh 632 baseline; that happened because prior button called nonfinancial `station_connect_admin_stage_arsselli_630` regardless of actual funds and never sent USSD. New same React/Ant Design `FlexyServicePage` has ONE `إرسال رصيد عادي — 630` button. It first performs the existing on-demand 632 nonfinancial balance freshness flow (configurable 6/12h cumulative ledger; wait in place for SMS if due), runs server preflight, and opens a standard confirmation modal showing real phone, amount and distributor. Only clicking modal OK executes `station_connect_admin_send_arsselli_630`. No temporary manual gate, review preparation, new UI architecture or PIN shown. Exact-user/phone/amount/source balance is reverified and locked in one SQL transaction at dispatch.
