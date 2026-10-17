@@ -5,6 +5,7 @@ import ts from "typescript";
 
 const page=readFileSync(new URL("../src/OfferSourcePreferenceSettings.tsx",import.meta.url),"utf8");
 const shell=readFileSync(new URL("../src/main.tsx",import.meta.url),"utf8");
+const balance=readFileSync(new URL("../src/ArsselliBalanceRefreshSettings.tsx",import.meta.url),"utf8");
 
 test("routing source editor uses the existing React/Ant Design settings page",()=>{
   const result=ts.transpileModule(page,{compilerOptions:{
@@ -31,4 +32,20 @@ test("630 ordinary, 696 Arsselli offers and 665 Sama offers are kept independent
   assert.match(page,/665 لعروض Sama/);
   assert.match(page,/ولا ترسل شحنًا ولا تغيّر نسب العملاء/);
   assert.doesNotMatch(page,/\b(?:ussd_start|ussd_reply|station_connect_admin_create_offer_execute)\b/);
+});
+
+test("Arsselli refresh interval is a configurable 6/12h Settings card, not a per-recharge form",()=>{
+ const compiled=ts.transpileModule(balance,{compilerOptions:{
+  jsx:ts.JsxEmit.ReactJSX,module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022
+ },reportDiagnostics:true});
+ assert.deepEqual((compiled.diagnostics||[]).filter(x=>x.category===ts.DiagnosticCategory.Error),[]);
+ assert.match(page,/import ArsselliBalanceRefreshSettings from "\.\/ArsselliBalanceRefreshSettings"/);
+ assert.match(page,/<ArsselliBalanceRefreshSettings db=\{db\}\/>/);
+ assert.match(balance,/value:6,label:"كل 6 ساعات"/);
+ assert.match(balance,/value:12,label:"كل 12 ساعة"/);
+ assert.match(balance,/station_connect_admin_arsselli_refresh_policy/);
+ assert.match(balance,/station_connect_admin_save_arsselli_refresh_policy/);
+ assert.match(balance,/p_expected_updated_at:saved\.updated_at/);
+ assert.match(balance,/title="تأكيد فترة تحديث رصيد أرسلي"/);
+ assert.doesNotMatch(balance,/station_connect_admin_queue_arsselli_balance|station_connect_admin_dispatch_630_test_once/);
 });

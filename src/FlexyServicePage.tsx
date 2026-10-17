@@ -37,6 +37,22 @@ type EligibleRoute = {
 type Mode = "offers" | "credit";
 type PendingRequest = { fingerprint: string; key: string; job?: Job };
 type CreditAvailability = {ready:boolean;reason:string;checked_at?:string};
+type CreditBalanceDecision = {
+  state:"ready"|"waiting"|"blocked";ready:boolean;reason:string;
+  balance_job_uuid?:string|null;financial_operation?:boolean;
+};
+type CreditBalanceWait = {phone:string;amount:number;startedAt:number;jobUuid:string|null};
+const creditBalancePendingMessage = (reason:string) =>
+  reason === "MODEM_BUSY"
+    ? "مودم أرسلي مشغول؛ ننتظر حتى يفرغ ثم نحدّث الرصيد تلقائيًا."
+    : "جاري تحديث رصيد الموزّع من الشبكة؛ انتظر حوالي دقيقة. لا تحتاج للذهاب إلى المحطات.";
+const creditBalanceBlockedMessage:Record<string,string> = {
+  BALANCE_QUERY_STALLED:"استعلام الرصيد توقف دون رد؛ لا نبدأ استعلامًا ثانيًا تلقائيًا.",
+  BALANCE_QUERY_UNCONFIRMED:"رد الرصيد لم يتأكد من SMS. سنحتفظ بالعملية للمراجعة دون إعادة الطلب.",
+  BALANCE_UPDATE_INCOMPLETE:"وصل رد الاستعلام لكن الرصيد المؤكد لم يتحدث. لا نخمّن المبلغ ولا نعيد الطلب.",
+  BALANCE_QUERY_FAILED:"فشل الاستعلام عن الرصيد. لم يُرسل أي شحن.",
+  BALANCE_SMS_PENDING:"ننتظر رسالة SMS التي تثبت رصيد الموزّع.",
+};
 type CreditPreflight = {
   ready: boolean; reason: string; phone?: string; amount?: number;
   distributor_account_code?: string; sim_uuid?: string; station_uuid?: string;
@@ -80,7 +96,11 @@ const credit630ReasonText:Record<string,{message:string;description:string}> = {
   },
   BALANCE_NOT_VERIFIED: {
     message:"رصيد حساب الموزع غير مؤكد",
-    description:"الشريحة متصلة؛ يلزم التحقق من قراءة الرصيد قبل اختيار الحساب."
+    description:"الشريحة متصلة؛ البرنامج يحدثه تلقائيًا قبل الإرسال."
+  },
+  BALANCE_STALE: {
+    message:"رصيد الموزّع قديم",
+    description:"الشريحة متصلة. عند الفحص سيقرأ البرنامج الرصيد من الشبكة تلقائيًا وينتظر SMS."
   },
   BALANCE_UNDER_REVIEW: {
     message:"الرصيد يحتاج مراجعة",
@@ -164,6 +184,10 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
     && creditCheck.distributor_account_code && creditCheck.sim_uuid && creditCheck.station_uuid
     && creditCheckInput === [normalizePhone(phone),amount].join(":"));
   const [creditCheckError,setCreditCheckError] = useState("");
+  const [creditBalanceWait,setCreditBalanceWait] = useState<CreditBalanceWait|null>(null);
+  const [creditBalanceMessage,setCreditBalanceMessage] = useState("");
+  const creditBalanceRequestLock = useRef(false);
+  const creditBalanceRequestSerial = useRef(0);
   const [creditStageBusy,setCreditStageBusy] = useState(false);
   const [creditStageResult,setCreditStageResult] = useState("");
   const [creditPreparedJob,setCreditPreparedJob] = useState<{
@@ -194,8 +218,36 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
   const [unknownResult, setUnknownResult] = useState(Boolean(initialRequest.current && !initialRequest.current.job));
   const requestRef = useRef<PendingRequest | null>(initialRequest.current);
 
+  const acceptCredit630Preflight = async (
+    recipient:string, checkedAmount:number, serial:number
+  ) => {
+    if (!db) return;
+    const {data,error}=await db.rpc("station_connect_admin_arsselli_630_preflight",{
+      p_phone:recipient,p_amount:checkedAmount
+    });
+    if (error) throw error;
+    if (serial!==creditBalanceRequestSerial.current) return;
+    const checked=data as CreditPreflight;
+    if (!checked || typeof checked.ready !== "boolean")
+      throw new Error("التحقق من الموزع أعاد نتيجة غير صالحة");
+    setCreditCheck(checked);
+    setCreditAvailability(checked.availability || {
+      ready:checked.ready,reason:checked.ready?"READY":checked.reason
+    });
+    setCreditAvailabilityError("");
+    setCreditCheckInput([recipient,checkedAmount].join(":"));
+    setCreditBalanceMessage("");
+  };
+
   const checkCredit630 = async () => {
-    if (!db || !validPhone(normalizePhone(phone)) || !amount || !Number.isInteger(amount) || amount < 1 || amount > 50000) return;
+    const recipient=normalizePhone(phone);
+    const checkedAmount=amount;
+    if (!db || isCustomer || mode!=="credit" || !validPhone(recipient)
+      || !checkedAmount || !Number.isInteger(checkedAmount)
+      || checkedAmount<1 || checkedAmount>50000 || creditBalanceRequestLock.current
+      || creditBalanceWait) return;
+    const serial=++creditBalanceRequestSerial.current;
+    creditBalanceRequestLock.current=true;
     setCreditCheckBusy(true);
     setCreditCheck(null);
     setCreditCheckInput(null);
@@ -203,24 +255,93 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
     setCreditPreparedJob(null);
     setCreditTrialAuthorized(false);
     setCreditCheckError("");
+    setCreditBalanceMessage("");
     try {
-      const result = await db.rpc("station_connect_admin_arsselli_630_preflight", {
-        p_phone: normalizePhone(phone), p_amount: amount
+      // One server-owned action: if a 24h confirmed baseline is missing,
+      // queue/reuse ONE existing NON-FINANCIAL 632 query (not a 630 recharge).
+      const {data,error}=await db.rpc("station_connect_admin_630_ensure_fresh_balance",{
+        p_amount:checkedAmount
       });
-      if (result.error) throw result.error;
-      const checked = result.data as CreditPreflight;
-      setCreditCheck(checked);
-      setCreditAvailability(checked.availability || {
-        ready: checked.ready, reason:checked.ready ? "READY" : checked.reason
-      });
-      setCreditAvailabilityError("");
-      setCreditCheckInput([normalizePhone(phone),amount].join(":"));
+      if (error) throw error;
+      if (serial!==creditBalanceRequestSerial.current) return;
+      const state=data as CreditBalanceDecision;
+      if (!state || !["ready","waiting","blocked"].includes(state.state)
+        || state.financial_operation === true)
+        throw new Error("تعذر تأكيد حالة تحديث الرصيد");
+      if (state.state==="waiting") {
+        setCreditBalanceWait({
+          phone:recipient,amount:checkedAmount,
+          startedAt:Date.now(),jobUuid:state.balance_job_uuid||null
+        });
+        setCreditBalanceMessage(creditBalancePendingMessage(state.reason));
+      } else if (state.state==="blocked") {
+        setCreditCheckError(creditBalanceBlockedMessage[state.reason] ||
+          credit630Feedback(state.reason).message);
+      } else {
+        await acceptCredit630Preflight(recipient,checkedAmount,serial);
+      }
     } catch (error) {
-      setCreditCheckError(error instanceof Error ? error.message : String(error));
+      if (serial===creditBalanceRequestSerial.current)
+        setCreditCheckError(error instanceof Error?error.message:String(error));
     } finally {
-      setCreditCheckBusy(false);
+      creditBalanceRequestLock.current=false;
+      if (serial===creditBalanceRequestSerial.current)setCreditCheckBusy(false);
     }
   };
+
+  // While the same recipient/money amount is on screen, finish the whole
+  // balance-preflight automatically. No additional button or manual page visit.
+  // A timed-out or unknown 632 result is never silently retried.
+  useEffect(() => {
+    const wait=creditBalanceWait;
+    if (!db || !wait || isCustomer || mode!=="credit"
+      || wait.phone!==normalizePhone(phone) || wait.amount!==amount) return;
+    let active=true;
+    let checking=false;
+    const serial=creditBalanceRequestSerial.current;
+    const poll=async()=>{
+      if (checking || !active) return;
+      if (Date.now()-wait.startedAt>=90000) {
+        setCreditBalanceWait(null);
+        setCreditBalanceMessage("");
+        setCreditCheckError("انتهت مهلة انتظار رصيد الشبكة. لم يُرسل أي شحن ولا نعيد الاستعلام تلقائيًا.");
+        return;
+      }
+      checking=true;
+      try {
+        const {data,error}=await db.rpc("station_connect_admin_630_ensure_fresh_balance",{
+          p_amount:wait.amount
+        });
+        if(error)throw error;
+        if(!active || serial!==creditBalanceRequestSerial.current)return;
+        const state=data as CreditBalanceDecision;
+        if (!state || !["ready","waiting","blocked"].includes(state.state)
+          || state.financial_operation === true)
+          throw new Error("تعذر تأكيد حالة الاستعلام");
+        if(state.state==="ready") {
+          setCreditBalanceMessage("تم تحديث الرصيد؛ جاري اختيار الموزّع تلقائيًا...");
+          await acceptCredit630Preflight(wait.phone,wait.amount,serial);
+          if(active && serial===creditBalanceRequestSerial.current)
+            setCreditBalanceWait(null);
+        } else if(state.state==="blocked"){
+          setCreditBalanceWait(null);
+          setCreditBalanceMessage("");
+          setCreditCheckError(creditBalanceBlockedMessage[state.reason] ||
+            credit630Feedback(state.reason).message);
+        } else {
+          setCreditBalanceMessage(creditBalancePendingMessage(state.reason));
+        }
+      } catch {
+        if (active && serial===creditBalanceRequestSerial.current) {
+          setCreditBalanceWait(null);
+          setCreditBalanceMessage("");
+          setCreditCheckError("تعذر متابعة استعلام الرصيد. راجع حالة العملية؛ لم يُرسل أي شحن.");
+        }
+      } finally {checking=false;}
+    };
+    const timer=window.setInterval(()=>{void poll();},5000);
+    return ()=>{active=false;window.clearInterval(timer);};
+  },[db,creditBalanceWait,isCustomer,mode,phone,amount]);
 
   const stageCredit630 = async () => {
     const recipient = normalizePhone(phone);
@@ -587,7 +708,8 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
             color={creditAvailability.ready ? "green" :
               credit630OfflineReasons.has(creditAvailability.reason) ? "red" : "orange"}>
             {creditAvailability.ready ? "Arsselli متصلة" :
-              credit630OfflineReasons.has(creditAvailability.reason) ? "Arsselli غير متصلة" : "Arsselli غير جاهزة"}
+              credit630OfflineReasons.has(creditAvailability.reason) ? "Arsselli غير متصلة" :
+              creditAvailability.reason==="BALANCE_STALE" ? "Arsselli متصلة · الرصيد قديم" : "Arsselli غير جاهزة"}
           </Tag>}
           {!isCustomer && mode === "offers" && <Tag color={executePrerequisitesReady ? "green" : "orange"}>
             {stationBusy ? "جاري فحص المحطة" : executePrerequisitesReady ? "Sama مستوفية للشروط الأساسية" : stationUuid ? "Sama للاستكشاف فقط" : "Sama غير جاهزة"}
@@ -607,6 +729,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
               setManual(false); setManualFamily(undefined); setManualAmount(null); setManualIndex("");
               setAmount(null); setConfirmSend(false);
               setCreditCheck(null); setCreditCheckInput(null); setCreditStageResult("");
+              ++creditBalanceRequestSerial.current; setCreditBalanceWait(null); setCreditBalanceMessage("");
               setCreditPreparedJob(null); setCreditTrialAuthorized(false); setCreditTrialConfirm(false);
             }
             setPhone(next);
@@ -630,17 +753,22 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
         {isCustomer&&<Alert showIcon type="warning" message="إرسال الرصيد العادي للزبائن غير متاح حاليًا"/>}
         <Space wrap>{[100, 200, 500].map(value =>
           <Button key={value} type={amount === value ? "primary" : "default"}
-            onClick={() => {setAmount(value);setCreditCheck(null);setCreditCheckInput(null);setCreditStageResult("");setCreditPreparedJob(null);setCreditTrialAuthorized(false);setCreditTrialConfirm(false);}}>{currency(value)}</Button>)}</Space>
+            onClick={() => {++creditBalanceRequestSerial.current;setCreditBalanceWait(null);setCreditBalanceMessage("");setAmount(value);setCreditCheck(null);setCreditCheckInput(null);setCreditStageResult("");setCreditPreparedJob(null);setCreditTrialAuthorized(false);setCreditTrialConfirm(false);}}>{currency(value)}</Button>)}</Space>
         <InputNumber<number> min={1} max={100000} precision={0} value={amount}
-          onChange={value => {setAmount(value);setCreditCheck(null);setCreditCheckInput(null);setCreditStageResult("");setCreditPreparedJob(null);setCreditTrialAuthorized(false);setCreditTrialConfirm(false);}} style={{ width: "100%" }} size="large" placeholder="المبلغ" addonAfter="دج" />
+          onChange={value => {++creditBalanceRequestSerial.current;setCreditBalanceWait(null);setCreditBalanceMessage("");setAmount(value);setCreditCheck(null);setCreditCheckInput(null);setCreditStageResult("");setCreditPreparedJob(null);setCreditTrialAuthorized(false);setCreditTrialConfirm(false);}} style={{ width: "100%" }} size="large" placeholder="المبلغ" addonAfter="دج" />
         {!isCustomer&&<Space direction="vertical" style={{width:"100%"}}>
-          {creditAvailability && !creditAvailability.ready && <Alert
+          {creditAvailability && !creditAvailability.ready && !creditBalanceWait && <Alert
             showIcon type={credit630OfflineReasons.has(creditAvailability.reason) ? "error" : "warning"}
             message={credit630Feedback(creditAvailability.reason).message}
             description={credit630Feedback(creditAvailability.reason).description}/>}
           {creditAvailabilityError && <Alert showIcon type="warning" message={creditAvailabilityError}/>}
           <Alert type="info" showIcon message="أرسلي 630 — اختيار الموزع من السيرفر" description="السيرفر يختار الحساب حسب ترتيب الإدارة والرصيد المتاح، وليس الـAgent. هذا المسار يسجل طلب مراجعة فقط، ولا يرسل رصيدًا ماليًا."/>
-          <Button block loading={creditCheckBusy} onClick={() => void checkCredit630()}>فحص الرصيد واختيار الموزع</Button>
+          <Button block loading={creditCheckBusy || Boolean(creditBalanceWait)}
+            disabled={Boolean(creditBalanceWait)}
+            onClick={() => void checkCredit630()}>فحص الرصيد واختيار الموزع</Button>
+          {creditBalanceWait && <Alert type="info" showIcon
+            message="جاري التحديث التلقائي لرصيد أرسلي"
+            description={creditBalanceMessage || "انتظر حوالي دقيقة؛ نقرأ الرصيد ثم نكمل اختيار الموزع وحدنا."}/>}
           {checkedCreditReady && creditCheck && <>
             <Alert type="success" showIcon message={`الموزع المختار: ${creditCheck.distributor_account_code} — ${arsselliAccounts[creditCheck.distributor_account_code || ""] || "غير معروف"}`} description="تم تحديد الموزع والشريحة من السيرفر؛ القرار قد يتغير عند تسجيل الطلب إذا تغير الرصيد."/>
             <Typography.Text strong>معاينة أمر 630 — دون إظهار PIN الحقيقي</Typography.Text>
