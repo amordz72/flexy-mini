@@ -1,3 +1,15 @@
+## 2026-10-17 — OWNER CLARIFICATION: network balance INCREASE means possible SIM replenishment; subtract outgoing separately
+
+**Actual user intent:** A +5000 DZD increase (or multiples such as +10000, +15000) in an Arsselli SIM/distributor account can be **incoming distributor credit to replenish the SIM**. A carrier confirmation SMS indicating SIM refill is further direct evidence. Do not interpret a larger post-632 balance as proof that a pending Flexy was never sent; inbound top-ups and outgoing Flexy can overlap between snapshots. This was a correction to the reconciliation design, not a request to automatically send Telegram top-ups or to alter current refresh intervals.
+
+**Simplified conceptual reconciliation:** `post_632 = pre_632 + evidenced_incoming_sim_refills - evidenced_outgoing_flexy + other_account_adjustments`. Example: pre 101 DZD; SIM refill +5000 DZD; outgoing confirmed Flexy 40 DZD => post 5061 DZD. If an incoming +5000 is only inferred from a balance jump, flag **potential refill** and reconcile with actual carrier refill SMS or distributor evidence; don't silently treat the multiple-of-5000 heuristic as final proof or mark the Flexy failed. Record replenishments as a distinct event from sales/debits; no duplicate balance ledger. Keep per-SIM and distributor-account ownership and existing cumulative 632 policy.
+
+**Specific old job, already reconciled by owner approval:** Job `7c84d6cd-502a-4c51-b8ec-76eb3012f277` was changed from REVIEW to `failed / 630_CONFIRMATION_NOT_SENT_NO_DEBIT_632` with source proof: successfully issued `ussd_start`, received confirmation menu, successfully released same session, **no `ussd_reply("1")`**, matching GTS 04 actual confirmed 632 at **101 DZD before** (balance job `db3474a3-58d5-40ec-9747-2ba5e2d380ed`) and **101 DZD after** (balance job `f4450a66-76c4-4114-bff3-0840e1cd1100`). This is a **one-off** manual reconciliation, not a new automatic rule that every stable 632 balance proves failure. No financial commands were dispatched by this reconciliation. Database readback: `pending_hold=0`, `pending_count=0`, `ambiguous_count=0`, spendable GTS **101 DZD** at check. This only resolves the old hold; actual next send still requires the normal authenticated admin confirmation and a deployed functional current 630 parser.
+
+**Implementation status:** Distinguishing +5000/multiples/SMS as SIM refill is **design recorded, NOT coded or enabled**. Do not mix it into low-balance/Telegram replenishment feature without separate approval.
+
+---
+
 ## 2026-10-17 — FUTURE BACKLOG (NOTE ONLY): file ownership audit, cumulative low-balance alert, optional supplier Telegram refill
 
 **OWNER INTENT:** Register for future review. This is NOT implemented, activated or scheduled. It does not change active 630/696/Sama, 632 refresh frequency, user funds, Agent, database or deployment.
