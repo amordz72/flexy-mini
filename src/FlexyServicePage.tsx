@@ -36,10 +36,72 @@ type EligibleRoute = {
 };
 type Mode = "offers" | "credit";
 type PendingRequest = { fingerprint: string; key: string; job?: Job };
+type CreditAvailability = {ready:boolean;reason:string;checked_at?:string};
 type CreditPreflight = {
   ready: boolean; reason: string; phone?: string; amount?: number;
   distributor_account_code?: string; sim_uuid?: string; station_uuid?: string;
-  dispatch_enabled?: boolean;
+  dispatch_enabled?: boolean; availability?:CreditAvailability;
+};
+const credit630OfflineReasons = new Set([
+  "STATION_OFFLINE","MODEM_OFFLINE","SIM_OFFLINE","NO_ARSSELLI_SIM"
+]);
+const credit630ReasonText:Record<string,{message:string;description:string}> = {
+  STATION_OFFLINE: {
+    message:"لا يوجد اتصال بمحطة Arsselli",
+    description:"كمبيوتر Station Connect الذي يحتوي على شريحة أرسلي غير متصل بالسيرفر. شغّل الـAgent وتأكد من الإنترنت ثم أعد الفحص."
+  },
+  MODEM_OFFLINE: {
+    message:"مودم Arsselli غير متصل",
+    description:"المحطة متصلة، لكن المودم لم يُرسل تحديث اتصال حديثًا. تحقق من المودم واتصاله بالمحطة."
+  },
+  SIM_OFFLINE: {
+    message:"شريحة Arsselli غير متصلة",
+    description:"المحطة والمودم متصلان، لكن الشريحة لا ترسل حالة اتصال حديثة."
+  },
+  NO_ARSSELLI_SIM: {
+    message:"لا توجد شريحة Arsselli مسجلة",
+    description:"لا توجد شريحة عادية من نوع Arsselli مسجلة في المحطات."
+  },
+  STATION_NOT_APPROVED: {
+    message:"محطة Arsselli غير معتمدة",
+    description:"الشريحة مسجلة، لكن المحطة المرتبطة بها تحتاج اعتمادًا من الإدارة."
+  },
+  SIM_NOT_APPROVED: {
+    message:"شريحة Arsselli غير معتمدة للفليكسي",
+    description:"يوجد اتصال بالشريحة، لكن لا تملك اعتماد التنفيذ."
+  },
+  PIN_MISSING: {
+    message:"شريحة Arsselli تحتاج إعداد PIN",
+    description:"الشريحة متصلة لكن PIN الخدمة غير محفوظ لها في السيرفر."
+  },
+  NO_ACCOUNT_BALANCE: {
+    message:"لا توجد بيانات رصيد لحساب الموزع",
+    description:"الشريحة متصلة، لكن لا توجد قراءة رصيد موثوقة لحساب موزع مؤهل."
+  },
+  BALANCE_NOT_VERIFIED: {
+    message:"رصيد حساب الموزع غير مؤكد",
+    description:"الشريحة متصلة؛ يلزم التحقق من قراءة الرصيد قبل اختيار الحساب."
+  },
+  BALANCE_UNDER_REVIEW: {
+    message:"الرصيد يحتاج مراجعة",
+    description:"هناك حساب به عمليات غير محسومة أو رصيد غير موثوق؛ لا نعتبره متاحًا للإرسال."
+  },
+  INSUFFICIENT_BALANCE: {
+    message:"رصيد حسابات الموزع غير كافٍ",
+    description:"الاتصال متوفر، لكن الحسابات المؤهلة لا تملك رصيدًا تشغيليًا كافيًا لهذا المبلغ."
+  },
+  ACCOUNTS_DISABLED: {
+    message:"حسابات الموزع غير مفعلة",
+    description:"الشريحة متصلة، لكن جميع حسابات الموزع المتوفرة معطّلة من الإعدادات."
+  },
+  NO_ELIGIBLE_DISTRIBUTOR_ACCOUNT: {
+    message:"لا يوجد حساب موزع مؤهل",
+    description:"المحطة والشريحة متصلتان، لكن شروط أهلية حساب الموزع لم تكتمل."
+  }
+};
+const credit630Feedback = (reason:string) => credit630ReasonText[reason] || {
+  message:"تعذر التحقق من جاهزية Arsselli",
+  description:"السبب غير محدد. حدّث حالة المحطة والشريحة ثم أعد الفحص."
 };
 const arsselliAccounts: Record<string,string> = {
   "01": "POSTE", "02": "ASSILOU", "03": "DATA", "04": "GTS", "05": "MOBILIS"
@@ -95,7 +157,10 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
   const [creditCheckBusy,setCreditCheckBusy] = useState(false);
   const [creditCheck,setCreditCheck] = useState<CreditPreflight|null>(null);
   const [creditCheckInput,setCreditCheckInput] = useState<string|null>(null);
+  const [creditAvailability,setCreditAvailability] = useState<CreditAvailability|null>(null);
+  const [creditAvailabilityError,setCreditAvailabilityError] = useState("");
   const checkedCreditReady = Boolean(creditCheck?.ready
+    && creditAvailability?.ready === true
     && creditCheck.distributor_account_code && creditCheck.sim_uuid && creditCheck.station_uuid
     && creditCheckInput === [normalizePhone(phone),amount].join(":"));
   const [creditCheckError,setCreditCheckError] = useState("");
@@ -135,6 +200,10 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
       if (result.error) throw result.error;
       const checked = result.data as CreditPreflight;
       setCreditCheck(checked);
+      setCreditAvailability(checked.availability || {
+        ready: checked.ready, reason:checked.ready ? "READY" : checked.reason
+      });
+      setCreditAvailabilityError("");
       setCreditCheckInput([normalizePhone(phone),amount].join(":"));
     } catch (error) {
       setCreditCheckError(error instanceof Error ? error.message : String(error));
@@ -210,6 +279,46 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
   }, [db, isCustomer]);
 
   useEffect(() => { void loadCatalog(); void loadStation(); }, [loadCatalog, loadStation]);
+
+  // Read-only automatic health check while editing an ordinary-credit amount.
+  // The user does NOT need to click a financial action just to learn a Station
+  // is offline. Never infer "no distributor balance" from a missing heartbeat.
+  useEffect(() => {
+    if (!db || isCustomer || mode !== "credit" || !Number.isInteger(amount)
+      || amount === null || amount < 1 || amount > 50000) {
+      setCreditAvailability(null);
+      setCreditAvailabilityError("");
+      return;
+    }
+    let active = true;
+    let checking = false;
+    const refresh = async () => {
+      if (checking) return;
+      checking = true;
+      try {
+        const {data,error} = await db.rpc("station_connect_admin_arsselli_630_availability", {
+          p_amount:amount
+        });
+        if (error) throw new Error(error.message);
+        const status = (Array.isArray(data) ? data[0] : data) as CreditAvailability|null;
+        if (!status || typeof status.ready !== "boolean" || typeof status.reason !== "string")
+          throw new Error("INVALID_630_AVAILABILITY");
+        if (active) {
+          setCreditAvailability(status);
+          setCreditAvailabilityError("");
+        }
+      } catch {
+        if (active) {
+          setCreditAvailability(null);
+          setCreditAvailabilityError("تعذر الاتصال بالسيرفر للتحقق من جاهزية Arsselli. لم يُرسل أي رصيد.");
+        }
+      } finally { checking = false; }
+    };
+    setCreditAvailability(null);
+    void refresh();
+    const timer = window.setInterval(() => { void refresh(); }, 30000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [db,isCustomer,mode,amount]);
 
   const verifiedGroup: OfferGroup | null = identity?.phone === normalizePhone(phone)
     && Date.parse(identity.validUntil) > Date.now() ? identity.group : null;
@@ -410,7 +519,13 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
       <Space direction="vertical" size="middle" style={{ width: "100%" }}>
         <Space wrap>
           <Tag color="green">Mobilis</Tag>
-          {!isCustomer && <Tag color={executePrerequisitesReady ? "green" : "orange"}>
+          {!isCustomer && mode === "credit" && creditAvailability && <Tag
+            color={creditAvailability.ready ? "green" :
+              credit630OfflineReasons.has(creditAvailability.reason) ? "red" : "orange"}>
+            {creditAvailability.ready ? "Arsselli متصلة" :
+              credit630OfflineReasons.has(creditAvailability.reason) ? "Arsselli غير متصلة" : "Arsselli غير جاهزة"}
+          </Tag>}
+          {!isCustomer && mode === "offers" && <Tag color={executePrerequisitesReady ? "green" : "orange"}>
             {stationBusy ? "جاري فحص المحطة" : executePrerequisitesReady ? "Sama مستوفية للشروط الأساسية" : stationUuid ? "Sama للاستكشاف فقط" : "Sama غير جاهزة"}
           </Tag>}
         </Space>
@@ -454,6 +569,11 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
         <InputNumber<number> min={1} max={100000} precision={0} value={amount}
           onChange={value => {setAmount(value);setCreditCheck(null);setCreditCheckInput(null);setCreditStageResult("");}} style={{ width: "100%" }} size="large" placeholder="المبلغ" addonAfter="دج" />
         {!isCustomer&&<Space direction="vertical" style={{width:"100%"}}>
+          {creditAvailability && !creditAvailability.ready && <Alert
+            showIcon type={credit630OfflineReasons.has(creditAvailability.reason) ? "error" : "warning"}
+            message={credit630Feedback(creditAvailability.reason).message}
+            description={credit630Feedback(creditAvailability.reason).description}/>}
+          {creditAvailabilityError && <Alert showIcon type="warning" message={creditAvailabilityError}/>}
           <Alert type="info" showIcon message="أرسلي 630 — اختيار الموزع من السيرفر" description="السيرفر يختار الحساب حسب ترتيب الإدارة والرصيد المتاح، وليس الـAgent. هذا المسار يسجل طلب مراجعة فقط، ولا يرسل رصيدًا ماليًا."/>
           <Button block loading={creditCheckBusy} onClick={() => void checkCredit630()}>فحص الرصيد واختيار الموزع</Button>
           {checkedCreditReady && creditCheck && <>
@@ -464,7 +584,9 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
           </>}
           {creditStageResult && <Alert type="success" showIcon message={creditStageResult}/>}
           {creditCheckError && <Alert type="error" message={creditCheckError}/>}
-          {creditCheck && !checkedCreditReady && <Alert type="warning" showIcon message="لا يوجد حاليًا حساب موزع مؤهل ورصيد كافٍ لهذا المبلغ"/>}
+          {creditCheck && !checkedCreditReady && !creditAvailability && !creditAvailabilityError &&
+            <Alert type="warning" showIcon message={credit630Feedback(creditCheck.reason).message}
+              description={credit630Feedback(creditCheck.reason).description}/>}
         </Space>}
       </Space>
     </Card> : <>
