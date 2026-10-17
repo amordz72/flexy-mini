@@ -1,3 +1,12 @@
+## 2026-10-17 — 630 one-time financial trial gate and UI (IMPLEMENTATION / NO LIVE CHARGE)
+
+- Existing `630` credit page continues admin-only nonfinancial preflight/staging. New private Station Connect `station_connect_630_test_gate` defaults `enabled=false` and can authorize at most one fresh owner-approved `job_uuid` with expiration and max first-trial amount 40 DZD. No client/agent authorization endpoint and no general customer money send.
+- For the *same staged job* only, Flexy Mini polls `station_connect_admin_630_test_gate_status` (read-only), shows `تأكيد إرسال تجريبي واحد — 630` only when gate armed, then shows explicit money warning modal with exact phone/amount/distributor. `station_connect_admin_dispatch_630_test_once` may be invoked exactly once from the UI; any transport error is unknown and never automatically retried.
+- Server locks same distributor account, validates confirmed network balance age max 24h, offline SIM/modem/Station, PIN and previous holds, freezes physical route and consumes gate in same transaction as first USSD command. Normal 630 credit amount min 40 DZD; activated offer 696/Sama untouched. New completion handler labels transport-only replies REVIEW/unknown until final network/SMS confirmation; does not claim live financial success.
+- **Verification:** UI unit mock test for unarmed no-send, separately armed one-shot confirmation; GitHub guard/build + deployment and actual PWA version distinct. Do not arm test gate until user explicitly authorizes a recipient and 40 DZD trial. MyTool Dev stays PAUSED.
+
+---
+
 ## 2026-10-17 — Arsselli 630 precise connectivity messaging (SOURCE / PHONE CHECK REQUIRED)
 
 - **Owner correction:** When ordinary-credit 630 preflight has no eligible account because Arsselli Station Connect is offline, the UI must state **"لا يوجد اتصال بمحطة Arsselli"** rather than assuming insufficient distributor balance. A Sama offline warning does not explain Arsselli credit readiness.
