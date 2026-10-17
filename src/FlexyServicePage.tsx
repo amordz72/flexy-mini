@@ -768,7 +768,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
             onClick={() => void checkCredit630()}>فحص الرصيد واختيار الموزع</Button>
           {creditBalanceWait && <Alert type="info" showIcon
             message="جاري التحديث التلقائي لرصيد أرسلي"
-            description={creditBalanceMessage || "انتظر حوالي دقيقة؛ نقرأ الرصيد ثم نكمل اختيار الموزع وحدنا."}/>
+            description={creditBalanceMessage || "انتظر حوالي دقيقة؛ نقرأ الرصيد ثم نكمل اختيار الموزع وحدنا."}/>}
           {checkedCreditReady && creditCheck && <>
             <Alert type="success" showIcon message={`الموزع المختار: ${creditCheck.distributor_account_code} — ${arsselliAccounts[creditCheck.distributor_account_code || ""] || "غير معروف"}`} description="تم تحديد الموزع والشريحة من السيرفر؛ القرار قد يتغير عند تسجيل الطلب إذا تغير الرصيد."/>
             <Typography.Text strong>معاينة أمر 630 — دون إظهار PIN الحقيقي</Typography.Text>
