@@ -327,6 +327,8 @@ test('630 credits show only server-selected distributor and stage only a nonfina
  const db=makeDb(name=>{
   if(name==='flexy_get_visible_offer_catalog_v2'||name==='flexy_mini_admin_sama_readiness')
    return Promise.resolve(ok([]));
+  if(name==='station_connect_admin_arsselli_630_availability')
+   return Promise.resolve({data:{ready:true,reason:'READY'},error:null});
   if(name==='station_connect_admin_arsselli_630_preflight')
    return Promise.resolve({data:{
     ready:true,reason:'FINANCIAL_EXECUTOR_NOT_YET_VERIFIED',phone:'0500000001',amount:1000,
@@ -358,9 +360,13 @@ test('630 credits show only server-selected distributor and stage only a nonfina
 });
 
 test('changing 630 amount invalidates the previous server account decision',async()=>{
- const db=makeDb(name=>Promise.resolve(name==='station_connect_admin_arsselli_630_preflight'?
-  {data:{ready:true,reason:'FINANCIAL_EXECUTOR_NOT_YET_VERIFIED',distributor_account_code:'05',sim_uuid:'a',station_uuid:'b'},error:null}
-  :ok([])));
+ const db=makeDb(name=>Promise.resolve(
+  name==='station_connect_admin_arsselli_630_availability'
+   ?{data:{ready:true,reason:'READY'},error:null}
+   :name==='station_connect_admin_arsselli_630_preflight'
+    ?{data:{ready:true,reason:'FINANCIAL_EXECUTOR_NOT_YET_VERIFIED',distributor_account_code:'05',sim_uuid:'a',station_uuid:'b'},error:null}
+    :ok([])
+ ));
  const r=await mount(Flexy,{db,isCustomer:false});
  const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
  await act(async()=>phone.props.onChange({target:{value:'0500000001'}}));
@@ -370,6 +376,59 @@ test('changing 630 amount invalidates the previous server account decision',asyn
  await act(async()=>r.root.findByType('amount').props.onChange(1000));
  assert.equal(button(r,'تسجيل طلب 630 للمراجعة (دون إرسال)'),undefined);
  await close(r);
+});
+
+
+test('630 offline Station shows a clear connection error, not a false low balance',async()=>{
+ const offline={ready:false,reason:'STATION_OFFLINE',dispatch_enabled:false};
+ const db=makeDb(name=>Promise.resolve(name==='station_connect_admin_arsselli_630_availability'
+  ?{data:offline,error:null}
+  :name==='station_connect_admin_arsselli_630_preflight'
+   ?{data:{...offline,availability:offline},error:null}
+   :ok([])));
+ const r=await mount(Flexy,{db,isCustomer:false});
+ const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
+ await act(async()=>phone.props.onChange({target:{value:'0500000001'}}));
+ await act(async()=>r.root.findByType('amount').props.onChange(40));await flush();
+ const alerts=r.root.findAllByType('alert');
+ assert.ok(alerts.some(x=>String(x.props.message).includes('لا يوجد اتصال بمحطة Arsselli')));
+ assert.ok(!alerts.some(x=>String(x.props.message).includes('رصيد كافٍ')));
+ assert.ok(r.root.findAllByType('tag').some(x=>texts(x).includes('Arsselli غير متصلة')));
+ assert.ok(!r.root.findAllByType('tag').some(x=>texts(x).includes('Sama غير جاهزة')));
+ await click(r,'فحص الرصيد واختيار الموزع');
+ assert.equal(button(r,'تسجيل طلب 630 للمراجعة (دون إرسال)'),undefined);
+ assert.equal(db.calls.some(x=>/stage_arsselli_630|create_verified_offer_execute/.test(x.name)),false);
+ await close(r);
+});
+test('630 low balance on connected station uses distinct balance warning',async()=>{
+ const low={ready:false,reason:'INSUFFICIENT_BALANCE'};
+ const db=makeDb(name=>Promise.resolve(name==='station_connect_admin_arsselli_630_availability'
+  ?{data:low,error:null}:ok([])));
+ const r=await mount(Flexy,{db,isCustomer:false});
+ const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
+ await act(async()=>phone.props.onChange({target:{value:'0500000001'}}));
+ await act(async()=>r.root.findByType('amount').props.onChange(40));await flush();
+ assert.ok(r.root.findAllByType('alert').some(x=>String(x.props.message).includes('رصيد حسابات الموزع غير كافٍ')));
+ assert.ok(!r.root.findAllByType('alert').some(x=>String(x.props.message).includes('لا يوجد اتصال بمحطة')));
+ await close(r);
+});
+test('630 reconnect state refreshes automatically but does not queue a financial send',async()=>{
+ let connected=false;
+ const db=makeDb(name=>Promise.resolve(name==='station_connect_admin_arsselli_630_availability'
+  ?{data:connected?{ready:true,reason:'READY'}:{ready:false,reason:'STATION_OFFLINE'},error:null}
+  :ok([])));
+ const r=await mount(Flexy,{db,isCustomer:false});
+ const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
+ await act(async()=>phone.props.onChange({target:{value:'0500000001'}}));
+ await act(async()=>r.root.findByType('amount').props.onChange(40));await flush();
+ assert.ok(r.root.findAllByType('alert').some(x=>String(x.props.message).includes('لا يوجد اتصال بمحطة Arsselli')));
+ assert.equal(timers.size,1);
+ connected=true;
+ await act(async()=>{for(const refresh of [...timers.values()])refresh();await Promise.resolve()});await flush();
+ assert.ok(r.root.findAllByType('tag').some(x=>texts(x).includes('Arsselli متصلة')));
+ assert.equal(db.calls.some(x=>/stage_arsselli_630|begin_command_session|create_verified_offer_execute/.test(x.name)),false);
+ await close(r);
+ assert.equal(timers.size,0);
 });
 
 after(()=>rm(output,{recursive:true,force:true}));
