@@ -161,7 +161,7 @@ const readCredit630Pending=():Credit630Pending|null=>{
       || raw.createdAt>Date.now()+60000 || Date.now()-raw.createdAt>30*86400000
       || (raw.jobUuid!==null && typeof raw.jobUuid!=="string")) return null;
     return {
-      key:raw.key, phone:raw.phone, amount:raw.amount, distributor:raw.distributor,
+      key:raw.key, phone:raw.phone, amount:raw.amount as number, distributor:raw.distributor,
       createdAt:raw.createdAt, jobUuid:raw.jobUuid, status:String(raw.status||"unknown")
     };
   } catch {return null;}
