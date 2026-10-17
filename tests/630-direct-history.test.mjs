@@ -45,3 +45,17 @@ test("unchanged amount control cannot reset the direct-630 send lock",()=>{
  assert.match(flexy,/onClick=\{\(\) => \{if\(amount===value\)return;/);
  assert.match(flexy,/onChange=\{value => \{if\(amount===value\)return;/);
 });
+
+test("known no-confirmation 630 failure releases the browser lock after server reconciliation",()=>{
+ const start=flexy.indexOf('} else if(status==="failed")');
+ const end=flexy.indexOf('} else {',start);
+ const branch=flexy.slice(start,end);
+ assert.match(branch,/String\(job\.result_code\|\|""\)==="630_CONFIRMATION_NOT_SENT"/);
+ assert.match(branch,/String\(job\.result_code\|\|""\)==="630_CONFIRMATION_NOT_SENT_NO_DEBIT_632"/);
+ assert.match(branch,/if\(notSent\)/);
+ assert.match(branch,/setCreditSendAttempted\(false\)/);
+ assert.match(branch,/creditRequestKey\.current=null/);
+ // Still depends on server terminal status, never self-resolves reviews.
+ assert.match(flexy,/else if\(status==="review"\)/);
+ assert.match(flexy,/station_connect_admin_630_credit_job/);
+});
