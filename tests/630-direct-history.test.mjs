@@ -59,3 +59,43 @@ test("known no-confirmation 630 failure releases the browser lock after server r
  assert.match(flexy,/else if\(status==="review"\)/);
  assert.match(flexy,/station_connect_admin_630_credit_job/);
 });
+
+
+const operationalSql=readFileSync(new URL(
+ "../supabase/migrations/20261018123000_flexy_mini_630_operational_ack_settlement.sql",
+ import.meta.url),"utf8");
+test("630 settlement belongs to the Flexy server, never the Agent or gateway",()=>{
+ assert.match(operationalSql,/create or replace function private\.flexy_mini_630_operational_ack_transition/);
+ assert.match(operationalSql,/before update of status, result_code, result_text/);
+ assert.match(operationalSql,/old\.status <> 'claimed'/);
+ assert.match(operationalSql,/new\.status <> 'review'/);
+ assert.match(operationalSql,/new\.source_app <> 'flexy-mini'/);
+ assert.match(operationalSql,/new\.operation_key <> 'mobilis\.flexy\.ordinary\.630'/);
+ assert.match(operationalSql,/new\.payload->>'dispatch_mode' <> 'direct_630'/);
+ assert.doesNotMatch(operationalSql,/queue_session_command|ussd_reply\s*\(/i);
+});
+test("the original amount and recipient and a single successful 1 must match the same closed session",()=>{
+ assert.match(operationalSql,/v_session\.status <> 'closed'/);
+ assert.match(operationalSql,/v_session\.station_uuid is distinct from new\.station_uuid/);
+ assert.match(operationalSql,/v_count <> 3/);
+ assert.match(operationalSql,/c\.sequence = 1/);
+ assert.match(operationalSql,/c\.sequence = 2/);
+ assert.match(operationalSql,/c\.sequence = 3/);
+ assert.match(operationalSql,/c\.value = '1'/);
+ assert.match(operationalSql,/array_length\(v_numbers, 1\), 0\) <> 4/);
+ assert.match(operationalSql,/v_numbers\[1\] <> new\.amount::text/);
+ assert.match(operationalSql,/v_numbers\[2\] <> new\.phone/);
+ assert.match(operationalSql,/v_numbers\[3\] <> '1'/);
+ assert.match(operationalSql,/v_numbers\[4\] <> '0'/);
+});
+test("carrier exact acceptance yields operational success, uncertain result stays review",()=>{
+ assert.match(operationalSql,/votre demande est prise en charge, un sms vous sera envoyé/);
+ assert.match(operationalSql,/تم استلام طلبك/);
+ assert.match(operationalSql,/if not v_accepted and not v_rejected then return new/);
+ assert.match(operationalSql,/new\.status := case when v_accepted then 'success' else 'failed' end/);
+ assert.match(operationalSql,/630_NETWORK_ACCEPTED_OPERATIONAL/);
+ assert.match(operationalSql,/network_acceptance_not_final_sms/);
+ assert.match(operationalSql,/automatic_retry',false/);
+ assert.doesNotMatch(operationalSql,/update\s+public\.station_connect_arsselli_account_balances/i);
+ assert.doesNotMatch(operationalSql,/update\s+public\.station_connect_jobs/i);
+});
