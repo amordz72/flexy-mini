@@ -59,6 +59,15 @@ const phoneStateLabel=(attempt:PhoneAttempt|undefined)=>{
  return attempt.status||"غير معروف";
 };
 const online=(date:string|null)=>Boolean(date&&Number.isFinite(Date.parse(date))&&Date.now()-Date.parse(date)>=0&&Date.now()-Date.parse(date)<90000);
+// Keep the same priority on desktop Table and mobile Cards. Do not infer connectivity from the saved SIM type.
+const hardwarePriority=(r:Hardware):number=>{
+ const recent=online(r.modem_last_seen_at);
+ const known=Boolean(r.sim_uuid&&r.sim_type&&r.sim_type!=="unknown");
+ if(recent&&known)return 0;
+ if(recent)return 1;
+ if(known)return 2;
+ return 3;
+};
 const dateLabel=(value:string|null)=>value?new Date(value).toLocaleString("ar-DZ"):"—";
 const cooldownActive=(value:string|null|undefined)=>Boolean(value&&Number.isFinite(Date.parse(value))&&Date.parse(value)>Date.now());
 const agentSupportsServiceCode=(version:string|null)=>{
@@ -508,7 +517,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   {checkedAt&&<Typography.Text type="secondary">آخر تحديث: {dateLabel(checkedAt)}</Typography.Text>}
   {visibleStations.length===0&&!loading&&<Empty description="لا توجد محطات مرئية للحساب"/>}
   {visibleStations.map(station=>{
-   const modems=(hardware[station.station_uuid]||[]).map(r=>({...r,station_uuid:station.station_uuid}));
+   const modems=(hardware[station.station_uuid]||[]).map(r=>({...r,station_uuid:station.station_uuid})).sort((a,b)=>hardwarePriority(a)-hardwarePriority(b));
    const connected=station.status==="approved"&&online(station.last_seen_at);
    return <Card key={station.station_uuid}
     title={identityCell("station",station.station_uuid,station.computer_name||"محطة دون اسم")}
