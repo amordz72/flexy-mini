@@ -1,3 +1,9 @@
+## 2026-10-18 — Owner-requested reversible station deapproval UI (not automatically executed)
+
+**USER_STATED:** Add `إلغاء الاعتماد` for already approved Station Connect computers in the existing top AntD stations Table. Require explicit owner click + confirmation Modal. Existing admin-only `public.station_connect_admin_set_status(p_station_uuid, 'pending')` transitions only that station back to pending, clears approval metadata, and prevents subsequent Agent heartbeats until reapproved. It **does not delete** its station UUID, modem USB registry, SIM ICCID identity, PIN, aliases, or historical business records. Keep `اعتماد` action for pending to restore access manually, with server authorization as before. No background/automatic deapproval, no station status DB write during code merge, and no USSD/financial operations. Code in `src/StationOverview.tsx`; mock RPC/regression checks in `tests/station-identity.test.mjs`. Branch `feat/station-deapprove-confirmed-20261018`. Deployment/PWA and actual manual approval changes require separate verification.
+
+---
+
 ## 2026-10-18 — Station table and single modem table; owner-only station approval (UI only)
 
 **User-approved layout:** Stations appear once in a compact Ant Design Table at top, including stable station name, approval status, heartbeat recency and an `اعتماد` action **only** for `pending` stations. All stations remain visible even while the modem table is filtered. An explicit Ant Design confirmation Modal must precede `public.station_connect_admin_set_status(p_station_uuid, 'approved')`. This existing RPC checks `private.is_shop_admin()`. **No new station is approved as part of this code/documentation rollout; the owner presses and confirms per station in the live UI.**
