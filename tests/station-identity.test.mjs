@@ -84,12 +84,13 @@ function makeDb(withLabels=true,usbDirectory=fixture.usbDirectory,stationRows=fi
   calls.push({name,args});
   if(name==='flexy_mini_station_overview')return data(currentStations);
   if(name==='station_connect_admin_set_status'){
-   if(args?.p_status!=='approved')throw new Error('unexpected station status mutation');
    const station=currentStations.find(row=>row.station_uuid===args.p_station_uuid);
-   if(!station||station.status!=='pending')return {data:null,error:{message:'not pending'}};
+   const expected=args?.p_status==='approved'?'pending':'approved';
+   if(!station||!['approved','pending'].includes(args?.p_status)||station.status!==expected)
+    return {data:null,error:{message:'invalid station transition'}};
    currentStations=currentStations.map(row=>row.station_uuid===station.station_uuid?
-    {...row,status:'approved'}:row);
-   return data([{station_uuid:station.station_uuid,status:'approved',approved_at:new Date().toISOString()}]);
+    {...row,status:args.p_status}:row);
+   return data([{station_uuid:station.station_uuid,status:args.p_status,approved_at:args.p_status==='approved'?new Date().toISOString():null}]);
   }
   if(name==='station_connect_admin_identity_labels')return withLabels?data(fixture.labels):{data:null,error:{code:'PGRST202',message:'not deployed'}};
   if(name==='station_connect_admin_hardware')return data(args?.p_station_uuid==='s-2'?hardware2:args?.p_station_uuid==='s-1'?hardware1:[]);
@@ -230,6 +231,40 @@ test('pending station requires explicit admin click then modal confirmation, nev
  assert.equal(tables()[0].props.dataSource.find(row=>row.station_uuid==='s-3').status,'approved');
  assert.equal(root.root.findAllByType('button').filter(button=>textOf(button)==='اعتماد').length,0);
  assert.equal(db.calls.some(call=>/recharge|ussd|send_arsselli_630|execute/.test(call.name)),false);
+ await act(async()=>root.unmount());
+});
+test('deapproval needs explicit owner click and confirmation, preserves station identity and can be reapproved',async()=>{
+ persistent.clear();
+ const db=makeDb();const root=await open(db);
+ const tables=()=>root.root.findAllByType('table');
+ const before=tables()[0].props.dataSource.map(row=>({...row}));
+ assert.equal(db.calls.filter(call=>call.name==='station_connect_admin_set_status').length,0);
+ const buttons=()=>root.root.findAllByType('button').filter(button=>textOf(button)==='إلغاء الاعتماد');
+ assert.equal(buttons().length,2,'approved stations allow explicit removal');
+ await act(async()=>buttons()[0].props.onClick());
+ assert.equal(db.calls.filter(call=>call.name==='station_connect_admin_set_status').length,0);
+ const firstModal=root.root.findAllByType('modal').find(node=>node.props.title==='إلغاء اعتماد المحطة');
+ assert.ok(firstModal,'explicit cancellation confirmation should be shown');
+ assert.match(textOf(firstModal),/هوية الكمبيوتر والمودمات والشرائح محفوظة/);
+ await act(async()=>firstModal.props.onCancel());
+ assert.equal(db.calls.filter(call=>call.name==='station_connect_admin_set_status').length,0,'dismissing modal makes no mutation');
+ await act(async()=>buttons()[0].props.onClick());
+ const secondModal=root.root.findAllByType('modal').find(node=>node.props.title==='إلغاء اعتماد المحطة');
+ await act(async()=>secondModal.props.onOk());
+ const writes=db.calls.filter(call=>call.name==='station_connect_admin_set_status');
+ assert.deepEqual(writes.map(call=>call.args),[{p_station_uuid:'s-1',p_status:'pending'}]);
+ assert.equal(tables()[0].props.dataSource.find(row=>row.station_uuid==='s-1').status,'pending');
+ assert.equal(tables()[0].props.dataSource.find(row=>row.station_uuid==='s-2').status,before[1].status,'other stations untouched');
+ assert.equal(tables()[1].props.dataSource.length,2,'historical modems are retained');
+ const approve=root.root.findAllByType('button').find(button=>textOf(button)==='اعتماد');
+ assert.ok(approve,'same station can be approved again');
+ await act(async()=>approve.props.onClick());
+ const approveModal=root.root.findAllByType('modal').find(node=>node.props.title==='اعتماد المحطة');
+ await act(async()=>approveModal.props.onOk());
+ assert.deepEqual(db.calls.filter(call=>call.name==='station_connect_admin_set_status').map(call=>call.args),
+  [{p_station_uuid:'s-1',p_status:'pending'},{p_station_uuid:'s-1',p_status:'approved'}]);
+ assert.equal(tables()[0].props.dataSource.find(row=>row.station_uuid==='s-1').status,'approved');
+ assert.equal(db.calls.some(call=>/recharge|ussd|delete|execute|create_/.test(call.name)),false);
  await act(async()=>root.unmount());
 });
 test('station filter changes only modem table; all station rows and old known modems are retained',async()=>{
