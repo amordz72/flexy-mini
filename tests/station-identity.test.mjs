@@ -76,12 +76,23 @@ const fixture={
 };
 const data=x=>({data:x,error:null});
 const textOf=n=>(n.children||[]).map(x=>typeof x==='string'?x:textOf(x)).join('');
-function makeDb(withLabels=true,usbDirectory=fixture.usbDirectory){
- const calls=[];return {calls,auth:{getUser:async()=>({data:{user:{id:'admin-a'}},error:null})},rpc:async(name,args)=>{
+function makeDb(withLabels=true,usbDirectory=fixture.usbDirectory,stationRows=fixture.stations,
+ hardware1=fixture.hardware,hardware2=fixture.hardware2){
+ const calls=[];
+ let currentStations=stationRows.map(station=>({...station}));
+ return {calls,auth:{getUser:async()=>({data:{user:{id:'admin-a'}},error:null})},rpc:async(name,args)=>{
   calls.push({name,args});
-  if(name==='flexy_mini_station_overview')return data(fixture.stations);
+  if(name==='flexy_mini_station_overview')return data(currentStations);
+  if(name==='station_connect_admin_set_status'){
+   if(args?.p_status!=='approved')throw new Error('unexpected station status mutation');
+   const station=currentStations.find(row=>row.station_uuid===args.p_station_uuid);
+   if(!station||station.status!=='pending')return {data:null,error:{message:'not pending'}};
+   currentStations=currentStations.map(row=>row.station_uuid===station.station_uuid?
+    {...row,status:'approved'}:row);
+   return data([{station_uuid:station.station_uuid,status:'approved',approved_at:new Date().toISOString()}]);
+  }
   if(name==='station_connect_admin_identity_labels')return withLabels?data(fixture.labels):{data:null,error:{code:'PGRST202',message:'not deployed'}};
-  if(name==='station_connect_admin_hardware')return data(args?.p_station_uuid==='s-2'?fixture.hardware2:fixture.hardware);
+  if(name==='station_connect_admin_hardware')return data(args?.p_station_uuid==='s-2'?hardware2:args?.p_station_uuid==='s-1'?hardware1:[]);
   if(name==='station_connect_admin_usb_sim_center')
    return usbDirectory===null?{data:null,error:{code:'PGRST202',message:'unavailable'}}:data(usbDirectory);
   if(name==='station_connect_admin_save_identity_label')return data({
@@ -177,27 +188,68 @@ test('old server without names RPC keeps station list usable',async()=>{
  await act(async()=>root.unmount());
 });
 
-test('mobile modem cards contain exactly one details Collapse per physical modem',async()=>{
+test('mobile UI shows one station table and one modem table with expandable details, not duplicate modem cards',async()=>{
  persistent.clear();
  globalThis.__stationMobileMode=true;
  let root;
  try{
   root=await open(makeDb());
-  const modemCards=root.root.findAllByType('card').filter(node=>{
-   const name=node.props.title?.props?.children?.[0]?.props?.children;
-   return typeof name==='string'&&name.startsWith('USB ');
-  });
-  assert.equal(modemCards.length,2,'two modem cards for two hardware records');
-  assert.equal(root.root.findAllByType('collapse').length,2);
-  for(const modem of modemCards){
-   assert.equal(modem.findAllByType('collapse').length,1,'one details section inside each modem');
-  }
-  assert.match(textOf(modemCards[0]),/sama-1/);
-  assert.match(textOf(modemCards[1]),/arsely-2/);
+  const tables=root.root.findAllByType('table');
+  assert.equal(tables.length,2,'one station table above one modem table');
+  assert.equal(tables[0].props.dataSource.length,2);
+  assert.equal(tables[1].props.dataSource.length,2);
+  assert.equal(root.root.findAllByType('expanded-row').length,2);
+  assert.equal(root.root.findAllByType('card').length,3,'cards group only sections');
+  assert.match(textOf(tables[1]),/sama-1/);
+  assert.match(textOf(tables[1]),/arsely-2/);
  }finally{
   if(root)await act(async()=>root.unmount());
   delete globalThis.__stationMobileMode;
  }
+});
+test('pending station requires explicit admin click then modal confirmation, never approves on read',async()=>{
+ const pending={station_uuid:'s-3',status:'pending',computer_name:'NEW-WIN-PC',
+  last_seen_at:null,agent_version:'0.4.14'};
+ const db=makeDb(true,fixture.usbDirectory,[...fixture.stations,pending]);
+ const root=await open(db);
+ const tables=()=>root.root.findAllByType('table');
+ assert.equal(tables().length,2);
+ assert.equal(tables()[0].props.dataSource.length,3);
+ assert.equal(tables()[1].props.dataSource.length,2);
+ assert.match(textOf(root.root),/بانتظار الاعتماد/);
+ assert.equal(db.calls.filter(call=>call.name==='station_connect_admin_set_status').length,0);
+ const buttons=root.root.findAllByType('button').filter(button=>textOf(button)==='اعتماد');
+ assert.equal(buttons.length,1,'approved stations must never expose an approve button');
+ await act(async()=>buttons[0].props.onClick());
+ assert.equal(db.calls.filter(call=>call.name==='station_connect_admin_set_status').length,0);
+ const modal=root.root.findAllByType('modal').find(node=>node.props.title==='اعتماد المحطة');
+ assert.ok(modal);
+ await act(async()=>modal.props.onOk());
+ assert.deepEqual(db.calls.filter(call=>call.name==='station_connect_admin_set_status').map(call=>call.args),
+  [{p_station_uuid:'s-3',p_status:'approved'}]);
+ assert.equal(tables()[0].props.dataSource.find(row=>row.station_uuid==='s-3').status,'approved');
+ assert.equal(root.root.findAllByType('button').filter(button=>textOf(button)==='اعتماد').length,0);
+ assert.equal(db.calls.some(call=>/recharge|ussd|send_arsselli_630|execute/.test(call.name)),false);
+ await act(async()=>root.unmount());
+});
+test('station filter changes only modem table; all station rows and old known modems are retained',async()=>{
+ persistent.clear();
+ const old=new Date(Date.now()-24*60*60*1000).toISOString();
+ const offline=fixture.hardware.map(row=>({...row,modem_last_seen_at:old,sim_last_seen_at:old}));
+ const db=makeDb(true,fixture.usbDirectory,fixture.stations,offline,fixture.hardware2);
+ const root=await open(db);
+ const tables=()=>root.root.findAllByType('table');
+ assert.equal(tables()[0].props.dataSource.length,2);
+ assert.equal(tables()[1].props.dataSource.length,2,'default never hides old registered SIMs');
+ assert.equal(tables()[1].props.dataSource[0].sim_uuid,'sim-2','recent modems first');
+ const selector=root.root.findAllByType('select').find(node=>node.props['aria-label']==='فلترة حسب السيرفر');
+ await act(async()=>selector.props.onChange('s-1'));
+ assert.equal(tables()[0].props.dataSource.length,2,'server table is not filtered');
+ assert.equal(tables()[1].props.dataSource.length,1);
+ assert.equal(tables()[1].props.dataSource[0].sim_uuid,'sim-1');
+ assert.equal(db.calls.some(call=>call.name==='station_connect_admin_set_status'),false);
+ await act(async()=>root.unmount());
+ persistent.clear();
 });
 test('USB and serial suffixes come from canonical modem identities, not list order or IP',async()=>{
  persistent.clear();
