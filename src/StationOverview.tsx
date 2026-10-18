@@ -97,7 +97,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
  const [usbDirectoryError,setUsbDirectoryError]=useState(false);
  const [selected,setSelected]=useState<string|null>(null);
  const [simVisibility,setSimVisibility]=useState<"all"|"recent-known"|"recent"|"known">("all");
- const [approvalTarget,setApprovalTarget]=useState<string|null>(null);
+ const [stationAction,setStationAction]=useState<{uuid:string;nextStatus:"approved"|"pending"}|null>(null);
  const [approvalBusy,setApprovalBusy]=useState(false);
  const [filterStorageKey,setFilterStorageKey]=useState<string|null>(null);
  const [samaRows,setSamaRows]=useState<SamaStatus[]>([]);
@@ -493,29 +493,31 @@ export default function StationOverview({db}:{db:SupabaseClient}){
  const shortSim=(r:StationHardware)=><>
   {identityCell("sim",r.sim_uuid,r.sim_uuid?"شريحة مسجلة":"بدون شريحة")}
  </>;
- const confirmStationApproval=async()=>{
-  if(!approvalTarget||approvalBusy)return;
-  const station=stations.find(item=>item.station_uuid===approvalTarget);
-  if(!station||station.status!=="pending"){
-   message.warning("لم تعد المحطة بانتظار الاعتماد؛ حدّث القائمة");
-   setApprovalTarget(null);
+ const confirmStationStatusChange=async()=>{
+  if(!stationAction||approvalBusy)return;
+  const station=stations.find(item=>item.station_uuid===stationAction.uuid);
+  const expectedStatus=stationAction.nextStatus==="approved"?"pending":"approved";
+  if(!station||station.status!==expectedStatus){
+   message.warning("حالة المحطة تغيّرت؛ حدّث القائمة قبل المحاولة");
+   setStationAction(null);
    return;
   }
   setApprovalBusy(true);
   try{
-   // The existing RPC enforces is_shop_admin(). Never run from a page effect.
+   // The existing admin-only RPC changes approval status, never deletes a station or SIM.
    const {data,error}=await db.rpc("station_connect_admin_set_status",{
-    p_station_uuid:station.station_uuid,p_status:"approved"
+    p_station_uuid:station.station_uuid,p_status:stationAction.nextStatus
    });
    if(error)throw error;
    const result=(Array.isArray(data)?data[0]:data) as {station_uuid?:string;status?:string}|null;
-   if(result?.station_uuid!==station.station_uuid||result.status!=="approved")
-    throw new Error("السيرفر لم يؤكد اعتماد هذه المحطة");
-   setApprovalTarget(null);
-   message.success("تم اعتماد المحطة؛ ننتظر اتصال Agent لتظهر متصلة");
+   if(result?.station_uuid!==station.station_uuid||result.status!==stationAction.nextStatus)
+    throw new Error("السيرفر لم يؤكد تغيير حالة هذه المحطة");
+   const removed=stationAction.nextStatus==="pending";
+   setStationAction(null);
+   message.success(removed?"تم إلغاء الاعتماد؛ المحطة بانتظار اعتماد جديد":"تم اعتماد المحطة؛ ننتظر اتصال Agent لتظهر متصلة");
    await refresh();
   }catch(error){
-   message.error("تعذر اعتماد المحطة: "+(error instanceof Error?error.message:String(error)));
+   message.error("تعذر تغيير اعتماد المحطة: "+(error instanceof Error?error.message:String(error)));
   }finally{
    setApprovalBusy(false);
   }
@@ -568,7 +570,10 @@ export default function StationOverview({db}:{db:SupabaseClient}){
      ...(!mobile?[{title:"Agent",render:(_:unknown,station:Station)=>station.agent_version||"—"}]:[]),
      {title:"الإجراء",render:(_,station)=>station.status==="pending"?
       <Button size="small" type="primary" disabled={approvalBusy}
-       onClick={()=>setApprovalTarget(station.station_uuid)}>اعتماد</Button>:
+       onClick={()=>setStationAction({uuid:station.station_uuid,nextStatus:"approved"})}>اعتماد</Button>:
+      station.status==="approved"?
+      <Button size="small" danger disabled={approvalBusy}
+       onClick={()=>setStationAction({uuid:station.station_uuid,nextStatus:"pending"})}>إلغاء الاعتماد</Button>:
       <Typography.Text type="secondary">—</Typography.Text>}
     ]}
    />
@@ -624,18 +629,20 @@ export default function StationOverview({db}:{db:SupabaseClient}){
    />
   </Card>
   <Modal
-   title="اعتماد المحطة"
-   open={Boolean(approvalTarget)}
-   onCancel={()=>{if(!approvalBusy)setApprovalTarget(null);}}
-   onOk={()=>void confirmStationApproval()}
-   okText="اعتماد المحطة"
-   cancelText="إلغاء"
+   title={stationAction?.nextStatus==="pending"?"إلغاء اعتماد المحطة":"اعتماد المحطة"}
+   open={Boolean(stationAction)}
+   onCancel={()=>{if(!approvalBusy)setStationAction(null);}}
+   onOk={()=>void confirmStationStatusChange()}
+   okText={stationAction?.nextStatus==="pending"?"نعم، إلغاء الاعتماد":"اعتماد المحطة"}
+   okButtonProps={{danger:stationAction?.nextStatus==="pending"}}
+   cancelText="رجوع"
    confirmLoading={approvalBusy}
    closable={!approvalBusy}
    maskClosable={!approvalBusy}>
    <Typography.Text>
-    هل تريد اعتماد {approvalTarget?serverName(approvalTarget):"هذه المحطة"}؟
-    لن تتغير حالة أي محطة أخرى. الاعتماد لا يعني أنها متصلة حتى يصل نبض Agent.
+    {stationAction?.nextStatus==="pending"?
+     <>هل تريد إلغاء اعتماد {serverName(stationAction.uuid)}؟ ستتوقف المحطة عن استقبال الأوامر وإرسال نبض الاتصال حتى تعيد اعتمادها. تبقى هوية الكمبيوتر والمودمات والشرائح محفوظة.</>:
+     <>هل تريد اعتماد {stationAction?serverName(stationAction.uuid):"هذه المحطة"}؟ لن تتغير حالة أي محطة أخرى، والاتصال يحتاج نبض Agent.</>}
    </Typography.Text>
   </Modal>
   <Modal title="التسمية الخاصة" open={Boolean(identityEdit)}
