@@ -47,12 +47,13 @@ test("unchanged amount control cannot reset the direct-630 send lock",()=>{
 });
 
 test("known no-confirmation 630 failure releases the browser lock after server reconciliation",()=>{
- const start=flexy.indexOf('} else if(status==="failed")');
- const end=flexy.indexOf('} else {',start);
+ const start=flexy.indexOf('}else if(status==="failed"){');
+ const end=flexy.indexOf('}else{',start);
  const branch=flexy.slice(start,end);
  assert.match(branch,/String\(job\.result_code\|\|""\)==="630_CONFIRMATION_NOT_SENT"/);
  assert.match(branch,/String\(job\.result_code\|\|""\)==="630_CONFIRMATION_NOT_SENT_NO_DEBIT_632"/);
- assert.match(branch,/if\(notSent\)/);
+ assert.match(branch,/if\(notSent \|\| explicitRejection\)/);
+ assert.match(branch,/630_NETWORK_REJECTED_EXPLICIT/);
  assert.match(branch,/setCreditSendAttempted\(false\)/);
  assert.match(branch,/creditRequestKey\.current=null/);
  // Still depends on server terminal status, never self-resolves reviews.
@@ -98,4 +99,33 @@ test("carrier exact acceptance yields operational success, uncertain result stay
  assert.match(operationalSql,/automatic_retry',false/);
  assert.doesNotMatch(operationalSql,/update\s+public\.station_connect_arsselli_account_balances/i);
  assert.doesNotMatch(operationalSql,/update\s+public\.station_connect_jobs/i);
+});
+
+test("630 follows the same accepted job quickly; 20 seconds warns rather than failing or cancelling",()=>{
+ const start=flexy.indexOf('    // The time budget is for the UI warning');
+ const end=flexy.indexOf('  const loadCatalog = useCallback',start);
+ const polling=flexy.slice(start,end);
+ assert.ok(start>0 && end>start);
+ assert.match(polling,/station_connect_admin_630_credit_job/);
+ assert.match(polling,/status==="success" \|\| status==="failed"/);
+ assert.match(polling,/630_NETWORK_ACCEPTED_OPERATIONAL/);
+ assert.match(polling,/Date\.now\(\)-since>=20000/);
+ assert.match(polling,/العملية قيد التحقق، وليست فاشلة/);
+ assert.match(polling,/elapsed<20000\?3000:elapsed<120000\?10000:30000/);
+ assert.match(polling,/window\.setTimeout/);
+ assert.doesNotMatch(polling,/Date\.now\(\)-since<120000\)void poll/);
+ assert.doesNotMatch(polling,/station_connect_admin_send_arsselli_630|ussd_start|ussd_reply/);
+ assert.doesNotMatch(polling,/setCreditDirectJobUuid\(/);
+});
+
+test("one slow 630 result does not freeze SIM, assume a DATA fallback, or re-send money",()=>{
+ const start=flexy.indexOf('    // The time budget is for the UI warning');
+ const end=flexy.indexOf('  const loadCatalog = useCallback',start);
+ const polling=flexy.slice(start,end);
+ assert.match(polling,/else if\(status==="review"\)/);
+ assert.match(polling,/لا تعاود إرسالها/);
+ assert.match(polling,/const explicitRejection=/);
+ assert.match(polling,/setCreditSendAttempted\(false\)/);
+ assert.doesNotMatch(polling,/freeze|block_sim|suspend_sim|switch_to_DATA/i);
+ assert.doesNotMatch(polling,/db\.rpc\("[^"]*send/i);
 });
