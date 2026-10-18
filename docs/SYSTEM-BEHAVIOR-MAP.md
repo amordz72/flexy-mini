@@ -1,3 +1,13 @@
+## 2026-10-18 — LIVE 630 production hotfix and no-reply reconciliation (SERVER v25; NOT END-TO-END CERTIFIED)
+
+**Server owner:** Station Connect/Supabase `station-gateway` is now **Edge v25 ACTIVE**. Readback verified the numeric four-field `[amount, recipient, 1 confirm, 0 cancel]` parser and the exact open same-session `ussd_reply("1")` path from `amordz72/station-connect` PR #22 branch. Only two gateway source files changed from v24; Agent, existing 696/Sama paths and Flexy Mini UI were not modified. Nine local parser cases passed. GitHub Agent Check runner remains failing, and PR #22 is not yet merged to Station main; live post-v25 financial transfer/SMS success is UNVERIFIED.
+
+**Historical job:** One already closed owner-approved ordinary 630 100 DZD session on old v24 had successful `ussd_start` and `ussd_release`, no `ussd_reply`, verified `await_start_response`, and a previously unknown financial result. The precise single-job guarded reconciliation marked `failed / 630_CONFIRMATION_NOT_SENT`; existing GTS cumulative hold calculation automatically released ONLY that hold. No financial command or SIM balance query was sent. Five old 696 reviews contained real `ussd_reply` and stay reserved pending independent evidence. Never auto-repeat or claim a successful 630 charge.
+
+**Frontend:** `src/FlexyServicePage.tsx` in main already contains the narrow `630_CONFIRMATION_NOT_SENT` recovery branch from Flexy PR #43: a fresh page reload/read RPC can clear an obsolete browser click lock without financial resend. Installed Android PWA SHA and fresh physical money-send proof are not verified. Next: verify PWA on phone and, only following explicit approval for a new transaction, inspect the three-step session and final carrier result. Source/DB/deployment are distinct gates.
+
+---
+
 ## 2026-10-18 — Reconciled 630 without reply(1) must clear stale browser lock (frontend source fix)
 
 **Observed bug:** after an admin-owned Mobilis ordinary 630 request was proven `630_CONFIRMATION_NOT_SENT` by server command/session evidence (closed session, **zero ussd_reply**), Supabase updated its financial job from REVIEW to FAILED and released its cumulative 632 hold. However the currently installed Flexy Mini client kept `creditSendAttempted=true` for every FAILED, even for *verified never-confirmed* 630 attempts. The local-storage metadata was cleared for terminal failures but the in-memory disabled send button remained until manual reload; this was an **incorrect UI-only lock**, not an unsettled financial debit.
