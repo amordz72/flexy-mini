@@ -32,7 +32,7 @@ const History=(await import(new URL('FlexyOperationHistory.mjs',output))).defaul
 const Flexy=(await import(new URL('FlexyServicePage.mjs',output))).default;
 globalThis.IS_REACT_ACT_ENVIRONMENT=true;
 const timers=new Map(); let timerId=0;
-globalThis.window={setInterval:fn=>{timers.set(++timerId,fn);return timerId},clearInterval:id=>timers.delete(id),localStorage:{getItem:()=>null,setItem(){},removeItem(){}}};
+globalThis.window={setInterval:fn=>{timers.set(++timerId,fn);return timerId},clearInterval:id=>timers.delete(id),setTimeout:fn=>{timers.set(++timerId,fn);return timerId},clearTimeout:id=>timers.delete(id),localStorage:{getItem:()=>null,setItem(){},removeItem(){}}};
 const future=new Date(Date.now()+86400000).toISOString();
 const classified={lookup_status:'CLASSIFIED',presentation_group:'PIXX',discovery_uuid:'discovery',discovered_at:new Date().toISOString(),valid_until:future,active_job_uuid:null};
 const missing={lookup_status:'NEEDS_DISCOVERY',presentation_group:null,active_job_uuid:null};
