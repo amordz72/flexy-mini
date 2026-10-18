@@ -1,3 +1,13 @@
+## 2026-10-18 — Station table and single modem table; owner-only station approval (UI only)
+
+**User-approved layout:** Stations appear once in a compact Ant Design Table at top, including stable station name, approval status, heartbeat recency and an `اعتماد` action **only** for `pending` stations. All stations remain visible even while the modem table is filtered. An explicit Ant Design confirmation Modal must precede `public.station_connect_admin_set_status(p_station_uuid, 'approved')`. This existing RPC checks `private.is_shop_admin()`. **No new station is approved as part of this code/documentation rollout; the owner presses and confirms per station in the live UI.**
+
+Below the station table, keep the per-admin/per-device saved station selector and a separate optional modem-visibility selector, defaulted to **all** (no hiding older known SIMs). Show **one** station-tagged modem/SIM AntD Table, sorted with recently observed known SIMs before other recent hardware, then older known and unknown rows. A row expansion keeps existing modem details, PIN, SMS, Sama and Arsselli actions; USB/Serial identities remain sourced from existing backend RPCs, never guessed. On phone the same Table uses compact columns and AntD horizontal scroll, not nested per-server modem Cards. The former fallback text `نوع غير محدد` next to a known but unlabeled SIM identity is replaced with `شريحة مسجلة`; actual `sim_type` still has its own field.
+
+**Scope:** `src/StationOverview.tsx`, existing `tests/station-identity.test.mjs` and this behavior note. No changes to Station Agent, database/RPC definitions, money transfer, SIM classification, wallet, PIN or MyTool shared entities. Branch `feat/stations-table-approval-filter-20261018`; tests and actual Pages/PWA deploy need independent proof before a production claim.
+
+---
+
 ## 2026-10-18 — Faster physical Agent handoff: v0.4.13 (Station SOURCE MERGED; NOT INSTALLED)
 
 **Owner instruction:** Do not hold the Arsselli SIM idle because HTTPS command polling sleeps 2s between 630 commands; immediately process the next USSD step after the previous completion is acknowledged. Keep the backend responsible for financial result and any future multi-SIM queue. Carrier "request accepted" after exact reply "1" is operational SUCCESS; release session and make SIM available, without awaiting recipient SMS or calling 632 after each success. Poll 632 for periodic freshness or truly unclear outcomes.
