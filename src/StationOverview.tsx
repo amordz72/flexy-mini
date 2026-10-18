@@ -87,6 +87,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
  const [usbIdentities,setUsbIdentities]=useState<Record<string,UsbModemIdentity>>({});
  const [usbDirectoryError,setUsbDirectoryError]=useState(false);
  const [selected,setSelected]=useState<string|null>(null);
+ const [simVisibility,setSimVisibility]=useState<"all"|"recent-known"|"recent"|"known">("recent-known");
  const [filterStorageKey,setFilterStorageKey]=useState<string|null>(null);
  const [samaRows,setSamaRows]=useState<SamaStatus[]>([]);
  const [samaError,setSamaError]=useState("");
@@ -509,6 +510,10 @@ export default function StationOverview({db}:{db:SupabaseClient}){
      options={[{value:"all",label:"كل السيرفرات"},...stations.map(station=>({value:station.station_uuid,label:serverName(station.station_uuid)}))]}
      onChange={value=>changeServer(value==="all"?null:value)}/>
     <Typography.Text type="secondary">الاختيار محفوظ لهذا الحساب على هذا الجهاز.</Typography.Text>
+    <Typography.Text strong>فلترة المودمات والشرائح</Typography.Text>
+    <Select aria-label="فلترة حالة الشرائح" value={simVisibility} style={{width:"100%",maxWidth:380}}
+     options={[{value:"recent-known",label:"الشرائح المعروفة والمرصودة حديثًا"},{value:"recent",label:"كل الأجهزة المرصودة حديثًا"},{value:"known",label:"كل الشرائح المعروفة"},{value:"all",label:"عرض الكل (بما فيها القديمة)"}]}
+     onChange={value=>setSimVisibility(value)}/>
    </Space>
   </Card>
   {error&&<Alert type="error" showIcon message={error}/>}
@@ -517,7 +522,12 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   {checkedAt&&<Typography.Text type="secondary">آخر تحديث: {dateLabel(checkedAt)}</Typography.Text>}
   {visibleStations.length===0&&!loading&&<Empty description="لا توجد محطات مرئية للحساب"/>}
   {visibleStations.map(station=>{
-   const modems=(hardware[station.station_uuid]||[]).map(r=>({...r,station_uuid:station.station_uuid})).sort((a,b)=>hardwarePriority(a)-hardwarePriority(b));
+   const allModems=(hardware[station.station_uuid]||[]).map(r=>({...r,station_uuid:station.station_uuid}));
+   const modems=allModems.filter(r=>simVisibility==="all"||
+    (simVisibility==="recent-known"&&hardwarePriority(r)===0)||
+    (simVisibility==="recent"&&online(r.modem_last_seen_at))||
+    (simVisibility==="known"&&Boolean(r.sim_uuid&&r.sim_type&&r.sim_type!=="unknown"))
+   ).sort((a,b)=>hardwarePriority(a)-hardwarePriority(b));
    const connected=station.status==="approved"&&online(station.last_seen_at);
    return <Card key={station.station_uuid}
     title={identityCell("station",station.station_uuid,station.computer_name||"محطة دون اسم")}
@@ -528,7 +538,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
       {key:"last",label:"آخر اتصال",children:dateLabel(station.last_seen_at)},
       {key:"agent",label:"Agent",children:station.agent_version||"—"}
      ]}/>
-     <Typography.Text strong>المودمات والشرائح ({modems.length})</Typography.Text>
+     <Typography.Text strong>المودمات والشرائح ({modems.length} من {allModems.length})</Typography.Text>
      {hardwareLoading&&<Typography.Text type="secondary">جاري تحديث المودمات...</Typography.Text>}
      {!hardwareLoading&&modems.length===0&&<Empty description="لا توجد مودمات مسجلة لهذه المحطة"/>}
      {mobile?<Space direction="vertical" size="small" style={{width:"100%"}}>
