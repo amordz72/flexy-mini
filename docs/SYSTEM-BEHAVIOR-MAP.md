@@ -1,3 +1,13 @@
+## 2026-10-18 — Faster physical Agent handoff: v0.4.13 (Station SOURCE MERGED; NOT INSTALLED)
+
+**Owner instruction:** Do not hold the Arsselli SIM idle because HTTPS command polling sleeps 2s between 630 commands; immediately process the next USSD step after the previous completion is acknowledged. Keep the backend responsible for financial result and any future multi-SIM queue. Carrier "request accepted" after exact reply "1" is operational SUCCESS; release session and make SIM available, without awaiting recipient SMS or calling 632 after each success. Poll 632 for periodic freshness or truly unclear outcomes.
+
+**Implementation:** [station-connect PR #24](https://github.com/amordz72/station-connect/pull/24) merged to main commit `d5aa31161b741b0a4326ba61b2c7f657d5175857`. Windows Agent source version 0.4.13: `commandLoop` and `jobLoop` immediately attempt another authenticated server claim after a successful completion. `JOB_POLL_MS=2000` remains idle/error fallback; server orchestrator, endpoint auth, USSD command order and financial idempotency unchanged. Additional `agent/tests/claim-loop-pacing.test.js` and in-tool mocked loop trace validated 3 sequential commands with no sleeps between them. GitHub Agent Check runner again failed before executing any job steps (empty list), **not a CI pass**. No live financial operation occurred.
+
+**Operational readback:** Supabase Station server-2 remains ONLINE at agent version 0.4.12, not yet 0.4.13, so physical rollout/latency improvement is **not yet active on Windows**. After Windows checkout update and PM2 restart, verify heartbeat version, then measure real 630 elapsed times. TRUE WebSocket server wake and durable multi-SIM queue are **future changes**, not falsely claimed as part of this latency fix.
+
+---
+
 ## 2026-10-18 — OWNER STANDING PERMISSION: ongoing live ordinary 630 field pilot
 
 **USER_STATED (explicit authorization):** The owner authorizes ongoing *real* Mobilis Arsselli ordinary-credit 630 dispatch for practical testing at the owner's shop and with cooperating shops, starting now and on future days. This is NOT limited to one 40 DZD test or a single-use experimental gate. Do not keep asking for a new blanket project-level permission to make the existing 630 admin dispatch workflow available. The owner will conduct actual tests with live money and inspect results.
