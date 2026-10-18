@@ -47,8 +47,8 @@ test("unchanged amount control cannot reset the direct-630 send lock",()=>{
 });
 
 test("known no-confirmation 630 failure releases the browser lock after server reconciliation",()=>{
- const start=flexy.indexOf('} else if(status==="failed")');
- const end=flexy.indexOf('} else {',start);
+ const start=flexy.indexOf('}else if(status==="failed"){');
+ const end=flexy.indexOf('}else{',start);
  const branch=flexy.slice(start,end);
  assert.match(branch,/String\(job\.result_code\|\|""\)==="630_CONFIRMATION_NOT_SENT"/);
  assert.match(branch,/String\(job\.result_code\|\|""\)==="630_CONFIRMATION_NOT_SENT_NO_DEBIT_632"/);
