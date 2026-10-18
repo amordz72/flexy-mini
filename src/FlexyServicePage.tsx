@@ -453,11 +453,18 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
   useEffect(() => {
     if (!db || !creditDirectJobUuid) return;
     let active=true,checking=false;
-    const since=Date.now();
+    // The time budget is for the UI warning, NOT a network timeout or a failed transfer.
+    // Preserve the original clock after a PWA reload of the same pending financial job.
+    const stored=readCredit630Pending();
+    const since=stored?.jobUuid===creditDirectJobUuid?stored.createdAt:Date.now();
+    let timer:number|undefined;
+    let previousStatus=creditTransferStatus;
     const poll=async()=>{
-      if (!active || checking) return;
+      if(!active || checking)return;
       checking=true;
+      let terminal=false;
       try {
+        // Read only: never re-send 630, retry confirmation 1, or touch the Station Agent.
         const {data,error}=await db.rpc("station_connect_admin_630_credit_job",{
           p_job_uuid:creditDirectJobUuid
         });
@@ -465,46 +472,63 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
         const job=Array.isArray(data)?data[0]:data;
         if(!active || !job || job.job_uuid!==creditDirectJobUuid)return;
         const status=String(job.status||"");
+        terminal=status==="success" || status==="failed";
         const pending=readCredit630Pending();
         if(pending?.jobUuid===creditDirectJobUuid){
-          if(status==="success" || status==="failed") saveCredit630Pending(null);
+          if(terminal)saveCredit630Pending(null);
           else saveCredit630Pending({...pending,status});
         }
         setCreditTransferStatus(status);
-        if(status==="success") {
-          setCreditStageResult("أكدت الشبكة نجاح شحن 630. المرجع: "+creditDirectJobUuid);
+        if(status!==previousStatus){
+          previousStatus=status;
+          refreshHistory();
+        }
+        if(status==="success"){
+          const operational=job.result_code==="630_NETWORK_ACCEPTED_OPERATIONAL";
+          setCreditStageResult((operational
+            ?"قبلت موبيليس طلب الشحن بعد التأكيد 1 (نجاح تشغيلي؛ وصول SMS للمستفيد يُراجع بشكل مستقل). "
+            :"نجحت عملية 630 حسب النتيجة الموثقة. ")+"المرجع: "+creditDirectJobUuid);
           setCreditSendAttempted(false);
           creditRequestKey.current=null;
-          refreshHistory();
-        } else if(status==="review") {
-          setCreditStageResult("بدأ إرسال 630 لكن نتيجته المالية لم تتأكد من الشبكة/SMS. لا تعاود الشحن. المرجع: "+creditDirectJobUuid);
-          refreshHistory();
-        } else if(status==="failed") {
-          // A closed 630 session with NO confirmation reply is a proven
-          // non-send. Do not keep a browser-only financial lock after the
-          // server has finished reconciliation; other failures stay locked.
+        }else if(status==="review"){
+          setCreditStageResult("رد الشبكة غير محسوم للعملية الحالية؛ لا تعاود إرسالها. تقدر تراجع السجل بينما تستمر باقي وظائف الموقع. المرجع: "+creditDirectJobUuid);
+        }else if(status==="failed"){
+          // Release the browser-only lock only for a carrier-proven rejection
+          // or a closed session that provably never sent confirmation 1.
+          // This is NOT permission for an automatic financial retry.
           const notSent=String(job.result_code||"")==="630_CONFIRMATION_NOT_SENT"
             || String(job.result_code||"")==="630_CONFIRMATION_NOT_SENT_NO_DEBIT_632";
-          if(notSent) {
+          const explicitRejection=String(job.result_code||"")==="630_NETWORK_REJECTED_EXPLICIT";
+          if(notSent || explicitRejection){
             setCreditSendAttempted(false);
             creditRequestKey.current=null;
-            setCreditStageResult("لم يرسل البرنامج تأكيد 1 للشبكة؛ أُغلقت العملية دون إرسال فليكسي. المرجع: "+creditDirectJobUuid);
-          } else {
-            setCreditStageResult("ورد فشل للعملية؛ لا تكررها قبل مراجعة رد الشبكة. المرجع: "+creditDirectJobUuid);
+            setCreditStageResult((notSent
+              ?"لم يُرسل التأكيد 1؛ أُغلقت العملية دون شحن. "
+              :"رفضت موبيليس الطلب صراحة؛ راجع السبب والرصيد قبل أي طلب جديد. ")
+              +"المرجع: "+creditDirectJobUuid);
+          }else{
+            setCreditStageResult("فشلت العملية لكن سلامة إعادة الإرسال لم تتأكد؛ لا تعاودها قبل مراجعة رد الشبكة. المرجع: "+creditDirectJobUuid);
           }
-          refreshHistory();
-        } else {
+        }else if(Date.now()-since>=20000){
+          setCreditStageResult("تأخر رد موبيليس أكثر من 20 ثانية. العملية قيد التحقق، وليست فاشلة؛ لا تعاود الإرسال. المرجع: "+creditDirectJobUuid);
+        }else{
           setCreditStageResult("قيد الإرسال والتحقق من الشبكة. مرجع العملية: "+creditDirectJobUuid);
         }
-      } catch {
+      }catch{
         if(active)setCreditStageResult("تعذر قراءة نتيجة 630. ربما بدأ أمر الشبكة؛ لا تعاود الشحن.");
-      } finally {checking=false;}
+      }finally{
+        checking=false;
+        if(active && !terminal){
+          const elapsed=Date.now()-since;
+          // Most 630 requests finish quickly. Poll less often only on the rare slow
+          // or ambiguous request, without stopping observation at an arbitrary 2 min.
+          timer=window.setTimeout(()=>{void poll();},
+            elapsed<20000?3000:elapsed<120000?10000:30000);
+        }
+      }
     };
     void poll();
-    const timer=window.setInterval(()=>{
-      if(Date.now()-since<120000)void poll();
-    },5000);
-    return ()=>{active=false;window.clearInterval(timer);};
+    return ()=>{active=false;if(timer!==undefined)window.clearTimeout(timer);};
   },[db,creditDirectJobUuid,refreshHistory]);
 
   const loadCatalog = useCallback(async () => {
