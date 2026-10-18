@@ -1,3 +1,19 @@
+## 2026-10-18 — OWNER STANDING PERMISSION: ongoing live ordinary 630 field pilot
+
+**USER_STATED (explicit authorization):** The owner authorizes ongoing *real* Mobilis Arsselli ordinary-credit 630 dispatch for practical testing at the owner's shop and with cooperating shops, starting now and on future days. This is NOT limited to one 40 DZD test or a single-use experimental gate. Do not keep asking for a new blanket project-level permission to make the existing 630 admin dispatch workflow available. The owner will conduct actual tests with live money and inspect results.
+
+**Exactly how authorized sends occur:** The existing `src/FlexyServicePage.tsx` admin-only direct-credit action, with a valid, user-entered recipient phone and exact amount, verified online station/SIM/account, fresh network balance, and its explicit in-app per-transaction confirmation modal. The already-installed `public.station_connect_admin_send_arsselli_630` RPC supports repeated independently confirmed *new* operations; the deprecated `private.station_connect_630_test_gate` does not control this pathway and stays disarmed. This standing pilot approval does **not** authorize the assistant to originate a new live financial transfer without a known destination and amount, quietly bypass confirmation, repeat uncertain transfers, weaken idempotency, or unlock general customer/shop money transfer permissions.
+
+**Participating shops:** Allow testing in cooperation with other shops through the owner's currently authorized operational workflow. Separate external shop logins / self-service financial dispatch are NOT automatically authorized: each needs explicit account, selling actor, wallet/settlement and server-side permission treatment. Do not make every authenticated user a shop admin.
+
+**Operational focus:** GTS 04 is owner's current primary Arsselli account; DATA 03 is historically used, and availability is never inferred by name. The server still selects only a demonstrably eligible and funded account. Slow or unknown carrier response affects the specific transaction and its balance hold; no reflexive freeze of the entire SIM or Flexy Mini app. Verified `1` and exact carrier acceptance is operational SUCCESS, independently distinguishable from SMS arrival. Preserve no-blind-retry, prevention of duplicate debits and safe preflight.
+
+**Evidence checked:** Production direct 630 sender does not consult the former one-shot test gate. Live database had one recently online, approved Arsselli SIM at inspection; readiness can change minute to minute and balance checks remain mandatory. The Flexy Mini PR #45 fast-response fix was merged and GitHub Pages run #39135309668 succeeded. No extra recharge was sent to enact this documentation change.
+
+**Next empirical gate:** Owner-led individually confirmed live 630 sends in the deployed PWA, record start → reply 1 → release, automatic terminal code, business-account debit and arrival/nonarrival reports. Address any confirmed nonarrival with actual evidence before escalating rollout. Offers/Sama/Djezzy/Ooredoo remain separate unfinished paths.
+
+---
+
 ## 2026-10-18 — Ordinary 630: fast feedback, no SIM-wide freeze (SOURCE; CI/DEPLOY PENDING)
 
 **Owner decision:** Prioritize stable working ordinary Mobilis 630 before investing in more SIMs or complicated failovers. GTS (04) is the main distributor account currently used; DATA (03) is historical and MUST NOT be assumed to have funds or to be a ready fallback. The canonical server may select only an actually enabled, verified account with spendable funds; do not hardcode GTS or auto-switch to DATA simply because an unrelated transfer was uncertain. One slow transfer is NOT justification to freeze the SIM, whole app or all Flexy sales.
