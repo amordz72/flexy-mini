@@ -22,7 +22,15 @@ function data(){
   flexy_mini_customer_accounts:[{id:1,active:true,username:"fixture_user"}],
   flexy_mini_customer_catalog_grants:[],
   card_stock_types:[{type_key:"pubg",active:true},{type_key:"disabled_master_type",active:false}],
-  flexy_mini_master_stock_summary:[{type_key:"pubg",denomination:"500",available_count:7}],
+  flexy_mini_master_stock_summary:[
+    {type_key:"pubg",denomination:"200",available_count:0},
+    {type_key:"pubg",denomination:"500",available_count:7},
+    {type_key:"pubg",denomination:"700",available_count:0},
+    {type_key:"pubg",denomination:"800",available_count:0},
+    {type_key:"pubg",denomination:"900",available_count:0},
+    {type_key:"pubg",denomination:"1000",available_count:0},
+    {type_key:"pubg",denomination:"1100",available_count:0}
+  ],
   flexy_mini_categories:[{id:1,name:"Games",sort_index:1,active:true},{id:2,name:"Inactive",sort_index:2,active:false}],
   flexy_mini_products:[
    {id:10,category_id:1,name:"Visible",master_type_key:"pubg",sort_index:1,active:true,display_mode:"visible",is_frozen:false},
@@ -40,7 +48,8 @@ function data(){
    {id:104,product_id:11,name:"Hidden parent",sort_index:1,denomination:900,stock_quantity:2,active:true,display_mode:"visible",is_frozen:false},
    {id:105,product_id:12,name:"Frozen parent",sort_index:1,denomination:1000,stock_quantity:2,active:true,display_mode:"visible",is_frozen:false},
    {id:106,product_id:14,name:"Disabled category",sort_index:1,denomination:1100,stock_quantity:2,active:true,display_mode:"visible",is_frozen:false},
-   {id:108,product_id:15,name:"Unmapped card",sort_index:1,denomination:500,stock_quantity:99,active:true,display_mode:"visible",is_frozen:false}
+   {id:108,product_id:15,name:"Unmapped card",sort_index:1,denomination:500,stock_quantity:99,active:true,display_mode:"visible",is_frozen:false},
+   {id:109,product_id:10,name:"Not in Master denomination",sort_index:6,denomination:1234,stock_quantity:50,active:true,display_mode:"visible",is_frozen:false}
   ]
  };
 }
@@ -49,7 +58,7 @@ function service(records,{isAdmin=true,hasUser=true}={}){
  let handler;
  const touched=[];
  function createClient(){
-  return {auth:{getUser:async()=>({data:{user:hasUser?{id:"fixture-admin"}:null}})},rpc:async(name)=>({data:name==="flexy_mini_master_stock_summary"?(records.flexy_mini_master_stock_summary||[]):isAdmin}),from(table){
+  return {auth:{getUser:async()=>({data:{user:hasUser?{id:"fixture-admin"}:null}})},rpc:async(name)=>name==="flexy_mini_master_stock_summary"&&records.masterStockUnavailable?{data:null,error:{code:"FORBIDDEN"}}:{data:name==="flexy_mini_master_stock_summary"?(records.flexy_mini_master_stock_summary||[]):isAdmin,error:null},from(table){
    touched.push(table);
    let fields=[],filters=[],orders=[],action="select";
    const rows=()=>{
@@ -107,6 +116,7 @@ test("valid approved customer sees only active visible unfrozen catalog in index
  assert.equal(result.body.variants.find(v=>v.id===107).stock_quantity,0);
  assert.equal(result.body.products.some(p=>p.id===15),false);
  assert.equal(result.body.variants.some(v=>v.id===108),false);
+ assert.equal(result.body.variants.some(v=>v.id===109),false);
  assert.equal(app.touched.includes("flexy_mini_customer_wallets"),false);
 });
 test("catalog rejects absent/invalid session token or wrong device secret",async()=>{
@@ -198,8 +208,9 @@ test("Master Card type deactivation hides a product even when a customer granted
 });
 
 test("customer catalog fails closed if Master Card cannot be read",async()=>{
- const records=data(),app=service(records);
+ const records=data();records.masterStockUnavailable=true;
+ const app=service(records);
  const result=await app.post({token,device_secret:deviceSecret});
- assert.equal(result.status,200);
+ assert.equal(result.status,503);
  assert.equal(app.touched.includes("card_stock_types"),true);
 });
