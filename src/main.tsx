@@ -792,7 +792,7 @@ function SharedCardsStore({token}:{token?:string}){
       const variants=(v.data||[]).filter(x=>x.active&&!x.is_frozen&&x.display_mode==="visible"&&byId.has(x.product_id))
         .map(x=>{const product=byId.get(x.product_id)!;return {
           id:x.id,product_id:x.product_id,name:x.name,denomination:x.denomination,sort_index:x.sort_index,
-          stock_quantity:(summary.data||[]).filter(row=>row.type_key===product.master_type_key&&Number(row.denomination)===Number(x.denomination)).reduce((sum,row)=>sum+Number(row.available_count||0),0)
+          stock_quantity:(summary.data||[]).filter((row:MasterStockSummary)=>row.type_key===product.master_type_key&&Number(row.denomination)===Number(x.denomination)).reduce((sum:number,row:MasterStockSummary)=>sum+Number(row.available_count||0),0)
         };});
       return {categories:[],products:products.map(({id,category_id,name})=>({id,category_id,name})),variants};
     })().then(data=>{if(active)setCatalog(data);}).catch(e=>{if(active)setError(e instanceof Error?e.message:"تعذر تحميل البطاقات");}).finally(()=>{if(active)setBusy(false);});return()=>{active=false;};}
