@@ -2,6 +2,15 @@
 
 **Applies to all future Flexy Mini changes and technical analysis.**
 
+## Owner-confirmed non-negotiable execution ownership — 2026-10-19
+
+**الموقع هو الذي يرسل الأوامر؛ Station Agent ينفّذها فقط.** The Flexy Mini online application/server (Supabase RPC/Edge and its canonical service policies), responding to an authorized UI/customer request, chooses the operation, eligible SIM/account, USSD template/steps, phone/amount, and financial conditions. It issues explicit, ordered, job-bound hardware commands to Station Connect. This is not a browser-to-modem direct connection.
+
+The Windows Station Agent is **only the physical transport executor**: consume an authorized command, verify transport/session/hardware identity and basic safety, perform exactly that USSD/SMS/modem action, and return raw responses/status. It must NOT invent USSD codes, interpret offer menus for business decisions, choose service routes, decide whether to reply `1`, classify financial success, debit balances, or autonomously retry a monetary operation. The **online server** interprets returned RAW, issues each next confirmed command in the existing session, and owns business result/ledger updates. Physical safety checks in Agent remain mandatory; "executor only" never means bypass authorization or hardware validation.
+
+Never put new carrier-specific state machines, offer choice, success rules, or balance accounting inside `station-connect/agent`. Preserve separation even when investigating 630, 696, Sama, Ooredoo or Djezzy. Existing deployments are unchanged by this document.
+
+
 ## Mandatory startup — no reset / no guessing
 
 **CANONICAL FLEXy ENTITY CONTRACT (2026-10-16):** Before changes to customers, server routing, Station/Agent, modem/SIM, distributor accounts, wallets, USSD codes, discovery, or execution, read [`amordz72/mytool-dev/flexy/policy/ENTITY-OWNERSHIP-CONTRACT.md`](https://github.com/amordz72/mytool-dev/blob/main/flexy/policy/ENTITY-OWNERSHIP-CONTRACT.md). Every feature must name its actor, stable entity ID, owning layer, permission boundary and related existing table before adding a UI or RPC. Admin confirmation of an operational USSD code is distinct from live-money execution authorization. **Do not create a second registry or bury the shared «الاتصالات والشبكات/الأكواد التشغيلية» under individual SIM cards.**
