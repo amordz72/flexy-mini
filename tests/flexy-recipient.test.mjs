@@ -561,6 +561,37 @@ test('new confirmed 632 SMS resumes 630 preflight automatically without second b
  await close(r);
 });
 
+test('632 reviewed as BALANCE_SMS_PENDING stays watchable until the independent SMS completes',async()=>{
+ let ensureCalls=0,scanCount=0;
+ const db=makeDb(name=>{
+  if(name==='station_connect_admin_arsselli_630_availability')
+   return Promise.resolve({data:{ready:false,reason:'BALANCE_NOT_VERIFIED'},error:null});
+  if(name==='station_connect_admin_630_ensure_fresh_balance'){
+   ensureCalls++;
+   return Promise.resolve({data:balanceWaiting,error:null});
+  }
+  if(name==='station_connect_admin_arsselli_balance_job'){
+   scanCount++;
+   return Promise.resolve(ok({job_uuid:'632-balance-1',status:'review',result_code:'BALANCE_SMS_PENDING'}));
+  }
+  if(name==='station_connect_admin_arsselli_630_preflight')
+   throw Error('no financial preflight until verified SMS');
+  return Promise.resolve(ok([]));
+ });
+ const r=await mount(Flexy,{db,isCustomer:false});
+ const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
+ await act(async()=>phone.props.onChange({target:{value:'0500000001'}}));
+ await act(async()=>r.root.findByType('amount').props.onChange(40));await flush();
+ await click(r,'إرسال رصيد عادي — 630');
+ assert.equal(ensureCalls,1);
+ await act(async()=>{for(const tick of [...timers.values()])await tick();});await flush();
+ assert.equal(scanCount,1);
+ assert.equal(ensureCalls,1,'no second 632 during SMS wait');
+ assert.ok(r.root.findAllByType('alert').some(x=>
+   String(x.props.message||x.props.description).includes('ننتظر')));
+ await close(r);
+});
+
 test('failed terminal 632 never auto-redials on 5-second polling and permits next explicit try',async()=>{
  let ensureCalls=0;
  const db=makeDb(name=>{
