@@ -87,6 +87,9 @@ Deno.serve(async(req)=>{
        const parent=eligibleParents.get(v.product_id);
        if(!parent)return false;
        const directGrant=variantGrants.has(v.id);
+       // Existing Flexy variant definitions are historical until the exact Master denomination is recorded.
+       const masterSku=String(parent.master_type_key)+"|"+String(Number(v.denomination));
+       if(v.denomination===null || !available.has(masterSku))return false;
        return (parent.display_mode==="visible"||productGrants.has(parent.id)||directGrant)
          && (v.display_mode==="visible"||directGrant);
      }).map(({display_mode,...v})=>{
@@ -94,10 +97,10 @@ Deno.serve(async(req)=>{
        return {...v,stock_quantity: parent ? (available.get(String(parent.master_type_key)+"|"+String(Number(v.denomination)))||0) : 0};
      });
      const accessibleProductIds=new Set(variants.map(v=>v.product_id));
-     const products=(productsResult.data||[]).filter(p=>eligibleParents.has(p.id)
+     const products=(productsResult.data||[]).filter(p=>eligibleParents.has(p.id) && accessibleProductIds.has(p.id)
        && (p.display_mode==="visible"||productGrants.has(p.id)||accessibleProductIds.has(p.id)))
        .map(({display_mode,master_type_key,...p})=>p);
-     return respond(200,{categories,products,variants});
+     return respond(200,{categories:categories.filter(c=>products.some(p=>p.category_id===c.id)),products,variants});
    }
    await admin.from("flexy_mini_trusted_devices").update({last_used_at:new Date().toISOString()}).eq("id",device.id);
    const {data:wallet,error:walletError}=await admin.from("flexy_mini_customer_wallets").select("balance,debt,profit,updated_at").eq("customer_id",session.customer_id).maybeSingle();
