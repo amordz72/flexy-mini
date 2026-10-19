@@ -290,8 +290,8 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
     setCreditCheckError("");
     setCreditBalanceMessage("");
     try {
-      // One server-owned action: if a 24h confirmed baseline is missing,
-      // queue/reuse ONE existing NON-FINANCIAL 632 query (not a 630 recharge).
+      // Cumulative spendable drives 630; only insufficient/unverified
+      // accounts can request ONE nonfinancial 632 per explicit preflight.
       const {data,error}=await db.rpc("station_connect_admin_630_ensure_fresh_balance",{
         p_amount:checkedAmount
       });
@@ -323,9 +323,9 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
     }
   };
 
-  // While the same recipient/money amount is on screen, finish the whole
-  // balance-preflight automatically. No additional button or manual page visit.
-  // A timed-out or unknown 632 result is never silently retried.
+  // Poll by EXACT nonfinancial 632 job UUID. Never call the queueing RPC
+  // again while following that attempt: an old terminal result must not
+  // turn the five-second UI interval into an endless network-USSD loop.
   useEffect(() => {
     const wait=creditBalanceWait;
     if (!db || !wait || isCustomer || mode!=="credit"
@@ -333,45 +333,91 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
     let active=true;
     let checking=false;
     const serial=creditBalanceRequestSerial.current;
+    const clearWait=()=>{
+      if(!active || serial!==creditBalanceRequestSerial.current)return;
+      setCreditBalanceWait(null);
+      setCreditBalanceMessage("");
+    };
     const poll=async()=>{
-      if (checking || !active) return;
-      if (Date.now()-wait.startedAt>=90000) {
-        setCreditBalanceWait(null);
-        setCreditBalanceMessage("");
-        setCreditCheckError("انتهت مهلة انتظار رصيد الشبكة. لم يُرسل أي شحن ولا نعيد الاستعلام تلقائيًا.");
+      if(checking || !active)return;
+      if(Date.now()-wait.startedAt>=90000){
+        clearWait();
+        creditSendIntent.current=false;
+        setCreditCheckError("انتهت مهلة متابعة كشف الرصيد. تستطيع بدء كشف جديد إذا كان المودام جاهزًا؛ لم يُرسل أي فليكسي.");
         return;
       }
       checking=true;
-      try {
+      try{
+        if(wait.jobUuid){
+          const {data,error}=await db.rpc("station_connect_admin_arsselli_balance_job",{
+            p_job_uuid:wait.jobUuid
+          });
+          if(error)throw error;
+          if(!active || serial!==creditBalanceRequestSerial.current)return;
+          const job=Array.isArray(data)?data[0]:data;
+          if(!job || job.job_uuid!==wait.jobUuid
+            || !["queued","claimed","success","failed","review","unavailable"].includes(String(job.status)))
+            throw new Error("نتيجة كشف الرصيد لا تطابق الطلب");
+          if(job.status==="queued" || job.status==="claimed"){
+            setCreditBalanceMessage("كشف الرصيد قيد التنفيذ. نتابع نفس الطلب دون إرسال كشف ثانٍ.");
+            return;
+          }
+          clearWait();
+          if(job.status==="success"){
+            // Query READ-ONLY availability: never enqueue 632 from polling.
+            const ready=await db.rpc("station_connect_admin_arsselli_630_availability",{
+              p_amount:wait.amount
+            });
+            if(ready.error)throw ready.error;
+            if(!active || serial!==creditBalanceRequestSerial.current)return;
+            const availability=ready.data as CreditAvailability;
+            if(availability?.ready===true){
+              await acceptCredit630Preflight(wait.phone,wait.amount,serial);
+            }else{
+              creditSendIntent.current=false;
+              setCreditCheckError(credit630Feedback(availability?.reason||"UNKNOWN").message);
+            }
+          }else{
+            creditSendIntent.current=false;
+            const code=String(job.result_code||job.status).slice(0,80);
+            setCreditCheckError("كشف الرصيد انتهى دون تأكيد جديد ("+code+"). يمكنك بدء كشف جديد؛ لن نعيد إرسال فليكسي تلقائيًا.");
+          }
+          return;
+        }
+
+        // Modem was busy before any 632 job UUID was allocated. Once free,
+        // one explicit ensure call may create one job, then switch to
+        // job-bound read-only polling, never enqueue after a terminal result.
         const {data,error}=await db.rpc("station_connect_admin_630_ensure_fresh_balance",{
           p_amount:wait.amount
         });
         if(error)throw error;
         if(!active || serial!==creditBalanceRequestSerial.current)return;
         const state=data as CreditBalanceDecision;
-        if (!state || !["ready","waiting","blocked"].includes(state.state)
-          || state.financial_operation === true)
-          throw new Error("تعذر تأكيد حالة الاستعلام");
-        if(state.state==="ready") {
-          setCreditBalanceMessage("تم تحديث الرصيد؛ جاري اختيار الموزّع تلقائيًا...");
+        if(!state || !["ready","waiting","blocked"].includes(state.state)
+          || state.financial_operation===true)throw new Error("نتيجة غير صالحة لاستعلام الرصيد");
+        if(state.state==="ready"){
+          clearWait();
           await acceptCredit630Preflight(wait.phone,wait.amount,serial);
-          if(active && serial===creditBalanceRequestSerial.current)
-            setCreditBalanceWait(null);
-        } else if(state.state==="blocked"){
-          setCreditBalanceWait(null);
-          setCreditBalanceMessage("");
-          setCreditCheckError(creditBalanceBlockedMessage[state.reason] ||
+        }else if(state.state==="blocked"){
+          clearWait();
+          creditSendIntent.current=false;
+          setCreditCheckError(creditBalanceBlockedMessage[state.reason]||
             credit630Feedback(state.reason).message);
-        } else {
+        }else if(state.balance_job_uuid){
+          setCreditBalanceWait(previous=>previous && previous.startedAt===wait.startedAt
+            ? {...previous,jobUuid:state.balance_job_uuid||null}:previous);
+          setCreditBalanceMessage(creditBalancePendingMessage(state.reason));
+        }else{
           setCreditBalanceMessage(creditBalancePendingMessage(state.reason));
         }
-      } catch {
-        if (active && serial===creditBalanceRequestSerial.current) {
-          setCreditBalanceWait(null);
-          setCreditBalanceMessage("");
-          setCreditCheckError("تعذر متابعة استعلام الرصيد. راجع حالة العملية؛ لم يُرسل أي شحن.");
+      }catch(error){
+        if(active && serial===creditBalanceRequestSerial.current){
+          clearWait();
+          creditSendIntent.current=false;
+          setCreditCheckError(error instanceof Error?error.message:"تعذرت متابعة كشف الرصيد.");
         }
-      } finally {checking=false;}
+      }finally{checking=false;}
     };
     const timer=window.setInterval(()=>{void poll();},5000);
     return ()=>{active=false;window.clearInterval(timer);};
