@@ -1,5 +1,9 @@
 # Flexy Mini — Agent / Developer entry contract
 
+## Owner rule: independent Flexy Monitor — no synchronous monitoring in Flexy Core
+
+For all new Flexy changes: Core (existing shared Supabase/backend) owns per-job routing, exact SIM/account, financial baseline/cumulative reconciliation, safety and outcome classification. **Flexy Monitor is a logically independent back-end read/aggregate/analyze module:** quality metrics for Agent/modem/SIM/carrier/account/lookup/Core, root-cause failures, queue trends and measured recommendations to add SIMs or replenish accounts. Do not calculate these aggregates inside financial RPCs, database settlement triggers, React page render, Gateway command claim/complete or the Windows Agent. Prefer SQL/PLpgSQL + existing Supabase pg_cron for a bounded periodic read-only monitor; optional Edge TypeScript later. A delayed/failed Monitor must not stop valid sending or discovery. Frontend displays server-provided metrics only; no extra DB/host. Architecture documented, **not implemented**. [Canonical Developer record](https://github.com/amordz72/developer/blob/main/projects/flexy/INDEPENDENT-QUALITY-CAPACITY-QUEUE-INTELLIGENCE-DECISION-2026-10-19.md).
+
 **Applies to all future Flexy Mini changes and technical analysis.**
 
 ## Owner-confirmed non-negotiable execution ownership — 2026-10-19
