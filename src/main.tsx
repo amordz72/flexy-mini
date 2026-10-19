@@ -188,11 +188,15 @@ function MiniMembers() {
 }
 
 type CatalogCategory = { id: number; name: string; sort_index: number; active: boolean };
-type CatalogProduct = { id: number; category_id: number; name: string; sort_index: number; active: boolean; display_mode: string; is_frozen: boolean };
+type CatalogProduct = { id: number; category_id: number; name: string; master_type_key: string | null; sort_index: number; active: boolean; display_mode: string; is_frozen: boolean };
+type MasterCardType = {type_key:string;name:string;active:boolean};
+type MasterStockSummary = {type_key:string;denomination:string;available_count:number};
 type CatalogVariant = { id: number; product_id: number; name: string; denomination: number | null; purchase_price: number; sale_price: number | null; markup_percent: number; sort_index: number; active: boolean; display_mode: string; stock_quantity: number; is_frozen: boolean };
 function CardsCatalog() {
   const [categories, setCategories] = useState<CatalogCategory[]>([]);
   const [products, setProducts] = useState<CatalogProduct[]>([]);
+  const [masterTypes,setMasterTypes] = useState<MasterCardType[]>([]);
+  const [masterSummary,setMasterSummary] = useState<MasterStockSummary[]>([]);
   const [variants, setVariants] = useState<CatalogVariant[]>([]);
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [productId, setProductId] = useState<number | null>(null);
@@ -209,18 +213,22 @@ function CardsCatalog() {
   async function refresh() {
     if (!client) return;
     setBusy(true);
-    const [c, p, v] = await Promise.all([
+    const [c, p, v, t, stock] = await Promise.all([
       client.from("flexy_mini_categories").select("*").order("sort_index").order("id"),
       client.from("flexy_mini_products").select("*").order("sort_index").order("id"),
-      client.from("flexy_mini_variants").select("*").order("sort_index").order("denomination").order("id")
+      client.from("flexy_mini_variants").select("*").order("sort_index").order("denomination").order("id"),
+      client.from("card_stock_types").select("type_key,name,active").eq("active",true).order("name"),
+      client.rpc("card_stock_admin_summary")
     ]);
     setBusy(false);
-    const issue = c.error || p.error || v.error;
+    const issue = c.error || p.error || v.error || t.error || stock.error;
     if (issue) { setError(issue.message); return; }
     setError("");
     setCategories((c.data || []) as CatalogCategory[]);
     setProducts((p.data || []) as CatalogProduct[]);
     setVariants((v.data || []) as CatalogVariant[]);
+    setMasterTypes((t.data || []) as MasterCardType[]);
+    setMasterSummary((stock.data || []) as MasterStockSummary[]);
   }
   useEffect(() => { void refresh(); }, []);
   async function save(table: string, payload: Record<string, unknown>, form: ReturnType<typeof Form.useForm>[0]): Promise<boolean> {
@@ -354,6 +362,12 @@ function CardsCatalog() {
     await refresh();
   }
   const visibleProducts = products.filter(p => p.category_id === categoryId && p.active);
+  const masterCount = (v:CatalogVariant):number => {
+    const product=products.find(p=>p.id===v.product_id);
+    if(!product?.master_type_key || v.denomination===null)return 0;
+    return masterSummary.filter(row=>row.type_key===product.master_type_key && Number(row.denomination)===Number(v.denomination)).reduce((sum,row)=>sum+Number(row.available_count||0),0);
+  };
+  const masterDenominations = [...new Set(masterSummary.filter(s=>s.type_key===products.find(p=>p.id===productId)?.master_type_key).map(s=>Number(s.denomination)).filter(n=>Number.isFinite(n)&&n>=0))].sort((a,b)=>a-b);
   const visibleVariants = variants.filter(v => v.product_id === productId && v.active)
     .sort((a, b) => a.sort_index - b.sort_index || (a.denomination ?? 999999) - (b.denomination ?? 999999) || a.id - b.id);
   return <Space direction="vertical" size="large" style={{ width: "100%" }}>
@@ -381,17 +395,17 @@ function CardsCatalog() {
       </Form>
     </Card>
     {categoryId !== null && <Card title="2 — الأنواع">
-      <Space wrap>{visibleProducts.map(p => <Space key={p.id} size={4}><Button type={productId === p.id ? "primary" : "default"} onClick={() => setProductId(current => current === p.id ? null : p.id)}>{p.name} <Tag style={{marginInlineStart:6}}>{variants.filter(v=>v.product_id===p.id).length} بطاقات</Tag></Button><Button size="small" aria-label={p.display_mode === "hidden" ? "إظهار" : "إخفاء"} title={p.display_mode === "hidden" ? "إظهار" : "إخفاء"} icon={p.display_mode === "hidden" ? <EyeInvisibleOutlined /> : <EyeOutlined />} onClick={() => toggleVisibility("flexy_mini_products", p.id, p.display_mode)} /><Button size="small" disabled={busy} onClick={() => toggleFreeze("flexy_mini_products",p.id,p.is_frozen)}>{p.is_frozen ? "إلغاء التجميد" : "تجميد"}</Button><Button size="small" danger disabled={busy || variants.some(v=>v.product_id===p.id)} onClick={()=>setPendingProductDelete({id:p.id,name:p.name})}>حذف</Button></Space>)}</Space>
-      <Form form={productForm} layout="inline" style={{ marginTop: 16, gap: 8 }} onFinish={v => save("flexy_mini_products", { category_id: categoryId, name: v.name.trim(), sort_index: Number(v.sort_index || 0) }, productForm)}>
-        <Form.Item name="name" rules={[{ required: true }]}><Input placeholder="اسم النوع" /></Form.Item>
+      <Space wrap>{visibleProducts.map(p => <Space key={p.id} size={4}><Button type={productId === p.id ? "primary" : "default"} onClick={() => setProductId(current => current === p.id ? null : p.id)}>{p.name} <Tag style={{marginInlineStart:6}}>{p.master_type_key ? "Master: "+p.master_type_key : "غير مربوط بـ Master"}</Tag><Tag>{variants.filter(v=>v.product_id===p.id).length} بطاقات</Tag></Button><Button size="small" aria-label={p.display_mode === "hidden" ? "إظهار" : "إخفاء"} title={p.display_mode === "hidden" ? "إظهار" : "إخفاء"} icon={p.display_mode === "hidden" ? <EyeInvisibleOutlined /> : <EyeOutlined />} onClick={() => toggleVisibility("flexy_mini_products", p.id, p.display_mode)} /><Button size="small" disabled={busy} onClick={() => toggleFreeze("flexy_mini_products",p.id,p.is_frozen)}>{p.is_frozen ? "إلغاء التجميد" : "تجميد"}</Button><Button size="small" danger disabled={busy || variants.some(v=>v.product_id===p.id)} onClick={()=>setPendingProductDelete({id:p.id,name:p.name})}>حذف</Button></Space>)}</Space>
+      <Form form={productForm} layout="inline" style={{ marginTop: 16, gap: 8 }} onFinish={v => {const master=masterTypes.find(t=>t.type_key===v.master_type_key && t.active);if(!master){setError("اختر نوعًا معتمدًا من Master Card");return;}return save("flexy_mini_products",{category_id:categoryId,master_type_key:master.type_key,name:master.name,sort_index:Number(v.sort_index||0)},productForm);}}>
+        <Form.Item name="master_type_key" rules={[{ required: true, message:"اختر نوعًا من Master Card" }]}><Select placeholder="نوع من Master Card" style={{minWidth:190}} options={masterTypes.filter(t=>!products.some(p=>p.master_type_key===t.type_key)).map(t=>({value:t.type_key,label:t.name}))}/></Form.Item>
         <Form.Item name="sort_index" initialValue={0}><Input type="number" placeholder="Index" style={{ width: 90 }} /></Form.Item>
         <Button htmlType="submit" type="primary" disabled={busy}>إضافة نوع</Button>
       </Form>
     </Card>}
-    {productId !== null && <Card id="mini-variants" title="3 — البطاقات" extra={<Button type="primary" icon={<PlusOutlined/>} onClick={()=>{variantForm.resetFields();setAddingVariant(true);}}>إضافة بطاقة</Button>}>
+    {productId !== null && <Card id="mini-variants" title="3 — البطاقات" extra={<Button type="primary" icon={<PlusOutlined/>} disabled={!products.find(p=>p.id===productId)?.master_type_key || masterDenominations.length===0} title={masterDenominations.length===0?"أدخل فئة البطاقة إلى Master Card أولًا":undefined} onClick={()=>{variantForm.resetFields();setAddingVariant(true);}}>إضافة بطاقة</Button>}>
       <Table<CatalogVariant> rowKey="id" dataSource={visibleVariants} size="small" pagination={{pageSize:10}} tableLayout="auto" expandable={{showExpandColumn:false,expandIcon:()=>null,expandRowByClick:true,expandedRowRender:(v)=><Descriptions size="small" column={1} bordered items={[
         {key:"value",label:"القيمة",children:v.denomination ?? "—"},
-        {key:"stock",label:"المخزون",children:v.stock_quantity},
+        {key:"stock",label:"المتاح في Master Card",children:masterCount(v)},
         {key:"order",label:"الترتيب",children:v.sort_index},
         {key:"buy",label:"سعر الشراء",children:v.purchase_price+" دج"},
         {key:"margin",label:"الربح",children:Number(v.markup_percent).toFixed(2)+"%"},
@@ -403,7 +417,7 @@ function CardsCatalog() {
         {title:"الشراء",dataIndex:"purchase_price",key:"purchase_price",width:100,responsive:["md"],render:(n:number)=>n+" دج"},
         {title:"الربح",dataIndex:"markup_percent",key:"markup_percent",width:85,responsive:["md"],render:(n:number)=>Number(n).toFixed(2)+"%"},
         {title:"البيع",key:"sale",width:82,render:(_,v)=><Typography.Text style={{whiteSpace:"nowrap"}}>{Number(v.sale_price ?? (Number(v.purchase_price)/(1-Number(v.markup_percent)/100))).toFixed(2)}</Typography.Text>},
-        {title:"المخزون",dataIndex:"stock_quantity",key:"stock",width:80,responsive:["md"]},
+        {title:"Master Card",key:"stock",width:80,responsive:["md"],render:(_,v)=>masterCount(v)},
         {title:"الإجراءات",key:"actions",width:76,render:(_,v)=><Space size={2}><Button size="small" title={v.display_mode==="hidden"?"إظهار":"إخفاء"} aria-label={v.display_mode==="hidden"?"إظهار":"إخفاء"} icon={v.display_mode==="hidden"?<EyeInvisibleOutlined/>:<EyeOutlined/>} onClick={()=>toggleVisibility("flexy_mini_variants",v.id,v.display_mode)}/><Button size="small" title="تعديل" aria-label="تعديل" icon={<SettingOutlined/>} onClick={()=>{setEditingVariant(v);editForm.setFieldsValue({name:v.name,denomination:v.denomination,purchase_price:v.purchase_price,markup_percent:v.markup_percent,sort_index:v.sort_index,sale_price:Number(Number(v.sale_price ?? (Number(v.purchase_price)/(1-Number(v.markup_percent)/100))).toFixed(2))});}}/></Space>}
       ]} />
       <Modal open={addingVariant} title="إضافة بطاقة" width={520} okText="إضافة بطاقة" cancelText="إلغاء" confirmLoading={busy} onOk={()=>variantForm.submit()} onCancel={()=>{if(!busy)setAddingVariant(false);}} destroyOnHidden>
