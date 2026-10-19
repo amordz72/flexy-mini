@@ -362,7 +362,6 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
             setCreditBalanceMessage("كشف الرصيد قيد التنفيذ. نتابع نفس الطلب دون إرسال كشف ثانٍ.");
             return;
           }
-          clearWait();
           if(job.status==="success"){
             // Query READ-ONLY availability: never enqueue 632 from polling.
             const ready=await db.rpc("station_connect_admin_arsselli_630_availability",{
@@ -373,11 +372,14 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
             const availability=ready.data as CreditAvailability;
             if(availability?.ready===true){
               await acceptCredit630Preflight(wait.phone,wait.amount,serial);
+              clearWait();
             }else{
+              clearWait();
               creditSendIntent.current=false;
               setCreditCheckError(credit630Feedback(availability?.reason||"UNKNOWN").message);
             }
           }else{
+            clearWait();
             creditSendIntent.current=false;
             const code=String(job.result_code||job.status).slice(0,80);
             setCreditCheckError("كشف الرصيد انتهى دون تأكيد جديد ("+code+"). يمكنك بدء كشف جديد؛ لن نعيد إرسال فليكسي تلقائيًا.");
@@ -397,8 +399,8 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
         if(!state || !["ready","waiting","blocked"].includes(state.state)
           || state.financial_operation===true)throw new Error("نتيجة غير صالحة لاستعلام الرصيد");
         if(state.state==="ready"){
-          clearWait();
           await acceptCredit630Preflight(wait.phone,wait.amount,serial);
+          clearWait();
         }else if(state.state==="blocked"){
           clearWait();
           creditSendIntent.current=false;
