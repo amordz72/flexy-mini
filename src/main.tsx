@@ -424,7 +424,7 @@ function CardsCatalog() {
       <Form form={variantForm} layout="vertical" size="small" onValuesChange={(changed,all)=>syncCardPrices(variantForm,changed,all)} onFinish={v => save("flexy_mini_variants", { product_id: productId, name: v.name.trim(), denomination: Number(v.denomination || 0), purchase_price: Number(v.purchase_price), sale_price: Number(v.sale_price), markup_percent: Number(v.markup_percent || 0), sort_index: Math.max(0, ...variants.filter(item => item.product_id === productId).map(item => Number(item.sort_index) || 0)) + 1 }, variantForm).then(saved=>{if(saved)setAddingVariant(false);})}>
         <Row gutter={[12,0]}>
           <Col span={24}><Form.Item style={{marginBottom:12}} name="name" label="اسم البطاقة" rules={[{ required: true }]}><Input placeholder="مثلاً 60 UC" /></Form.Item></Col>
-          <Col span={12}><Form.Item style={{marginBottom:12}} name="denomination" label="القيمة"><Input type="number" min={0} /></Form.Item></Col>
+          <Col span={12}><Form.Item style={{marginBottom:12}} name="denomination" label="القيمة من Master Card" rules={[{required:true,message:"اختر فئة موجودة في Master Card"}]}><Select placeholder="فئة موجودة في Master Card" options={masterDenominations.map(n=>({label:String(n),value:n}))}/></Form.Item></Col>
           <Col span={12}><Form.Item label="الترتيب (تلقائي)" style={{marginBottom:12}}><Input value={Math.max(0,...variants.filter(v=>v.product_id===productId).map(v=>Number(v.sort_index)||0))+1} disabled /></Form.Item></Col>
           <Col span={12}><Form.Item style={{marginBottom:12}} name="purchase_price" label="سعر الشراء (دج)" rules={[{required:true},{validator:(_,v)=>Number.isFinite(Number(v))&&Number(v)>0?Promise.resolve():Promise.reject(new Error("سعر الشراء يجب أن يكون أكبر من صفر"))}]}><Input type="number" min={0} step="0.01" /></Form.Item></Col>
           <Col span={12}><Form.Item style={{marginBottom:12}} name="sale_price" label="سعر البيع (دج)" rules={[({getFieldValue})=>({validator:(_,v)=>{const buy=Number(getFieldValue("purchase_price"));const sale=Number(v);return v!==undefined&&v!==""&&(!Number.isFinite(sale)||sale<=0||sale<buy)?Promise.reject(new Error("سعر البيع يجب أن يكون أكبر من صفر ولا يقل عن الشراء")):Promise.resolve();}})]}><Input type="number" min={0} step="0.01" /></Form.Item></Col>
@@ -776,7 +776,26 @@ function SharedCardsStore({token}:{token?:string}){
   const [busy,setBusy]=useState(true);
   useEffect(()=>{
     let active=true;setBusy(true);
-    if(!token){void (async()=>{if(!client)throw new Error("لا يوجد اتصال");const [p,v]=await Promise.all([client.from("flexy_mini_products").select("id,category_id,name,active,display_mode"),client.from("flexy_mini_variants").select("id,product_id,name,denomination,stock_quantity,sort_index,is_frozen,active,display_mode")]);if(p.error||v.error)throw new Error(p.error?.message||v.error?.message);return {categories:[],products:(p.data||[]).filter(x=>x.active&&x.display_mode==="visible"),variants:(v.data||[]).filter(x=>x.active&&x.display_mode==="visible")};})().then(data=>{if(active)setCatalog(data);}).catch(e=>{if(active)setError(e instanceof Error?e.message:"تعذر تحميل البطاقات");}).finally(()=>{if(active)setBusy(false);});return()=>{active=false;};}
+    if(!token){void (async()=>{
+      if(!client)throw new Error("لا يوجد اتصال");
+      // Admin store uses the same canonical Master Card catalog as the customer service.
+      const [p,v,t,summary]=await Promise.all([
+        client.from("flexy_mini_products").select("id,category_id,name,active,display_mode,is_frozen,master_type_key"),
+        client.from("flexy_mini_variants").select("id,product_id,name,denomination,sort_index,is_frozen,active,display_mode"),
+        client.from("card_stock_types").select("type_key,active").eq("active",true),
+        client.rpc("card_stock_admin_summary")
+      ]);
+      if(p.error||v.error||t.error||summary.error)throw new Error(p.error?.message||v.error?.message||t.error?.message||summary.error?.message);
+      const allowed=new Set((t.data||[]).map(x=>x.type_key));
+      const products=(p.data||[]).filter(x=>x.active&&!x.is_frozen&&x.display_mode==="visible"&&x.master_type_key&&allowed.has(x.master_type_key));
+      const byId=new Map(products.map(x=>[x.id,x]));
+      const variants=(v.data||[]).filter(x=>x.active&&!x.is_frozen&&x.display_mode==="visible"&&byId.has(x.product_id))
+        .map(x=>{const product=byId.get(x.product_id)!;return {
+          id:x.id,product_id:x.product_id,name:x.name,denomination:x.denomination,sort_index:x.sort_index,
+          stock_quantity:(summary.data||[]).filter(row=>row.type_key===product.master_type_key&&Number(row.denomination)===Number(x.denomination)).reduce((sum,row)=>sum+Number(row.available_count||0),0)
+        };});
+      return {categories:[],products:products.map(({id,category_id,name})=>({id,category_id,name})),variants};
+    })().then(data=>{if(active)setCatalog(data);}).catch(e=>{if(active)setError(e instanceof Error?e.message:"تعذر تحميل البطاقات");}).finally(()=>{if(active)setBusy(false);});return()=>{active=false;};}
     void fetch(url+"/functions/v1/flexy-mini-customers",{method:"POST",headers:{"Content-Type":"application/json",apikey:key},body:JSON.stringify({action:"catalog",token,device_secret:window.localStorage.getItem("flexy_mini_device_secret")||""})})
       .then(async r=>{const data=await r.json();if(!r.ok)throw new Error(data.error||"تعذر تحميل البطاقات");if(active)setCatalog(data);})
       .catch(e=>{if(active)setError(e instanceof Error?e.message:"تعذر الاتصال");})
