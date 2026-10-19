@@ -503,6 +503,8 @@ test('630 automatically waits for a 632 balance read within the same credit scre
    checks++;
    return Promise.resolve({data:balanceWaiting,error:null});
   }
+  if(name==='station_connect_admin_arsselli_balance_job')
+   return Promise.resolve(ok({job_uuid:'632-balance-1',status:'claimed'}));
   if(name==='station_connect_admin_arsselli_630_preflight')
    throw Error('preflight must wait for fresh balance');
   if(name==='station_connect_admin_stage_arsselli_630' ||
@@ -522,7 +524,9 @@ test('630 automatically waits for a 632 balance read within the same credit scre
  const intervals=[...timers.values()];
  assert.equal(intervals.length,2,'one readonly health timer and one pending balance timer');
  await act(async()=>{for(const refresh of intervals)await refresh();});await flush();
- assert.equal(checks,2,'subsequent polls reuse server-side 632 job');
+ assert.equal(checks,1,'pending polling must NOT enqueue another 632');
+ assert.equal(db.calls.filter(x=>x.name==='station_connect_admin_arsselli_balance_job').length,1,
+  'pending interval follows exact 632 job UUID');
  assert.equal(db.calls.some(x=>x.name==='station_connect_admin_dispatch_630_test_once'),false);
  await close(r);assert.equal(timers.size,0);
 });
@@ -532,7 +536,10 @@ test('new confirmed 632 SMS resumes 630 preflight automatically without second b
   if(name==='station_connect_admin_arsselli_630_availability')
    return Promise.resolve({data:confirmed?{ready:true,reason:'READY'}:{ready:false,reason:'BALANCE_STALE'},error:null});
   if(name==='station_connect_admin_630_ensure_fresh_balance')
-   return Promise.resolve({data:confirmed?balanceReady:balanceWaiting,error:null});
+   return Promise.resolve({data:balanceWaiting,error:null});
+  if(name==='station_connect_admin_arsselli_balance_job')
+   return Promise.resolve(ok({job_uuid:'632-balance-1',status:confirmed?'success':'claimed',
+    result_code:confirmed?'ARSSELLI_BALANCE_SMS':null}));
   if(name==='station_connect_admin_arsselli_630_preflight')
    return Promise.resolve({data:{ready:true,reason:'FINANCIAL_EXECUTOR_NOT_YET_VERIFIED',
       distributor_account_code:'04',sim_uuid:'sim',station_uuid:'station',
@@ -553,6 +560,39 @@ test('new confirmed 632 SMS resumes 630 preflight automatically without second b
  assert.equal(db.calls.some(x=>x.name==='station_connect_admin_stage_arsselli_630'),false);
  await close(r);
 });
+
+test('failed terminal 632 never auto-redials on 5-second polling and permits next explicit try',async()=>{
+ let ensureCalls=0;
+ const db=makeDb(name=>{
+  if(name==='station_connect_admin_arsselli_630_availability')
+   return Promise.resolve({data:{ready:false,reason:'BALANCE_NOT_VERIFIED'},error:null});
+  if(name==='station_connect_admin_630_ensure_fresh_balance'){
+   ensureCalls++;
+   return Promise.resolve({data:{...balanceWaiting,
+    balance_job_uuid:'632-try-'+ensureCalls},error:null});
+  }
+  if(name==='station_connect_admin_arsselli_balance_job')
+   return Promise.resolve(ok({job_uuid:'632-try-1',status:'failed',result_code:'HiLinkUssdError'}));
+  if(name==='station_connect_admin_arsselli_630_preflight')
+   throw Error('No money preflight after an unconfirmed 632');
+  return Promise.resolve(ok([]));
+ });
+ const r=await mount(Flexy,{db,isCustomer:false});
+ const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
+ await act(async()=>phone.props.onChange({target:{value:'0500000001'}}));
+ await act(async()=>r.root.findByType('amount').props.onChange(40));await flush();
+ await click(r,'إرسال رصيد عادي — 630');
+ assert.equal(ensureCalls,1);
+ await act(async()=>{for(const tick of [...timers.values()])await tick();});await flush();
+ assert.equal(ensureCalls,1,'a completed failed 632 cannot trigger a second USSD from polling');
+ assert.ok(r.root.findAllByType('alert').some(x=>String(x.props.description||x.props.message).includes('كشف الرصيد انتهى')));
+ // User must deliberately request the next check.
+ await click(r,'إرسال رصيد عادي — 630');
+ assert.equal(ensureCalls,2);
+ assert.equal(db.calls.some(x=>x.name==='station_connect_admin_send_arsselli_630'),false);
+ await close(r);
+});
+
 test('change recipient cancels pending 632 results for old recipient',async()=>{
  let confirmed=false;
  const db=makeDb(name=>Promise.resolve({data:
