@@ -588,7 +588,8 @@ test('632 reviewed as BALANCE_SMS_PENDING stays watchable until the independent 
  assert.equal(scanCount,1);
  assert.equal(ensureCalls,1,'no second 632 during SMS wait');
  assert.ok(r.root.findAllByType('alert').some(x=>
-   String(x.props.message||x.props.description).includes('ننتظر')));
+   String(x.props.message).includes('جاري تحديث رصيد أرسلي تلقائيًا')),
+   '632 remains visibly pending, not treated as terminal failure');
  await close(r);
 });
 
