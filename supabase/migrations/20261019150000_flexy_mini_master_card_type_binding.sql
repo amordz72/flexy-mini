@@ -65,3 +65,31 @@ revoke all on function public.flexy_mini_master_stock_summary()
 grant execute on function public.flexy_mini_master_stock_summary() to service_role;
 comment on function public.flexy_mini_master_stock_summary() is
  'Service-only read of live Master Card availability by exact type and denomination; never an independent Flexy stock.';
+
+
+-- Newly added denominations must already exist in Master Card's actual stock history.
+-- Existing legacy Flexy pricing rows are preserved; no automatic deletion or sale is performed.
+create or replace function private.flexy_mini_require_master_sku()
+returns trigger language plpgsql security definer set search_path='' as $$
+declare v_type text;
+begin
+  select p.master_type_key into v_type
+  from public.flexy_mini_products p
+  join public.card_stock_types t on t.type_key=p.master_type_key and t.active=true
+  where p.id=new.product_id;
+  if v_type is null then
+    raise exception 'MASTER_CARD_TYPE_REQUIRED' using errcode='23514';
+  end if;
+  if new.denomination is null or not exists(
+    select 1 from public.card_stock_items i
+    where i.type_key=v_type and i.denomination=new.denomination::text
+  ) then
+    raise exception 'MASTER_CARD_SKU_REQUIRED' using errcode='23514';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists flexy_mini_variant_master_sku_guard on public.flexy_mini_variants;
+create trigger flexy_mini_variant_master_sku_guard
+before insert or update of product_id, denomination on public.flexy_mini_variants
+for each row execute function private.flexy_mini_require_master_sku();
