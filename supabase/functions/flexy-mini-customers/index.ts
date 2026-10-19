@@ -59,13 +59,15 @@ Deno.serve(async(req)=>{
      // Hidden visibility may be granted per customer. Frozen and inactive are NEVER overridden.
      // A product grant exposes its visible variants; a variant grant permits that one variant
      // and makes the parent product visible to this customer (not its other hidden variants).
-     const [categoriesResult,productsResult,variantsResult,grantsResult]=await Promise.all([
+     const [categoriesResult,productsResult,variantsResult,grantsResult,masterTypesResult,masterStockResult]=await Promise.all([
        admin.from("flexy_mini_categories").select("id,name,sort_index").eq("active",true).order("sort_index",{ascending:true}).order("id",{ascending:true}),
-       admin.from("flexy_mini_products").select("id,category_id,name,sort_index,display_mode").eq("active",true).eq("is_frozen",false).order("sort_index",{ascending:true}).order("id",{ascending:true}),
-       admin.from("flexy_mini_variants").select("id,product_id,name,denomination,stock_quantity,sort_index,display_mode").eq("active",true).eq("is_frozen",false).order("product_id",{ascending:true}).order("sort_index",{ascending:true}).order("denomination",{ascending:true}).order("id",{ascending:true}),
-       admin.from("flexy_mini_customer_catalog_grants").select("product_id,variant_id").eq("customer_id",session.customer_id)
+       admin.from("flexy_mini_products").select("id,category_id,name,sort_index,display_mode,master_type_key").eq("active",true).eq("is_frozen",false).order("sort_index",{ascending:true}).order("id",{ascending:true}),
+       admin.from("flexy_mini_variants").select("id,product_id,name,denomination,sort_index,display_mode").eq("active",true).eq("is_frozen",false).order("product_id",{ascending:true}).order("sort_index",{ascending:true}).order("denomination",{ascending:true}).order("id",{ascending:true}),
+       admin.from("flexy_mini_customer_catalog_grants").select("product_id,variant_id").eq("customer_id",session.customer_id),
+       admin.from("card_stock_types").select("type_key,active").eq("active",true),
+       admin.rpc("flexy_mini_master_stock_summary")
      ]);
-     if(categoriesResult.error||productsResult.error||variantsResult.error||grantsResult.error){
+     if(categoriesResult.error||productsResult.error||variantsResult.error||grantsResult.error||masterTypesResult.error||masterStockResult.error){
        console.error("customer_catalog_fetch_failed",{categories:categoriesResult.error?.code,products:productsResult.error?.code,variants:variantsResult.error?.code,grants:grantsResult.error?.code});
        return respond(503,{error:"تعذر تحميل البطاقات حاليًا"});
      }
@@ -73,18 +75,28 @@ Deno.serve(async(req)=>{
      const categoryIds=new Set(categories.map(c=>c.id));
      const productGrants=new Set((grantsResult.data||[]).filter(g=>g.product_id!==null).map(g=>g.product_id));
      const variantGrants=new Set((grantsResult.data||[]).filter(g=>g.variant_id!==null).map(g=>g.variant_id));
-     const eligibleParents=new Map((productsResult.data||[]).filter(p=>categoryIds.has(p.category_id)).map(p=>[p.id,p]));
+     const masterTypes=new Set((masterTypesResult.data||[]).map(t=>t.type_key));
+     // Only products with an active canonical Master Card type can reach customers.
+     // Customer grants cannot override this ownership boundary.
+     const eligibleParents=new Map((productsResult.data||[])
+       .filter(p=>categoryIds.has(p.category_id) && p.master_type_key && masterTypes.has(p.master_type_key))
+       .map(p=>[p.id,p]));
+     const available=new Map((masterStockResult.data||[])
+       .map(row=>[String(row.type_key)+"|"+String(Number(row.denomination)),Number(row.available_count)||0]));
      const variants=(variantsResult.data||[]).filter(v=>{
        const parent=eligibleParents.get(v.product_id);
        if(!parent)return false;
        const directGrant=variantGrants.has(v.id);
        return (parent.display_mode==="visible"||productGrants.has(parent.id)||directGrant)
          && (v.display_mode==="visible"||directGrant);
-     }).map(({display_mode,...v})=>v);
+     }).map(({display_mode,...v})=>{
+       const parent=eligibleParents.get(v.product_id);
+       return {...v,stock_quantity: parent ? (available.get(String(parent.master_type_key)+"|"+String(Number(v.denomination)))||0) : 0};
+     });
      const accessibleProductIds=new Set(variants.map(v=>v.product_id));
-     const products=(productsResult.data||[]).filter(p=>categoryIds.has(p.category_id)
+     const products=(productsResult.data||[]).filter(p=>eligibleParents.has(p.id)
        && (p.display_mode==="visible"||productGrants.has(p.id)||accessibleProductIds.has(p.id)))
-       .map(({display_mode,...p})=>p);
+       .map(({display_mode,master_type_key,...p})=>p);
      return respond(200,{categories,products,variants});
    }
    await admin.from("flexy_mini_trusted_devices").update({last_used_at:new Date().toISOString()}).eq("id",device.id);
