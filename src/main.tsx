@@ -789,12 +789,18 @@ function SharedCardsStore({token}:{token?:string}){
       const allowed=new Set((t.data||[]).map(x=>x.type_key));
       const products=(p.data||[]).filter(x=>x.active&&!x.is_frozen&&x.display_mode==="visible"&&x.master_type_key&&allowed.has(x.master_type_key));
       const byId=new Map(products.map(x=>[x.id,x]));
-      const variants=(v.data||[]).filter(x=>x.active&&!x.is_frozen&&x.display_mode==="visible"&&byId.has(x.product_id))
-        .map(x=>{const product=byId.get(x.product_id)!;return {
+      // The Master summary includes real stocked/reviewed/used denominations; no phantom Flexy SKUs.
+      const knownSku=new Set((summary.data||[]).map((row:MasterStockSummary)=>row.type_key+"|"+String(Number(row.denomination))));
+      const variants=(v.data||[]).filter(x=>{
+        const product=byId.get(x.product_id);
+        return !!product && x.active&&!x.is_frozen&&x.display_mode==="visible"&&x.denomination!==null
+          && knownSku.has(String(product.master_type_key)+"|"+String(Number(x.denomination)));
+      }).map(x=>{const product=byId.get(x.product_id)!;return {
           id:x.id,product_id:x.product_id,name:x.name,denomination:x.denomination,sort_index:x.sort_index,
           stock_quantity:(summary.data||[]).filter((row:MasterStockSummary)=>row.type_key===product.master_type_key&&Number(row.denomination)===Number(x.denomination)).reduce((sum:number,row:MasterStockSummary)=>sum+Number(row.available_count||0),0)
         };});
-      return {categories:[],products:products.map(({id,category_id,name})=>({id,category_id,name})),variants};
+      const actualProductIds=new Set(variants.map(x=>x.product_id));
+      return {categories:[],products:products.filter(x=>actualProductIds.has(x.id)).map(({id,category_id,name})=>({id,category_id,name})),variants};
     })().then(data=>{if(active)setCatalog(data);}).catch(e=>{if(active)setError(e instanceof Error?e.message:"تعذر تحميل البطاقات");}).finally(()=>{if(active)setBusy(false);});return()=>{active=false;};}
     void fetch(url+"/functions/v1/flexy-mini-customers",{method:"POST",headers:{"Content-Type":"application/json",apikey:key},body:JSON.stringify({action:"catalog",token,device_secret:window.localStorage.getItem("flexy_mini_device_secret")||""})})
       .then(async r=>{const data=await r.json();if(!r.ok)throw new Error(data.error||"تعذر تحميل البطاقات");if(active)setCatalog(data);})
