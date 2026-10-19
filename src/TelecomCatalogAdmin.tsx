@@ -3,7 +3,7 @@ import { Alert, Button, Card, Empty, Input, InputNumber, Modal, Select, Space, T
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 type Operator = { operator_key: string; display_name: string; enabled: boolean };
-type SimType = { sim_type: string; display_name: string; operator_key: string; enabled: boolean };
+type SimType = { sim_type: string; display_name: string; operator_key: string; enabled: boolean; phone_lookup_code: string | null };
 type Offer = {
   offer_uuid: string; operator: string; group_code: string; family: string;
   amount: number; display_name: string; active: boolean; execution_enabled: boolean;
@@ -18,10 +18,11 @@ type Source = {
   offer_uuid: string; source_uuid: string | null; source_kind: string | null;
   source_name: string | null; observed_via_sim_type: string | null;
 };
+type CodeSimBinding = { sim_type: string; display_name: string; enabled: boolean; auto_allowed: boolean };
 type UssdCode = {
   ussd_uuid: string; operator_key: string; title_ar: string; purpose_key: string;
   sim_profile: string; code_template: string; knowledge_status: string;
-  implementation_status: string; last_verified_at: string | null;
+  implementation_status: string; last_verified_at: string | null; sim_types: CodeSimBinding[];
 };
 type CatalogData = { operators: Operator[]; simTypes: SimType[]; offers: Offer[];
   routes: Route[]; sources: Source[]; codes: UssdCode[] };
@@ -66,7 +67,7 @@ export default function TelecomCatalogAdmin({ db }: { db: SupabaseClient }) {
           db.rpc("admin_flexy_offer_source_matrix", {
             p_operator: null, p_family: null, p_observed_via_sim_type: null,
           }),
-          db.rpc("mytool_admin_ussd_codes_list"),
+          db.rpc("mytool_admin_ussd_code_matrix"),
         ]);
         const results = [operators, simTypes, offers, routes, sources, codes];
         const failure = results.find(result => result.error);
@@ -251,6 +252,42 @@ export default function TelecomCatalogAdmin({ db }: { db: SupabaseClient }) {
             عرض واحد لكل هوية تجارية؛ الشريحة ومسار التنفيذ منفصلان. غياب المسار لا يحذف العرض.
           </Typography.Text>
         </Space> },
+        { key: "types", label: "أنواع الشرائح", children: <Space direction="vertical" size="middle" style={{width:"100%"}}>
+          <Alert type="info" showIcon message="المتعامل ← نوع الشريحة ← الأكواد المرتبطة"
+            description="هذه روابط تعريفية محفوظة؛ لا تثبت جاهزية التنفيذ ولا ترسل أوامر إلى الشبكة."/>
+          <Table<SimType> rowKey="sim_type" loading={loading} size="small"
+            dataSource={data.simTypes.filter(t => operator === "all" || t.operator_key === operator)}
+            pagination={{pageSize:10,showSizeChanger:false}} scroll={{x:640}}
+            expandable={{expandedRowRender: t => {
+              const linked=data.codes.filter(c=>c.operator_key===t.operator_key &&
+                (c.sim_types||[]).some(b=>b.sim_type===t.sim_type));
+              return <Table<UssdCode> rowKey="ussd_uuid" size="small" pagination={false}
+                scroll={{x:630}} dataSource={linked}
+                locale={{emptyText:"لا توجد أكواد مرتبطة بهذا النوع؛ نطاق التعريف ليس ربطًا فعليًا"}}
+                columns={[
+                  {title:"الخدمة",dataIndex:"title_ar"},
+                  {title:"الغرض",dataIndex:"purpose_key"},
+                  {title:"صيغة الكود",render:(_,code)=><Typography.Text code dir="ltr">{code.code_template}</Typography.Text>},
+                  {title:"الربط",render:(_,code)=>{
+                    const b=(code.sim_types||[]).find(x=>x.sim_type===t.sim_type);
+                    return <Space wrap size={4}>
+                      <Tag color={b?.enabled?"green":"default"}>{b?.enabled?"مفعّل":"معطّل"}</Tag>
+                      <Tag>{b?.auto_allowed?"سماح آلي مسجل":"بدون سماح آلي"}</Tag>
+                    </Space>;
+                  }}
+                ]}/>;
+            }}}
+            columns={[
+              {title:"المتعامل",render:(_,t)=>labelFor(t.operator_key,data.operators)},
+              {title:"نوع الشريحة",dataIndex:"display_name"},
+              {title:"المعرف",dataIndex:"sim_type",render:(v:string)=><Typography.Text code>{v}</Typography.Text>},
+              {title:"الحالة",render:(_,t)=><Tag color={t.enabled?"green":"default"}>{t.enabled?"مفعّل":"معطّل"}</Tag>},
+              {title:"عدد روابط الأكواد",render:(_,t)=>data.codes.filter(c=>
+                (c.sim_types||[]).some(b=>b.sim_type===t.sim_type)).length},
+              {title:"كود معرفة الرقم المسجل",render:(_,t)=>t.phone_lookup_code
+                ? <Typography.Text code dir="ltr">{t.phone_lookup_code}</Typography.Text>:"غير مسجل"}
+            ]}/>
+        </Space> },
         { key: "codes", label: "الأكواد التشغيلية", children: <Space direction="vertical" size="middle" style={{ width: "100%" }}>
           <Space wrap>
             <Select aria-label="الغرض من الكود" style={{ width: 210 }} value={purpose}
@@ -269,6 +306,12 @@ export default function TelecomCatalogAdmin({ db }: { db: SupabaseClient }) {
               { title: "الكود / الخدمة", dataIndex: "title_ar", key: "title" },
               { title: "الغرض", dataIndex: "purpose_key", key: "purpose" },
               { title: "نطاق التعريف", dataIndex: "sim_profile", key: "profile" },
+               { title: "الروابط الفعلية", key: "binding", render: (_, code) =>
+                 (code.sim_types||[]).length ?
+                   <Space wrap size={2}>{code.sim_types.map(link =>
+                     <Tag key={link.sim_type} color={link.enabled?"green":"default"}>
+                       {link.display_name}{link.auto_allowed?" · آلي مسجل":""}
+                     </Tag>)}</Space> : <Tag>غير مربوط</Tag> },
               { title: "دليل المعرفة", key: "knowledge", render: (_, code) =>
                 <Tag color={code.knowledge_status === "confirmed" ? "green" : "orange"}>{code.knowledge_status}</Tag> },
               { title: "حالة التطبيق", key: "implementation", render: (_, code) =>
