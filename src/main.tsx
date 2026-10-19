@@ -361,14 +361,17 @@ function CardsCatalog() {
     message.success("تم تحديث البطاقة");
     await refresh();
   }
-  const visibleProducts = products.filter(p => p.category_id === categoryId && p.active);
+  const visibleProducts = products.filter(p => p.category_id === categoryId && p.active && !!p.master_type_key && masterTypes.some(t=>t.type_key===p.master_type_key));
+  const legacyProductCount = products.filter(p=>!p.master_type_key || !masterTypes.some(t=>t.type_key===p.master_type_key)).length;
   const masterCount = (v:CatalogVariant):number => {
     const product=products.find(p=>p.id===v.product_id);
     if(!product?.master_type_key || v.denomination===null)return 0;
     return masterSummary.filter(row=>row.type_key===product.master_type_key && Number(row.denomination)===Number(v.denomination)).reduce((sum,row)=>sum+Number(row.available_count||0),0);
   };
   const masterDenominations = [...new Set(masterSummary.filter(s=>s.type_key===products.find(p=>p.id===productId)?.master_type_key).map(s=>Number(s.denomination)).filter(n=>Number.isFinite(n)&&n>=0))].sort((a,b)=>a-b);
-  const visibleVariants = variants.filter(v => v.product_id === productId && v.active)
+  const visibleVariants = variants.filter(v => v.product_id === productId && v.active && !!products.find(p=>p.id===v.product_id)?.master_type_key
+    && masterSummary.some(row=>row.type_key===products.find(p=>p.id===v.product_id)?.master_type_key
+      && Number(row.denomination)===Number(v.denomination)))
     .sort((a, b) => a.sort_index - b.sort_index || (a.denomination ?? 999999) - (b.denomination ?? 999999) || a.id - b.id);
   return <Space direction="vertical" size="large" style={{ width: "100%" }}>
     <Modal open={editingVariant !== null} title="تعديل البطاقة" width={520} okText="حفظ التعديل" cancelText="إلغاء" confirmLoading={busy} onOk={() => editForm.submit()} onCancel={() => !busy && setEditingVariant(null)} destroyOnHidden>
@@ -386,8 +389,9 @@ function CardsCatalog() {
     <Modal open={pendingProductDelete!==null} title="تأكيد حذف النوع" okText="حذف نهائي" okButtonProps={{danger:true,loading:busy}} cancelText="إلغاء" onCancel={()=>{if(!busy)setPendingProductDelete(null);}} onOk={()=>void confirmProductDelete()}><Typography.Text>هل تريد حذف النوع «{pendingProductDelete?.name}» نهائيًا؟</Typography.Text></Modal>
     <Modal open={pendingCategoryDelete!==null} title="تأكيد حذف القسم" okText="حذف نهائي" okButtonProps={{danger:true,loading:busy}} confirmLoading={busy} cancelText="إلغاء" onCancel={()=>{if(!busy)setPendingCategoryDelete(null);}} onOk={()=>void confirmCategoryDelete()}><Typography.Text>هل تريد حذف القسم «{pendingCategoryDelete?.name}» نهائيًا؟</Typography.Text>{error&&<Alert type="error" showIcon message={error} style={{marginTop:12}}/>}</Modal>
     {error && <Alert type="error" showIcon message={error} closable onClose={() => setError("")} />}
+    {legacyProductCount>0 && <Alert type="info" showIcon message={"تم استبعاد "+legacyProductCount+" أنواع قديمة غير مرتبطة بـ Master Card من الكتالوج التجاري؛ بياناتها محفوظة ولم تُحذف."} />}
     <Card title="1 — الأقسام" loading={busy && !categories.length}>
-      <Space wrap>{categories.filter(c => c.active).map(c => <Space key={c.id} size={4}><Button type={categoryId === c.id ? "primary" : "default"} onClick={() => { setCategoryId(c.id); setProductId(null); }}>{c.name} <Tag style={{marginInlineStart:6}}>{products.filter(p=>p.category_id===c.id).length} أنواع</Tag></Button><Button size="small" danger disabled={busy || products.some(p=>p.category_id===c.id)} onClick={() => void deleteCategory(c.id,c.name)}>حذف</Button></Space>)}</Space>
+      <Space wrap>{categories.filter(c => c.active).map(c => <Space key={c.id} size={4}><Button type={categoryId === c.id ? "primary" : "default"} onClick={() => { setCategoryId(c.id); setProductId(null); }}>{c.name} <Tag style={{marginInlineStart:6}}>{visibleProducts.filter(p=>p.category_id===c.id).length} أنواع</Tag></Button><Button size="small" danger disabled={busy || products.some(p=>p.category_id===c.id)} onClick={() => void deleteCategory(c.id,c.name)}>حذف</Button></Space>)}</Space>
       <Form form={categoryForm} layout="inline" style={{ marginTop: 16, gap: 8 }} onFinish={v => save("flexy_mini_categories", { name: v.name.trim(), sort_index: Number(v.sort_index || 0) }, categoryForm)}>
         <Form.Item name="name" rules={[{ required: true }]}><Input placeholder="اسم القسم" /></Form.Item>
         <Form.Item name="sort_index" initialValue={0}><Input type="number" placeholder="Index" style={{ width: 90 }} /></Form.Item>
