@@ -27,7 +27,7 @@ test("read-only catalog uses canonical admin guarded RPCs and never executes car
     "admin_flexy_list_offer_catalog",
     "admin_flexy_offer_execution_routes",
     "admin_flexy_offer_source_matrix",
-    "mytool_admin_ussd_codes_list"
+    "mytool_admin_ussd_code_matrix"
   ]) assert.ok(catalog.includes('db.rpc("'+rpc+'"'),rpc);
   assert.doesNotMatch(catalog,/db\.from\(/);
   assert.doesNotMatch(catalog,/db\.(?:insert|update|upsert|delete)\(/);
@@ -56,4 +56,18 @@ test("separate USSD code knowledge from execution permission, no write or live s
   assert.match(catalog,/توثيق صحة الكود مستقل عن السماح بالشحن/);
   assert.match(catalog,/دون اختبار شبكة أو تنفيذ USSD/);
   assert.match(catalog,/pagination=\{\{ pageSize: 10, showSizeChanger: false \}\}/);
+});
+
+
+test("operator SIM-type code matrix is read-only, shows actual bindings not profile guesses",()=>{
+  assert.match(catalog,/label: "أنواع الشرائح"/);
+  assert.match(catalog,/rowKey="sim_type"/);
+  assert.match(catalog,/mytool_admin_ussd_code_matrix/);
+  assert.match(catalog,/code\.sim_types/);
+  assert.match(catalog,/c\.sim_types/);
+  assert.match(catalog,/code_template/);
+  assert.match(catalog,/نطاق التعريف ليس ربطًا فعليًا/);
+  assert.match(catalog,/لا تثبت جاهزية التنفيذ/);
+  assert.doesNotMatch(catalog,/mytool_admin_ussd_codes_list/);
+  assert.doesNotMatch(catalog,/mytool_admin_ussd_code_bind_sim_type\",/);
 });
