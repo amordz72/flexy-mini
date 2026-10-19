@@ -111,6 +111,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
  const [guardMap,setGuardMap]=useState<Record<string,OoredooGuard>>({});
  const [manualNumbers,setManualNumbers]=useState<Record<string,string>>({});
  const [manualBusy,setManualBusy]=useState<string|null>(null);
+ const [manualErrors,setManualErrors]=useState<Record<string,string>>({});
  const [rearmBusy,setRearmBusy]=useState<string|null>(null);
  const [pinConfigSim,setPinConfigSim]=useState<string|null>(null);
  const [pinConfigStation,setPinConfigStation]=useState<string|null>(null);
@@ -283,25 +284,26 @@ export default function StationOverview({db}:{db:SupabaseClient}){
   void loadHardwareRows(uuid?stations.filter(station=>station.station_uuid===uuid):stations);
  };
  const saveManualNumber=async(sim:Hardware)=>{
-  if(!sim.sim_uuid)return;
-  const phone=normalizePhone(manualNumbers[sim.sim_uuid]||"");
-  if(!/^0[5-7]\d{8}$/.test(phone)){message.warning("أدخل رقم هاتف جزائري صحيحًا من 10 أرقام");return;}
-  Modal.confirm({
-   title:"تسجيل رقم الشريحة يدويًا",
-   content:"سيُسجّل الرقم "+phone+" لهذه الشريحة في قاعدة البيانات، دون أي استعلام أو محاولة اتصال بالشبكة. هل تؤكد؟",
-   okText:"تسجيل الرقم",cancelText:"إلغاء",
-   onOk:async()=>{
-    setManualBusy(sim.sim_uuid!);
-    try{
-     const {error}=await db.rpc("station_connect_admin_update_sim",{p_sim_uuid:sim.sim_uuid,p_msisdn:phone});
-     if(error)throw error;
-     setHardware(old=>Object.fromEntries(Object.entries(old).map(([station,items])=>[station,items.map(item=>item.sim_uuid===sim.sim_uuid?{...item,msisdn:phone}:item)])));
-     setManualNumbers(old=>({...old,[sim.sim_uuid!]:""}));
-     message.success("تم تسجيل الرقم يدويًا دون إرسال USSD");
-    }catch(error){message.error("فشل حفظ الرقم: "+(error instanceof Error?error.message:String(error)));}
-    finally{setManualBusy(null);}
-   }
-  });
+  if(!sim.sim_uuid||manualBusy)return;
+  const uuid=sim.sim_uuid;
+  const phone=normalizePhone(manualNumbers[uuid]||"");
+  setManualErrors(old=>({...old,[uuid]:""}));
+  if(!/^0[5-7]\d{8}$/.test(phone)){
+   setManualErrors(old=>({...old,[uuid]:"أدخل رقم هاتف جزائري صحيحًا من 10 أرقام"}));return;
+  }
+  setManualBusy(uuid);
+  try{
+   const {data,error}=await db.rpc("station_connect_admin_update_sim",{p_sim_uuid:uuid,p_msisdn:phone});
+   if(error)throw error;
+   const saved=(Array.isArray(data)?data[0]:data) as {sim_uuid?:string;msisdn?:string}|null;
+   if(saved?.sim_uuid!==uuid||saved?.msisdn!==phone)throw new Error("لم يؤكد السيرفر حفظ الرقم؛ أعد تحديث البيانات قبل المحاولة");
+   setHardware(old=>Object.fromEntries(Object.entries(old).map(([station,items])=>[station,items.map(item=>item.sim_uuid===uuid?{...item,msisdn:saved.msisdn!}:item)])));
+   setManualNumbers(old=>({...old,[uuid]:""}));
+   message.success("تم حفظ رقم الشريحة");
+  }catch(cause){
+   const detail=cause&&typeof cause==="object"&&"message" in cause?String(cause.message):String(cause);
+   setManualErrors(old=>({...old,[uuid]:"فشل حفظ الرقم: "+detail}));
+  }finally{setManualBusy(null);}
  };
  const rearmOoredoo=async(sim:Hardware)=>{
   if(!sim.sim_uuid)return;
@@ -441,8 +443,9 @@ export default function StationOverview({db}:{db:SupabaseClient}){
    {operator==="djezzy"&&!agentSupportsServiceCode(stations.find(station=>station.station_uuid===stationUuid)?.agent_version||null)&&<Typography.Text type="secondary" style={{fontSize:11}}>جيزي 99 تحتاج Agent 0.4.11+</Typography.Text>}
    <Space.Compact style={{width:"100%"}}>
     <Input aria-label="رقم الشريحة يدويًا" dir="ltr" inputMode="tel" placeholder="0XXXXXXXXX" value={manualNumbers[sim.sim_uuid]||""} maxLength={20} onChange={event=>setManualNumbers(old=>({...old,[sim.sim_uuid!]:event.target.value}))}/>
-    <Button loading={manualBusy===sim.sim_uuid} onClick={()=>void saveManualNumber(sim)}>حفظ يدوي</Button>
+    <Button loading={manualBusy===sim.sim_uuid} disabled={manualBusy!==null} onClick={()=>void saveManualNumber(sim)}>حفظ يدوي</Button>
    </Space.Compact>
+   {manualErrors[sim.sim_uuid]&&<Alert type="error" showIcon message={manualErrors[sim.sim_uuid]}/>}
   </Space>;
  };
  const serverName=(uuid:string)=>{

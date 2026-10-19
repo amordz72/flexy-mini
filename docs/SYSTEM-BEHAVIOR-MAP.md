@@ -1,3 +1,11 @@
+## 2026-10-19 — Manual SIM phone save executes directly and reports errors inline
+
+Owner phone evidence: tapping manual Save left the draft visible and no confirmation was shown. The old action depended on static `Modal.confirm`, a previously recorded PWA failure mode. Replace that dependency with direct authenticated save on the existing button; this reversible SIM metadata save does not send USSD. Validate/normalize the number, serialize pending saves, verify returned SIM UUID and saved number, retain draft and show server errors inline. Existing server admin permissions and canonical registry remain unchanged.
+
+Validation: focused UI regression verifies one click saves only the selected SIM, international-prefix normalization, no network-command RPC, plain Supabase error display, and rejection of mismatched server confirmation. Full suite 105/105 PASS; architecture gate and seven acceptance/rejection fixtures PASS. TypeScript/build and GitHub deployment results tracked separately. Installed Android acceptance pending: refresh to fixed SHA and save the SIM number; do not claim an actual database save from mocked tests. Ooredoo automatic number discovery is a separate unresolved change.
+
+---
+
 ## 2026-10-19 — Commercial card catalog uses Master Card as its only type and stock owner
 
 **USER DECISION / IMPLEMENTED DB+EDGE / UI SOURCE IN PR #51:** Flexy Mini is only a presentation/pricing/customer-access screen for real commercial Master Card products. Never create separate stock or allocate a fixed quantity to Flexy Mini. No cards/codes are copied to `flexy_mini_card_codes`; canonical commercial codes remain in Master `card_stock_items` (Vault), with one real available quantity per type/denomination. Concurrent sale/one-time delivery and per-platform sale ledger are a **separate not-yet-implemented milestone**; buying remains disabled.
