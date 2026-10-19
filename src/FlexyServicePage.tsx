@@ -358,8 +358,11 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
           if(!job || job.job_uuid!==wait.jobUuid
             || !["queued","claimed","success","failed","review","unavailable"].includes(String(job.status)))
             throw new Error("نتيجة كشف الرصيد لا تطابق الطلب");
-          if(job.status==="queued" || job.status==="claimed"){
-            setCreditBalanceMessage("كشف الرصيد قيد التنفيذ. نتابع نفس الطلب دون إرسال كشف ثانٍ.");
+          if(job.status==="queued" || job.status==="claimed"
+            || (job.status==="review" && job.result_code==="BALANCE_SMS_PENDING")){
+            // USSD has already been released; the independent SMS read is
+            // still in flight. REVIEW alone is not terminal for this exact code.
+            setCreditBalanceMessage("تم إرسال كشف الرصيد؛ ننتظر SMS الجديدة دون حجز جلسة USSD.");
             return;
           }
           if(job.status==="success"){
