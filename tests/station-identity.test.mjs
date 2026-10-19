@@ -359,4 +359,42 @@ test('CSS applies full-height only to grid cards, not all nested modem cards',as
  assert.doesNotMatch(css,/\.app-content\s+\.ant-card\s*\{\s*height\s*:\s*100%/);
  assert.match(css,/\.app-content\s+\.ant-row\s*>\s*\.ant-col\s*>\s*\.ant-card\s*\{\s*height\s*:\s*100%/);
 });
+test('manual SIM phone saves on one click, verifies server result and never sends USSD',async()=>{
+ persistent.clear();
+ const db=makeDb(),read=db.rpc;
+ db.rpc=async(name,args)=>{
+  if(name==='station_connect_admin_update_sim'){
+   db.calls.push({name,args});
+   return data([{sim_uuid:args.p_sim_uuid,msisdn:args.p_msisdn}]);
+  }
+  return read(name,args);
+ };
+ const root=await open(db);
+ const input=root.root.findAllByType('input').find(x=>x.props['aria-label']==='رقم الشريحة يدويًا');
+ await act(async()=>input.props.onChange({target:{value:'+213 555 12 34 56'}}));
+ await click(root,'حفظ يدوي');
+ assert.deepEqual(db.calls.filter(x=>x.name==='station_connect_admin_update_sim').map(x=>x.args),
+  [{p_sim_uuid:'sim-1',p_msisdn:'0555123456'}]);
+ assert.match(textOf(root.root),/0555123456/);
+ assert.equal(db.calls.some(x=>/queue_|retry_|recharge|ussd|execute/.test(x.name)),false);
+ await act(async()=>root.unmount());
+});
+test('manual phone save shows server errors inline and retains draft without claiming success',async()=>{
+ persistent.clear();
+ const db=makeDb(),read=db.rpc;
+ db.rpc=async(name,args)=>name==='station_connect_admin_update_sim'
+  ?{data:null,error:{message:'SIM_NUMBER_CONFLICT'}}:read(name,args);
+ const root=await open(db);
+ const input=()=>root.root.findAllByType('input').find(x=>x.props['aria-label']==='رقم الشريحة يدويًا');
+ await act(async()=>input().props.onChange({target:{value:'0555123456'}}));
+ await click(root,'حفظ يدوي');
+ assert.equal(input().props.value,'0555123456');
+ assert.ok(root.root.findAllByType('alert').some(x=>String(x.props.message).includes('SIM_NUMBER_CONFLICT')));
+ db.rpc=async(name,args)=>name==='station_connect_admin_update_sim'
+  ?data([{sim_uuid:'different-sim',msisdn:args.p_msisdn}]):read(name,args);
+ await click(root,'حفظ يدوي');
+ assert.ok(root.root.findAllByType('alert').some(x=>String(x.props.message).includes('لم يؤكد السيرفر')));
+ assert.equal(input().props.value,'0555123456');
+ await act(async()=>root.unmount());
+});
 after(async()=>rm(output,{recursive:true,force:true}));
