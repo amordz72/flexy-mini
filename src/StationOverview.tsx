@@ -35,6 +35,7 @@ const serialDisplayTail=(row:UsbModemIdentity|null,all:Record<string,UsbModemIde
 type PhoneAttempt={sim_uuid:string;status:string;result_code:string|null;discovered_msisdn:string|null;started_at:string|null};
 type PhoneQueue={queued:boolean;state:string;job_uuid:string|null};
 type OoredooGuard={sim_uuid:string;is_locked:boolean;cooldown_until:string|null;last_failed_at:string|null;last_attempt_at:string|null;last_failure_code:string|null;admin_armed:boolean};
+type OoredooBalanceRead={job_uuid:string;sim_uuid?:string;status:string;result_code?:string|null;raw_response?:string|null;confirmed_balance?:boolean};
 const normalizePhone=(raw:string)=>{
  const digits=raw.replace(/\D/g,"");
  return digits.startsWith("213")&&digits.length===12?"0"+digits.slice(3):digits;
@@ -113,6 +114,8 @@ export default function StationOverview({db}:{db:SupabaseClient}){
  const [manualBusy,setManualBusy]=useState<string|null>(null);
  const [manualErrors,setManualErrors]=useState<Record<string,string>>({});
  const [rearmBusy,setRearmBusy]=useState<string|null>(null);
+ const [ooredooBalanceBusy,setOoredooBalanceBusy]=useState<string|null>(null);
+ const [ooredooBalanceReads,setOoredooBalanceReads]=useState<Record<string,OoredooBalanceRead>>({});
  const [pinConfigSim,setPinConfigSim]=useState<string|null>(null);
  const [pinConfigStation,setPinConfigStation]=useState<string|null>(null);
  const [servicePin,setServicePin]=useState("");
@@ -323,11 +326,39 @@ export default function StationOverview({db}:{db:SupabaseClient}){
    }
   });
  };
+ const readOoredooBalance=async(sim:Hardware)=>{
+  if(!sim.sim_uuid||ooredooBalanceBusy)return;
+  const uuid=sim.sim_uuid;
+  if(!sim.sim_type?.startsWith("ooredoo-")||!sim.has_pin){
+   message.warning("يلزم نوع شريحة أوريدو وPIN خدمة مسجل.");return;
+  }
+  setOoredooBalanceBusy(uuid);
+  try{
+   const {data,error}=await db.rpc("station_connect_admin_queue_ooredoo_pin_balance",{p_sim_uuid:uuid});
+   if(error)throw error;
+   const row=(Array.isArray(data)?data[0]:data) as {job_uuid?:string;status?:string}|undefined;
+   if(!row?.job_uuid)throw new Error("السيرفر لم يؤكد إنشاء طلب الاستعلام");
+   setOoredooBalanceReads(prev=>({...prev,[uuid]:{job_uuid:row.job_uuid!,status:row.status||"claimed"}}));
+   message.info("طُلب كشف رصيد أوريدو. هذه ليست عملية فليكسي.");
+   for(let i=0;i<12;i++){
+    await new Promise(resolve=>setTimeout(resolve,1000));
+    const {data:response,error:pollError}=await db.rpc("station_connect_admin_ooredoo_pin_balance_job",{p_job_uuid:row.job_uuid});
+    if(pollError)throw pollError;
+    const result=(Array.isArray(response)?response[0]:response) as OoredooBalanceRead|null;
+    if(!result||result.job_uuid!==row.job_uuid||result.sim_uuid!==uuid)throw new Error("تعذر تأكيد هوية نتيجة أوريدو");
+    setOoredooBalanceReads(prev=>({...prev,[uuid]:result}));
+    if(["success","failed","review","unavailable"].includes(result.status))return;
+   }
+   message.warning("تأخر رد الاستعلام؛ لا يُعاد إرساله تلقائيًا.");
+  }catch(cause){
+   message.error("تعذر قراءة رصيد أوريدو: "+(cause instanceof Error?cause.message:String(cause)));
+  }finally{setOoredooBalanceBusy(null);}
+ };
  const discoverPhone=async(sim:Hardware,stationUuid:string)=>{
   if(!sim.sim_uuid||sim.msisdn)return;
   const operator=operatorOf(sim);
   if(operator==="unknown"){message.warning("المتعامل غير معروف؛ يجب اكتشاف IMSI أولًا. لن نرسل كودًا عشوائيًا.");return;}
-  if(operator==="ooredoo"){message.warning("أوريدو: صيغة *200*PIN# مسجلة للمراجعة، لكنها قد تنفذ شحنًا إذا كان PIN كود بطاقة. لن نرسلها قبل تأكيد نوع PIN.");return;}
+  if(operator==="ooredoo"){message.info("كود *200*PIN# خاص بمعرفة رصيد أوريدو، وليس معرفة رقم الهاتف.");return;}
   const agent=stations.find(station=>station.station_uuid===stationUuid);
   if(operator==="djezzy"&&!agentSupportsServiceCode(agent?.agent_version||null)){
    message.warning("جيزي 99 تحتاج Station Agent 0.4.11 أو أحدث. النسخة الحالية: "+(agent?.agent_version||"غير معروفة"));return;
@@ -425,6 +456,22 @@ export default function StationOverview({db}:{db:SupabaseClient}){
    onClick={()=>{setServicePin("");setPinConfigStation(stationUuid);setPinConfigSim(sim.sim_uuid);}}>
     {sim.has_pin?"تغيير PIN":"تسجيل PIN"}
    </Button>}
+  {sim.sim_uuid&&operatorOf(sim)==="ooredoo"&&<>
+   <Button size="small" loading={ooredooBalanceBusy===sim.sim_uuid}
+    disabled={!sim.has_pin||!online(sim.sim_last_seen_at)||!online(sim.modem_last_seen_at)||ooredooBalanceBusy!==null}
+    onClick={()=>void readOoredooBalance(sim)}>معرفة رصيد أوريدو (*200*PIN#)</Button>
+   {ooredooBalanceReads[sim.sim_uuid]&&<Typography.Text type="secondary" style={{fontSize:11}}>
+    {ooredooBalanceReads[sim.sim_uuid].status==="claimed"?"تنفيذ استعلام الرصيد":
+     ooredooBalanceReads[sim.sim_uuid].status==="review"?"الرد يحتاج مراجعة/تفسير رصيد":
+     ooredooBalanceReads[sim.sim_uuid].status==="failed"?"فشل تنفيذ استعلام الرصيد":
+     ooredooBalanceReads[sim.sim_uuid].status}
+    {ooredooBalanceReads[sim.sim_uuid].result_code?" — "+ooredooBalanceReads[sim.sim_uuid].result_code:""}
+   </Typography.Text>}
+   {ooredooBalanceReads[sim.sim_uuid]?.raw_response&&
+    <Typography.Text copyable style={{maxWidth:260,whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>
+     {ooredooBalanceReads[sim.sim_uuid].raw_response}
+    </Typography.Text>}
+  </>}
  </Space>;
  const phoneAction=(sim:Hardware,stationUuid:string)=>{
   if(!sim.sim_uuid)return <Typography.Text type="secondary">الشريحة غير محددة</Typography.Text>;
@@ -439,7 +486,7 @@ export default function StationOverview({db}:{db:SupabaseClient}){
    {operator==="ooredoo"&&<Typography.Text type="secondary" style={{fontSize:11}}>{guardMap[sim.sim_uuid]?.last_failed_at?"آخر فشل: "+dateLabel(guardMap[sim.sim_uuid].last_failed_at):"لا توجد محاولة موثقة"} — {cooldownActive(guardMap[sim.sim_uuid]?.cooldown_until)?"محظور حتى "+dateLabel(guardMap[sim.sim_uuid].cooldown_until):"المحاولات محمية ومقفلة افتراضيًا"}</Typography.Text>}
    {operator==="ooredoo"&&guardMap[sim.sim_uuid]?.last_failure_code&&<Typography.Text type="secondary" style={{fontSize:11}}>سبب الفشل: {guardMap[sim.sim_uuid].last_failure_code}</Typography.Text>}
    {operator==="ooredoo"&&<Button size="small" loading={rearmBusy===sim.sim_uuid} disabled={!!(cooldownActive(guardMap[sim.sim_uuid]?.cooldown_until))} onClick={()=>void rearmOoredoo(sim)}>إعادة السماح من الإدارة</Button>}
-   {operator==="ooredoo"&&<Typography.Text type="secondary" style={{fontSize:11}}>كود *200*PIN# غير مفعّل حتى تثبت وظيفته ويُتحقق من PIN</Typography.Text>}
+   {operator==="ooredoo"&&<Typography.Text type="secondary" style={{fontSize:11}}>كود *200*PIN# مؤكد لمعرفة الرصيد فقط؛ معرفة رقم الهاتف خدمة مستقلة</Typography.Text>}
    {operator==="djezzy"&&!agentSupportsServiceCode(stations.find(station=>station.station_uuid===stationUuid)?.agent_version||null)&&<Typography.Text type="secondary" style={{fontSize:11}}>جيزي 99 تحتاج Agent 0.4.11+</Typography.Text>}
    <Space.Compact style={{width:"100%"}}>
     <Input aria-label="رقم الشريحة يدويًا" dir="ltr" inputMode="tel" placeholder="0XXXXXXXXX" value={manualNumbers[sim.sim_uuid]||""} maxLength={20} onChange={event=>setManualNumbers(old=>({...old,[sim.sim_uuid!]:event.target.value}))}/>
