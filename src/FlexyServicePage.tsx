@@ -8,6 +8,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import FlexyOperationHistory from "./FlexyOperationHistory";
 
 import CustomerOfferIdentity from "./CustomerOfferIdentity";
+import OoredooCreditSend, { ooredooRecipient } from "./OoredooCreditSend";
 import type { OfferGroup, OfferIdentity } from "./CustomerOfferIdentity";
 import {readSamaStatus,readinessProblems} from "./SamaOperationalActions";
 import type {SamaStatus} from "./SamaOperationalActions";
@@ -184,6 +185,7 @@ const currency = (amount: number) => new Intl.NumberFormat("en-US").format(amoun
 
 export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { db?: SupabaseClient; isCustomer: boolean; onOpenStations?: () => void }) {
   const [mode, setMode] = useState<Mode>("credit");
+  const [creditOperator, setCreditOperator] = useState<"mobilis" | "ooredoo">("mobilis");
   const [offersRequest, setOffersRequest] = useState(0);
   const [confirmSend, setConfirmSend] = useState(false);
   const sendLock = useRef(false);
@@ -812,7 +814,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
     <Card>
       <Space direction="vertical" size="middle" style={{ width: "100%" }}>
         <Space wrap>
-          <Tag color="green">Mobilis</Tag>
+          {mode === "credit" && creditOperator === "ooredoo" ? <Tag color="red">Ooredoo</Tag> : <Tag color="green">Mobilis</Tag>}
           {!isCustomer && mode === "credit" && creditAvailability && <Tag
             color={creditAvailability.ready ? "green" :
               credit630OfflineReasons.has(creditAvailability.reason) ? "red" : "orange"}>
@@ -860,7 +862,17 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
     </Card>
 
     {mode === "credit" ? <Card>
-      <Space direction="vertical" style={{ width: "100%" }} size="middle">
+      {!isCustomer && db && <Radio.Group optionType="button" buttonStyle="solid" style={{ marginBottom: 16 }}
+        aria-label="شبكة الإرسال" value={creditOperator}
+        options={[{ label: "موبيليس", value: "mobilis" }, { label: "أوريدو", value: "ooredoo" }]}
+        onChange={event => setCreditOperator(event.target.value as "mobilis" | "ooredoo")}/>}
+      {!isCustomer && db && creditOperator === "ooredoo"
+        ? <>
+          {!ooredooRecipient(normalizePhone(phone)) && <Alert showIcon type="warning" style={{ marginBottom: 16 }}
+            message="رقم أوريدو يبدأ بـ05"/>}
+          <OoredooCreditSend db={db} phone={normalizePhone(phone)}/>
+        </>
+        : <Space direction="vertical" style={{ width: "100%" }} size="middle">
         {isCustomer&&<Alert showIcon type="warning" message="إرسال الرصيد العادي للزبائن غير متاح حاليًا"/>}
         <Space wrap>{[100, 200, 500].map(value =>
           <Button key={value} type={amount === value ? "primary" : "default"}
@@ -911,7 +923,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
             <Alert type="warning" showIcon message={credit630Feedback(creditCheck.reason).message}
               description={credit630Feedback(creditCheck.reason).description}/>}
         </Space>}
-      </Space>
+      </Space>}
     </Card> : <>
       <Card title="العروض المتاحة" extra={<Button size="small" icon={<ReloadOutlined/>}
         onClick={() => void loadCatalog()} loading={loading}>تحديث</Button>}>

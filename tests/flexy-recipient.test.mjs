@@ -11,7 +11,7 @@ const output = new URL('../node_modules/.flexy-tests/', import.meta.url);
 await mkdir(output, { recursive: true });
 const ui = `import React from 'react';
 const c = name => props => React.createElement(name, props, props.children);
-export const Alert=c('alert'), Button=c('button'), Card=c('card'), Table=c('table'), Descriptions=c('descriptions'), Col=c('col'), Empty=c('empty'), Input=c('input'), InputNumber=c('amount'), Row=c('row'), Segmented=c('segmented'), Select=c('select'), Space=c('space'), Spin=c('spin'), Tag=c('tag'), Radio=c('radio');
+export const Alert=c('alert'), Button=c('button'), Card=c('card'), Table=c('table'), Descriptions=c('descriptions'), Col=c('col'), Empty=c('empty'), Input=c('input'), InputNumber=c('amount'), Row=c('row'), Segmented=c('segmented'), Select=c('select'), Space=c('space'), Spin=c('spin'), Tag=c('tag'), Radio=Object.assign(c('radio'),{Group:c('radio-group'),Button:c('radio-button')});
 export const Collapse=props=>React.createElement('collapse',props,(props.items||[]).map(item=>React.createElement('panel',{key:item.key,label:item.label},item.children)));
 export const List=Object.assign(props=>React.createElement('list',props,(props.dataSource||[]).map(row=>props.renderItem(row))),{Item:c('list-item')});
 export const Typography={Text:c('text'),Paragraph:c('paragraph')};
@@ -574,3 +574,34 @@ test('change recipient cancels pending 632 results for old recipient',async()=>{
 });
 
 after(()=>rm(output,{recursive:true,force:true}));
+
+test('Ooredoo ordinary send is an explicit choice, needs modal OK, and sends one keyed request',async()=>{
+ const db=makeDb(name=>{
+  if(name==='station_connect_admin_send_ooredoo_flexy')
+   return Promise.resolve({data:[{job_uuid:'ooredoo-job-1',status:'claimed',reused:false,sim_uuid:'sim',sim_label:'خينش اوريدو'}],error:null});
+  if(name==='station_connect_admin_ooredoo_flexy_job')
+   return Promise.resolve({data:[{job_uuid:'ooredoo-job-1',status:'review',result_code:'OOREDOO_590_RAW_REQUIRES_CONFIRMATION',result_text:'ok'}],error:null});
+  return Promise.resolve(ok([]));
+ });
+ const r=await mount(Flexy,{db,isCustomer:false});
+ const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
+ await act(async()=>phone.props.onChange({target:{value:'0551234567'}}));
+ assert.equal(button(r,'إرسال رصيد أوريدو'),undefined,'Mobilis stays the default network');
+ const network=r.root.findAllByType('radio-group').find(n=>n.props['aria-label']==='شبكة الإرسال');
+ await act(async()=>network.props.onChange({target:{value:'ooredoo'}}));await flush();
+ await act(async()=>r.root.findByType('amount').props.onChange(100));await flush();
+ await click(r,'إرسال رصيد أوريدو');
+ assert.equal(db.calls.filter(x=>x.name==='station_connect_admin_send_ooredoo_flexy').length,0,'nothing sent before confirmation');
+ const modal=r.root.findByType('modal');
+ assert.ok(texts(modal).includes('0551234567'));
+ await act(async()=>{await modal.props.onOk()});
+ const sends=db.calls.filter(x=>x.name==='station_connect_admin_send_ooredoo_flexy');
+ assert.equal(sends.length,1);
+ assert.equal(sends[0].args.p_phone,'0551234567');
+ assert.equal(sends[0].args.p_amount,100);
+ assert.ok(sends[0].args.p_idempotency_key.length>8);
+ assert.equal(db.calls.some(x=>x.name==='station_connect_admin_send_arsselli_630'),false,'never routes through 630');
+ const again=button(r,'إرسال رصيد أوريدو');
+ assert.ok(again.props.disabled,'no second send while a result is pending');
+ await close(r);
+});
