@@ -334,7 +334,7 @@ test('630 direct send uses server-selected distributor, and NO financial action 
   if(name==='station_connect_admin_630_ensure_fresh_balance')
    return Promise.resolve({data:balanceReady,error:null});
   if(name==='station_connect_admin_arsselli_630_preflight')
-   return Promise.resolve({data:{ready:true,reason:'READY',phone:'0500000001',amount:40,
+   return Promise.resolve({data:{ready:true,reason:'READY',phone:'0600000001',amount:40,
     distributor_account_code:'04',sim_uuid:'chosen-sim',station_uuid:'chosen-station'},error:null});
   if(name==='station_connect_admin_send_arsselli_630'){
    moneyCalls++;
@@ -347,7 +347,7 @@ test('630 direct send uses server-selected distributor, and NO financial action 
  });
  const r=await mount(Flexy,{db,isCustomer:false});
  const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
- await act(async()=>phone.props.onChange({target:{value:'0500000001'}}));
+ await act(async()=>phone.props.onChange({target:{value:'0600000001'}}));
  await act(async()=>r.root.findByType('amount').props.onChange(40));await flush();
  assert.equal(r.root.findAllByType('select').length,0,'distributor chosen only by server');
  await click(r,'إرسال رصيد عادي — 630');
@@ -359,7 +359,7 @@ test('630 direct send uses server-selected distributor, and NO financial action 
  assert.equal(moneyCalls,1,'one real dispatch after affirmative confirmation');
  const financial=db.calls.filter(x=>x.name==='station_connect_admin_send_arsselli_630');
  assert.equal(financial.length,1);
- assert.equal(financial[0].args.p_phone,'0500000001');
+ assert.equal(financial[0].args.p_phone,'0600000001');
  assert.equal(financial[0].args.p_amount,40);
  assert.equal(financial[0].args.p_expected_distributor_account,'04');
  assert.ok(financial[0].args.p_idempotency_key.length>8);
@@ -381,7 +381,7 @@ test('change of 630 amount invalidates old account selection and modal',async()=
  ));
  const r=await mount(Flexy,{db,isCustomer:false});
  const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
- await act(async()=>phone.props.onChange({target:{value:'0500000001'}}));
+ await act(async()=>phone.props.onChange({target:{value:'0600000001'}}));
  await act(async()=>r.root.findByType('amount').props.onChange(500));
  await click(r,'إرسال رصيد عادي — 630');
  assert.ok(r.root.findByType('modal'),'confirmation only after verified distributor');
@@ -402,7 +402,7 @@ test('630 offline Station shows a clear connection error, not a false low balanc
    :ok([])));
  const r=await mount(Flexy,{db,isCustomer:false});
  const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
- await act(async()=>phone.props.onChange({target:{value:'0500000001'}}));
+ await act(async()=>phone.props.onChange({target:{value:'0600000001'}}));
  await act(async()=>r.root.findByType('amount').props.onChange(40));await flush();
  const alerts=r.root.findAllByType('alert');
  assert.ok(alerts.some(x=>String(x.props.message).includes('لا يوجد اتصال بمحطة Arsselli')));
@@ -420,7 +420,7 @@ test('630 low balance on connected station uses distinct balance warning',async(
   ?{data:low,error:null}:ok([])));
  const r=await mount(Flexy,{db,isCustomer:false});
  const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
- await act(async()=>phone.props.onChange({target:{value:'0500000001'}}));
+ await act(async()=>phone.props.onChange({target:{value:'0600000001'}}));
  await act(async()=>r.root.findByType('amount').props.onChange(40));await flush();
  assert.ok(r.root.findAllByType('alert').some(x=>String(x.props.message).includes('رصيد حسابات الموزع غير كافٍ')));
  assert.ok(!r.root.findAllByType('alert').some(x=>String(x.props.message).includes('لا يوجد اتصال بمحطة')));
@@ -433,7 +433,7 @@ test('630 reconnect state refreshes automatically but does not queue a financial
   :ok([])));
  const r=await mount(Flexy,{db,isCustomer:false});
  const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
- await act(async()=>phone.props.onChange({target:{value:'0500000001'}}));
+ await act(async()=>phone.props.onChange({target:{value:'0600000001'}}));
  await act(async()=>r.root.findByType('amount').props.onChange(40));await flush();
  assert.ok(r.root.findAllByType('alert').some(x=>String(x.props.message).includes('لا يوجد اتصال بمحطة Arsselli')));
  assert.equal(timers.size,1);
@@ -458,7 +458,7 @@ test('630 never dispatches if server availability is offline or blocked',async()
  });
  const r=await mount(Flexy,{db,isCustomer:false});
  const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
- await act(async()=>phone.props.onChange({target:{value:'0500000001'}}));
+ await act(async()=>phone.props.onChange({target:{value:'0600000001'}}));
  await act(async()=>r.root.findByType('amount').props.onChange(40));await flush();
  await click(r,'إرسال رصيد عادي — 630');
  assert.equal(rpcCount,0);
@@ -483,7 +483,7 @@ test('uncertain 630 transport error blocks a second attempt with a different key
  });
  const r=await mount(Flexy,{db,isCustomer:false});
  const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
- await act(async()=>phone.props.onChange({target:{value:'0500000001'}}));
+ await act(async()=>phone.props.onChange({target:{value:'0600000001'}}));
  await act(async()=>r.root.findByType('amount').props.onChange(40));await flush();
  await click(r,'إرسال رصيد عادي — 630');
  await act(async()=>r.root.findByType('modal').props.onOk());await flush();
@@ -512,7 +512,7 @@ test('630 automatically waits for a 632 balance read within the same credit scre
  });
  const r=await mount(Flexy,{db,isCustomer:false});
  const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
- await act(async()=>phone.props.onChange({target:{value:'0500000001'}}));
+ await act(async()=>phone.props.onChange({target:{value:'0600000001'}}));
  await act(async()=>r.root.findByType('amount').props.onChange(40));await flush();
  await click(r,'إرسال رصيد عادي — 630');
  assert.equal(checks,1);
@@ -541,7 +541,7 @@ test('new confirmed 632 SMS resumes 630 preflight automatically without second b
  });
  const r=await mount(Flexy,{db,isCustomer:false});
  const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
- await act(async()=>phone.props.onChange({target:{value:'0500000001'}}));
+ await act(async()=>phone.props.onChange({target:{value:'0600000001'}}));
  await act(async()=>r.root.findByType('amount').props.onChange(40));await flush();
  await click(r,'إرسال رصيد عادي — 630');
  confirmed=true;
@@ -562,10 +562,10 @@ test('change recipient cancels pending 632 results for old recipient',async()=>{
    error:null}));
  const r=await mount(Flexy,{db,isCustomer:false});
  const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
- await act(async()=>phone.props.onChange({target:{value:'0500000001'}}));
+ await act(async()=>phone.props.onChange({target:{value:'0600000001'}}));
  await act(async()=>r.root.findByType('amount').props.onChange(40));await flush();
  await click(r,'إرسال رصيد عادي — 630');
- await act(async()=>phone.props.onChange({target:{value:'0500000002'}}));await flush();
+ await act(async()=>phone.props.onChange({target:{value:'0600000002'}}));await flush();
  confirmed=true;
  await act(async()=>{for(const tick of [...timers.values()])await tick();});await flush();
  assert.equal(button(r,'تأكيد الإرسال'),undefined);
@@ -573,9 +573,9 @@ test('change recipient cancels pending 632 results for old recipient',async()=>{
  await close(r);
 });
 
-after(()=>rm(output,{recursive:true,force:true}));
 
-test('Ooredoo ordinary send is an explicit choice, needs modal OK, and sends one keyed request',async()=>{
+
+test('Ooredoo ordinary send follows the 05 number, needs modal OK, and sends one keyed request',async()=>{
  const db=makeDb(name=>{
   if(name==='station_connect_admin_send_ooredoo_flexy')
    return Promise.resolve({data:[{job_uuid:'ooredoo-job-1',status:'claimed',reused:false,sim_uuid:'sim',sim_label:'خينش اوريدو'}],error:null});
@@ -586,9 +586,8 @@ test('Ooredoo ordinary send is an explicit choice, needs modal OK, and sends one
  const r=await mount(Flexy,{db,isCustomer:false});
  const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
  await act(async()=>phone.props.onChange({target:{value:'0551234567'}}));
- assert.equal(button(r,'إرسال رصيد أوريدو'),undefined,'Mobilis stays the default network');
  const network=r.root.findAllByType('radio-group').find(n=>n.props['aria-label']==='شبكة الإرسال');
- await act(async()=>network.props.onChange({target:{value:'ooredoo'}}));await flush();
+ assert.equal(network.props.value,'ooredoo','05 number selects Ooredoo automatically');
  await act(async()=>r.root.findByType('amount').props.onChange(100));await flush();
  await click(r,'إرسال رصيد أوريدو');
  assert.equal(db.calls.filter(x=>x.name==='station_connect_admin_send_ooredoo_flexy').length,0,'nothing sent before confirmation');
@@ -605,3 +604,18 @@ test('Ooredoo ordinary send is an explicit choice, needs modal OK, and sends one
  assert.ok(again.props.disabled,'no second send while a result is pending');
  await close(r);
 });
+test('Mobilis 630 refuses a non-Mobilis number even when Mobilis is chosen by hand',async()=>{
+ const db=makeDb(()=>Promise.resolve(ok([])));
+ const r=await mount(Flexy,{db,isCustomer:false});
+ const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
+ await act(async()=>phone.props.onChange({target:{value:'0557720516'}}));await flush();
+ const network=r.root.findAllByType('radio-group').find(n=>n.props['aria-label']==='شبكة الإرسال');
+ await act(async()=>network.props.onChange({target:{value:'mobilis'}}));await flush();
+ await act(async()=>r.root.findByType('amount').props.onChange(100));await flush();
+ assert.ok(button(r,'إرسال رصيد عادي — 630').props.disabled,'630 send disabled for an 05 number');
+ assert.ok(r.root.findAllByType('alert').some(n=>n.props.message==='فليكسي موبيليس لرقم يبدأ بـ06 فقط'));
+ assert.equal(db.calls.some(x=>['station_connect_admin_arsselli_630_preflight','station_connect_admin_630_ensure_fresh_balance','station_connect_admin_send_arsselli_630'].includes(x.name)),false,'no 630 balance read or send for a non-Mobilis number');
+ await close(r);
+});
+
+after(()=>rm(output,{recursive:true,force:true}));
