@@ -8,7 +8,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import FlexyOperationHistory from "./FlexyOperationHistory";
 
 import CustomerOfferIdentity from "./CustomerOfferIdentity";
-import OoredooCreditSend, { ooredooRecipient } from "./OoredooCreditSend";
+import OoredooCreditSend from "./OoredooCreditSend";
 import type { OfferGroup, OfferIdentity } from "./CustomerOfferIdentity";
 import {readSamaStatus,readinessProblems} from "./SamaOperationalActions";
 import type {SamaStatus} from "./SamaOperationalActions";
@@ -180,13 +180,15 @@ const normalizePhone = (value: string) => {
 };
 const validPhone = (value: string) => /^0[5-7][0-9]{8}$/.test(value);
 const mobilisRecipient = (value: string) => /^06[0-9]{8}$/.test(value);
+// The recipient's prefix alone picks the sending network: 05 Ooredoo, 06 Mobilis, 07 Djezzy.
+const recipientNetwork = (value: string) =>
+  value.startsWith("05") ? "ooredoo" : value.startsWith("07") ? "djezzy" : "mobilis";
 const titleStatus = (status: string) =>
   ({ queued: "في الطابور", claimed: "قيد المعالجة", success: "نجحت", failed: "فشلت", review: "تحتاج مراجعة", unavailable: "غير متاحة" } as Record<string, string>)[status] || status;
 const currency = (amount: number) => new Intl.NumberFormat("en-US").format(amount) + " دج";
 
 export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { db?: SupabaseClient; isCustomer: boolean; onOpenStations?: () => void }) {
   const [mode, setMode] = useState<Mode>("credit");
-  const [creditOperator, setCreditOperator] = useState<"mobilis" | "ooredoo">("mobilis");
   const [offersRequest, setOffersRequest] = useState(0);
   const [confirmSend, setConfirmSend] = useState(false);
   const sendLock = useRef(false);
@@ -197,6 +199,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
   }, []);
   const recoveredCredit630=useRef<Credit630Pending|null>(isCustomer?null:readCredit630Pending());
   const [phone, setPhone] = useState(recoveredCredit630.current?.phone||"");
+  const creditNetwork = recipientNetwork(normalizePhone(phone));
   const [offers, setOffers] = useState<Offer[]>([]);
   const [loading, setLoading] = useState(false);
   const [catalogError, setCatalogError] = useState("");
@@ -815,7 +818,9 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
     <Card>
       <Space direction="vertical" size="middle" style={{ width: "100%" }}>
         <Space wrap>
-          {mode === "credit" && creditOperator === "ooredoo" ? <Tag color="red">Ooredoo</Tag> : <Tag color="green">Mobilis</Tag>}
+          {mode === "credit" && creditNetwork === "ooredoo" ? <Tag color="red">Ooredoo</Tag>
+            : mode === "credit" && creditNetwork === "djezzy" ? <Tag color="volcano">Djezzy</Tag>
+            : <Tag color="green">Mobilis</Tag>}
           {!isCustomer && mode === "credit" && creditAvailability && <Tag
             color={creditAvailability.ready ? "green" :
               credit630OfflineReasons.has(creditAvailability.reason) ? "red" : "orange"}>
@@ -845,7 +850,6 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
               creditSendIntent.current=false; creditRequestKey.current=null;
               setCreditDirectConfirm(false); setCreditSendAttempted(false);
               setCreditDirectJobUuid(null); setCreditTransferStatus("");
-              setCreditOperator(next.startsWith("05") ? "ooredoo" : "mobilis");
             }
             setPhone(next);
           }}
@@ -864,16 +868,10 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
     </Card>
 
     {mode === "credit" ? <Card>
-      {!isCustomer && db && <Radio.Group optionType="button" buttonStyle="solid" style={{ marginBottom: 16 }}
-        aria-label="شبكة الإرسال" value={creditOperator}
-        options={[{ label: "موبيليس", value: "mobilis" }, { label: "أوريدو", value: "ooredoo" }]}
-        onChange={event => setCreditOperator(event.target.value as "mobilis" | "ooredoo")}/>}
-      {!isCustomer && db && creditOperator === "ooredoo"
-        ? <>
-          {!ooredooRecipient(normalizePhone(phone)) && <Alert showIcon type="warning" style={{ marginBottom: 16 }}
-            message="رقم أوريدو يبدأ بـ05"/>}
-          <OoredooCreditSend db={db} phone={normalizePhone(phone)}/>
-        </>
+      {!isCustomer && db && creditNetwork === "ooredoo"
+        ? <OoredooCreditSend db={db} phone={normalizePhone(phone)}/>
+        : !isCustomer && db && creditNetwork === "djezzy"
+        ? <Alert showIcon type="info" message="رقم جيزي (07)" description="إرسال رصيد جيزي غير متاح بعد في البرنامج."/>
         : <Space direction="vertical" style={{ width: "100%" }} size="middle">
         {isCustomer&&<Alert showIcon type="warning" message="إرسال الرصيد العادي للزبائن غير متاح حاليًا"/>}
         <Space wrap>{[100, 200, 500].map(value =>

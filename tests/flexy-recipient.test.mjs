@@ -586,8 +586,8 @@ test('Ooredoo ordinary send follows the 05 number, needs modal OK, and sends one
  const r=await mount(Flexy,{db,isCustomer:false});
  const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
  await act(async()=>phone.props.onChange({target:{value:'0551234567'}}));
- const network=r.root.findAllByType('radio-group').find(n=>n.props['aria-label']==='شبكة الإرسال');
- assert.equal(network.props.value,'ooredoo','05 number selects Ooredoo automatically');
+ assert.equal(r.root.findAllByType('radio-group').length,0,'no manual network choice');
+ assert.equal(button(r,'إرسال رصيد عادي — 630'),undefined,'05 number never shows the Mobilis 630 send');
  await act(async()=>r.root.findByType('amount').props.onChange(100));await flush();
  await click(r,'إرسال رصيد أوريدو');
  assert.equal(db.calls.filter(x=>x.name==='station_connect_admin_send_ooredoo_flexy').length,0,'nothing sent before confirmation');
@@ -604,17 +604,18 @@ test('Ooredoo ordinary send follows the 05 number, needs modal OK, and sends one
  assert.ok(again.props.disabled,'no second send while a result is pending');
  await close(r);
 });
-test('Mobilis 630 refuses a non-Mobilis number even when Mobilis is chosen by hand',async()=>{
+test('the number prefix alone picks the network: 07 is Djezzy (not available), 06 is Mobilis 630',async()=>{
  const db=makeDb(()=>Promise.resolve(ok([])));
  const r=await mount(Flexy,{db,isCustomer:false});
  const phone=r.root.findAllByType('input').find(n=>n.props['aria-label']==='رقم الهاتف المراد شحنه');
- await act(async()=>phone.props.onChange({target:{value:'0557720516'}}));await flush();
- const network=r.root.findAllByType('radio-group').find(n=>n.props['aria-label']==='شبكة الإرسال');
- await act(async()=>network.props.onChange({target:{value:'mobilis'}}));await flush();
- await act(async()=>r.root.findByType('amount').props.onChange(100));await flush();
- assert.ok(button(r,'إرسال رصيد عادي — 630').props.disabled,'630 send disabled for an 05 number');
- assert.ok(r.root.findAllByType('alert').some(n=>n.props.message==='فليكسي موبيليس لرقم يبدأ بـ06 فقط'));
- assert.equal(db.calls.some(x=>['station_connect_admin_arsselli_630_preflight','station_connect_admin_630_ensure_fresh_balance','station_connect_admin_send_arsselli_630'].includes(x.name)),false,'no 630 balance read or send for a non-Mobilis number');
+ await act(async()=>phone.props.onChange({target:{value:'0770000001'}}));await flush();
+ assert.ok(r.root.findAllByType('alert').some(n=>n.props.message==='رقم جيزي (07)'));
+ assert.equal(button(r,'إرسال رصيد عادي — 630'),undefined,'07 number never shows the Mobilis 630 send');
+ assert.equal(button(r,'إرسال رصيد أوريدو'),undefined,'07 number never shows the Ooredoo send');
+ await act(async()=>phone.props.onChange({target:{value:'0660000001'}}));await flush();
+ assert.ok(button(r,'إرسال رصيد عادي — 630'),'06 number shows the Mobilis 630 send');
+ assert.equal(button(r,'إرسال رصيد أوريدو'),undefined);
+ assert.equal(db.calls.some(x=>['station_connect_admin_send_arsselli_630','station_connect_admin_send_ooredoo_flexy'].includes(x.name)),false,'nothing sent');
  await close(r);
 });
 
