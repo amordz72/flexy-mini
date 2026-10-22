@@ -981,7 +981,7 @@ function Dashboard({customerToken,customerAccount,customerError,onCustomerLogout
             {mobile && <Button onClick={() => setDrawer(true)} aria-label="فتح القائمة">☰</Button>}
             <Text strong>Flexy Mini</Text>
           </Space>
-          <Space><Tag color={client ? "green" : "blue"}>v0.9.2 · {isCustomer ? "حساب الزبون" : client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{<Button size="small" onClick={isCustomer?onCustomerLogout:()=>logout()}>خروج</Button>}</Space>
+          <Space><Tag color={client ? "green" : "blue"}>v0.9.3 · {String(import.meta.env.VITE_BUILD_SHA || 'local').slice(0,7)} · {isCustomer ? "حساب الزبون" : client ? "دخول الإدارة" : "إعداد الاتصال مطلوب"}</Tag>{<Button size="small" onClick={isCustomer?onCustomerLogout:()=>logout()}>خروج</Button>}</Space>
         </Header>
         <Content className="app-content">
           {page !== "home" && <div className="page-heading"><Title level={mobile ? 3 : 2}>{names[page]}</Title></div>}
