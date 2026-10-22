@@ -179,6 +179,7 @@ const normalizePhone = (value: string) => {
   return digits.startsWith("213") && digits.length === 12 ? "0" + digits.slice(3) : digits;
 };
 const validPhone = (value: string) => /^0[5-7][0-9]{8}$/.test(value);
+const mobilisRecipient = (value: string) => /^06[0-9]{8}$/.test(value);
 const titleStatus = (status: string) =>
   ({ queued: "في الطابور", claimed: "قيد المعالجة", success: "نجحت", failed: "فشلت", review: "تحتاج مراجعة", unavailable: "غير متاحة" } as Record<string, string>)[status] || status;
 const currency = (amount: number) => new Intl.NumberFormat("en-US").format(amount) + " دج";
@@ -279,7 +280,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
   const checkCredit630 = async () => {
     const recipient=normalizePhone(phone);
     const checkedAmount=amount;
-    if (!db || isCustomer || mode!=="credit" || !validPhone(recipient)
+    if (!db || isCustomer || mode!=="credit" || !mobilisRecipient(recipient)
       || !checkedAmount || !Number.isInteger(checkedAmount)
       || checkedAmount<1 || checkedAmount>50000 || creditBalanceRequestLock.current
       || creditBalanceWait) return;
@@ -382,7 +383,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
   const beginCredit630Send = async () => {
     const recipient=normalizePhone(phone);
     if (!db || isCustomer || mode!=="credit"
-      || !validPhone(recipient) || !amount || !Number.isInteger(amount)
+      || !mobilisRecipient(recipient) || !amount || !Number.isInteger(amount)
       || amount<40 || amount>50000
       || creditStageBusy || creditSendAttempted || creditBalanceWait
       || creditDirectLock.current) return;
@@ -410,7 +411,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
     const selectedAccount=creditCheck?.distributor_account_code;
     if (!db || isCustomer || mode!=="credit" || !checkedCreditReady
       || creditDirectLock.current || creditStageBusy || creditSendAttempted
-      || !validPhone(recipient) || !amount || amount<40 || amount>50000
+      || !mobilisRecipient(recipient) || !amount || amount<40 || amount>50000
       || !selectedAccount) return;
     creditDirectLock.current=true;
     setCreditSendAttempted(true);
@@ -844,6 +845,7 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
               creditSendIntent.current=false; creditRequestKey.current=null;
               setCreditDirectConfirm(false); setCreditSendAttempted(false);
               setCreditDirectJobUuid(null); setCreditTransferStatus("");
+              setCreditOperator(next.startsWith("05") ? "ooredoo" : "mobilis");
             }
             setPhone(next);
           }}
@@ -886,10 +888,13 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
             description={credit630Feedback(creditAvailability.reason).description}/>}
           {creditAvailabilityError && <Alert showIcon type="warning" message={creditAvailabilityError}/>}
           <Alert type="info" showIcon message="رصيد عادي 630 — إرسال مباشر" description="البرنامج يختار الموزع ويتأكد من الرصيد تلقائيًا، ثم يرسل أمر الشحن إلى الشبكة بعد تأكيد الرقم والمبلغ. لا ينشئ طلب مراجعة تحضيريًا."/>
+          {validPhone(normalizePhone(phone)) && !mobilisRecipient(normalizePhone(phone)) && <Alert showIcon type="error"
+            message="فليكسي موبيليس لرقم يبدأ بـ06 فقط"
+            description="هذا الرقم ليس من موبيليس. اختر الشبكة المناسبة أو صحّح الرقم."/>}
           <Button block type="primary"
             loading={creditCheckBusy || Boolean(creditBalanceWait) || creditStageBusy}
             disabled={Boolean(creditBalanceWait) || creditSendAttempted
-              || creditCheckBusy || creditStageBusy || !validPhone(normalizePhone(phone))
+              || creditCheckBusy || creditStageBusy || !mobilisRecipient(normalizePhone(phone))
               || !amount || amount<40 || amount>50000 || !Number.isInteger(amount)}
             onClick={()=>void beginCredit630Send()}>إرسال رصيد عادي — 630</Button>
           {creditBalanceWait && <Alert type="info" showIcon
