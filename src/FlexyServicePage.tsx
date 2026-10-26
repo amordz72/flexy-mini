@@ -11,6 +11,10 @@ import CustomerOfferIdentity from "./CustomerOfferIdentity";
 import OoredooCreditSend from "./OoredooCreditSend";
 import type { OfferGroup, OfferIdentity } from "./CustomerOfferIdentity";
 import {readSamaStatus,readinessProblems} from "./SamaOperationalActions";
+
+// Owner 2026-10-26: the old 630 and offer sends are closed here (the server refuses them too);
+// Flexy Core sends both. Ooredoo 590 and Arsselli 696 stay open until the core takes them over.
+const OLD_SENDS_CLOSED = true;
 import type {SamaStatus} from "./SamaOperationalActions";
 
 type Offer = {
@@ -885,13 +889,14 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
             message={credit630Feedback(creditAvailability.reason).message}
             description={credit630Feedback(creditAvailability.reason).description}/>}
           {creditAvailabilityError && <Alert showIcon type="warning" message={creditAvailabilityError}/>}
-          <Alert type="info" showIcon message="رصيد عادي 630 — إرسال مباشر" description="البرنامج يختار الموزع ويتأكد من الرصيد تلقائيًا، ثم يرسل أمر الشحن إلى الشبكة بعد تأكيد الرقم والمبلغ. لا ينشئ طلب مراجعة تحضيريًا."/>
+          <Alert type="warning" showIcon message="أُغلق إرسال 630 من هنا"
+            description="قرار المالك 26 أكتوبر 2026: الإرسال انتقل إلى النواة. أرسل رصيد Mobilis العادي من صفحة «إرسال فليكسي» في المتجر."/>
           {validPhone(normalizePhone(phone)) && !mobilisRecipient(normalizePhone(phone)) && <Alert showIcon type="error"
             message="فليكسي موبيليس لرقم يبدأ بـ06 فقط"
             description="هذا الرقم ليس من موبيليس. اختر الشبكة المناسبة أو صحّح الرقم."/>}
           <Button block type="primary"
             loading={creditCheckBusy || Boolean(creditBalanceWait) || creditStageBusy}
-            disabled={Boolean(creditBalanceWait) || creditSendAttempted
+            disabled={OLD_SENDS_CLOSED || Boolean(creditBalanceWait) || creditSendAttempted
               || creditCheckBusy || creditStageBusy || !mobilisRecipient(normalizePhone(phone))
               || !amount || amount<40 || amount>50000 || !Number.isInteger(amount)}
             onClick={()=>void beginCredit630Send()}>إرسال رصيد عادي — 630</Button>
@@ -1034,8 +1039,10 @@ export default function FlexyServicePage({ db, isCustomer, onOpenStations }: { d
           {unknownResult && !lastJob && <Alert type="error" showIcon
             message="حالة الطلب غير مؤكدة"
             description="لا تغيّر الرقم أو العرض ولا تبدأ طلبًا جديدًا حتى تتأكد من العمليات. سيُستخدم نفس مفتاح العملية عند إعادة المحاولة."/>}
+          {!isCustomer && <Alert type="warning" showIcon message="أُغلق إرسال العروض من هنا"
+            description="قرار المالك 26 أكتوبر 2026: الإرسال انتقل إلى النواة. أرسل عروض Sama من صفحة «إرسال فليكسي» في المتجر."/>}
           <Button type="primary" size="large" block loading={sendBusy}
-            disabled={isCustomer||!db||!routeCanSendThroughSama||!validPhone(normalizePhone(phone))||Boolean(lastJob)}
+            disabled={OLD_SENDS_CLOSED||isCustomer||!db||!routeCanSendThroughSama||!validPhone(normalizePhone(phone))||Boolean(lastJob)}
             onClick={() => submit()}>إرسال العرض</Button>
 
         </Space>
