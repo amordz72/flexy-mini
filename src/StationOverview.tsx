@@ -536,13 +536,10 @@ export default function StationOverview({db}:{db:SupabaseClient}){
    {row.sim_type==="mobilis-arsselli"&&<ArsselliBalanceActions db={db} simUuid={row.sim_uuid}
     canRequestBalance={Boolean(row.has_pin&&online(row.modem_last_seen_at)&&online(row.sim_last_seen_at)
      &&stations.some(st=>st.station_uuid===row.station_uuid&&st.status==="approved"&&online(st.last_seen_at)))}/>}
-   {/* The admin phone (agent_version "phone-*") has no HiLink modem and no SMS reader: modem_status and sms_read are rejected there. */}
-   {(stations.find(st=>st.station_uuid===row.station_uuid)?.agent_version||"").startsWith("phone-")
-    ?<Alert type="info" showIcon message="هاتف الإدارة: لا صفحة مودم ولا قارئ رسائل في التطبيق"/>
-    :<>
-     <ModemPage db={db} simUuid={row.sim_uuid} agentVersion={stations.find(st=>st.station_uuid===row.station_uuid)?.agent_version||null}/>
-     <AdminSmsInbox db={db} simUuid={row.sim_uuid}/>
-    </>}
+   <ModemPage db={db} simUuid={row.sim_uuid} agentVersion={stations.find(st=>st.station_uuid===row.station_uuid)?.agent_version||null}/>
+   {/* The admin phone (agent_version "phone-*") has no SMS reader: sms_read is rejected there. */}
+   {!(stations.find(st=>st.station_uuid===row.station_uuid)?.agent_version||"").startsWith("phone-")&&
+    <AdminSmsInbox db={db} simUuid={row.sim_uuid}/>}
    {row.sim_type==="mobilis-sama"&&!sama&&
     <Alert type="warning" message="بيانات جاهزية Sama غير متاحة لهذه الشريحة، حدّث الحالة" showIcon/>}
   </Space>;

@@ -133,12 +133,15 @@ export default function ModemPage({db,simUuid,agentVersion}:{db:SupabaseClient;s
  const lastOk=steps.length>0&&steps[steps.length-1].status==="success";
  const pinInCode=(v:string)=>/\{\s*pin\s*\}/i.test(v)||/\*\d{4,8}(?=[*#]|$)/.test(v);
  const pinBlocked=lab.pin_wait_seconds>0;
+ // The admin phone (agent "phone-*") has no HiLink modem: modem_status is rejected there, only the USSD lab works.
+ const phone=(agentVersion||"").startsWith("phone-");
 
- return <Card size="small" title="صفحة المودم" extra={<Button size="small" loading={reading} disabled={!page?.ready} onClick={()=>void readStatus()}>اقرأ حالة المودم</Button>}>
+ return <Card size="small" title={phone?"تجربة USSD — هاتف الإدارة":"صفحة المودم"} extra={!phone&&<Button size="small" loading={reading} disabled={!page?.ready} onClick={()=>void readStatus()}>اقرأ حالة المودم</Button>}>
   {error&&<Alert type="error" showIcon message={error} style={{marginBottom:8}}/>}
   {page&&page.same_ip_modems>0&&<Alert type="warning" showIcon style={{marginBottom:8}}
    message={`يوجد ${page.same_ip_modems} مودم آخر في نفس الكمبيوتر بنفس العنوان ${page.modem_ip||""} خلال آخر 5 أيام`}/>}
   {page&&!page.ready&&<Alert type="info" showIcon style={{marginBottom:8}} message="الشريحة أو المودم أو الكمبيوتر غير متصل الآن: القراءة والإرسال غير متاحين"/>}
+  {!phone&&<>
   {unsupported&&<Alert type="warning" showIcon style={{marginBottom:8}} message={`قراءة حالة المودم تحتاج Agent 0.6.5 أو أحدث (الحالي: ${agentVersion||"غير معروف"}). اضغط «حدّث» في صفحة المحطات.`}/>}
   <Descriptions size="small" bordered column={1} items={[
    {key:"ip",label:"عنوان المودم",children:<span dir="ltr">{page?.modem_ip||"—"}</span>},
@@ -161,6 +164,7 @@ export default function ModemPage({db,simUuid,agentVersion}:{db:SupabaseClient;s
   ]}/>
   {status?.errors&&Object.keys(status.errors).length>0&&<Typography.Paragraph type="secondary" style={{fontSize:11,marginTop:4}}>
    أجزاء لم يجب عليها المودم: {Object.entries(status.errors).map(([k,v])=>k+" ("+v+")").join("، ")}</Typography.Paragraph>}
+  </>}
 
   <Typography.Title level={5} style={{marginTop:16}}>تجربة USSD</Typography.Title>
   <Typography.Paragraph type="secondary" style={{fontSize:12}}>
