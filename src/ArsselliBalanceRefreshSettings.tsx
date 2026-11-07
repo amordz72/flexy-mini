@@ -56,6 +56,8 @@ export default function ArsselliBalanceRefreshSettings({db}:{db:SupabaseClient})
         options={[{value:6,label:"كل 6 ساعات"},{value:12,label:"كل 12 ساعة"}]}
         onChange={setHours}/>
       <Typography.Text type="secondary">لا نفحص الشبكة بعد كل عملية. عند انتهاء المدة يُستعمل استعلام واحد موجود أو يُطلب تحديث غير مالي، ثم تواصل شاشة الفليكسي تلقائيًا.</Typography.Text>
+      <Alert type="info" showIcon message="هذه المدة لا تتحكم في القراءة الآلية"
+        description="هذه المدة تخص فحص Flexy Mini قبل الإرسال فقط. القراءة الآلية الدورية لرصيد كل الشرائح يديرها Flexy Core: مدتها وإعادة القراءة الفاشلة تُضبط من «المهام الآلية» في تطبيق المتجر."/>
       {error&&<Alert type="error" showIcon message={error}/>}
       <Button type="primary" disabled={!changed||saving||busy}
         onClick={()=>setConfirm(true)}>حفظ المدة</Button>

@@ -49,3 +49,10 @@ test("Arsselli refresh interval is a configurable 6/12h Settings card, not a per
  assert.match(balance,/title="تأكيد فترة تحديث رصيد أرسلي"/);
  assert.doesNotMatch(balance,/station_connect_admin_queue_arsselli_balance|station_connect_admin_dispatch_630_test_once/);
 });
+
+// Owner 2026-11-07 («نفذ 2»): this card is not the automatic balance read; that one is Flexy Core's «المهام الآلية»
+test("Arsselli refresh card says it does not control the automatic reads, and points to «المهام الآلية»",()=>{
+ assert.match(balance,/<Alert type="info" showIcon message="هذه المدة لا تتحكم في القراءة الآلية"/);
+ assert.match(balance,/يديرها Flexy Core: مدتها وإعادة القراءة الفاشلة تُضبط من «المهام الآلية» في تطبيق المتجر/);
+ assert.doesNotMatch(balance,/كل ساعة/,"no copied number: the real one lives in Flexy Core and can change");
+});
